@@ -17,6 +17,7 @@ import {
   socialsValidator,
   customCopyValidator,
 } from "../component/validators.js";
+import type { StripeEventHandlers } from "@convex-dev/stripe";
 
 // =============================================================================
 // Types
@@ -599,6 +600,275 @@ export function registerRoutes(
       );
     }),
   });
+}
+
+// =============================================================================
+// Stripe Webhook Handler
+// =============================================================================
+
+/**
+ * Verify Stripe webhook signature without the Stripe SDK.
+ * Uses Web Crypto API for HMAC-SHA256.
+ */
+async function verifyStripeSignature(
+  payload: string,
+  signature: string,
+  secret: string
+): Promise<boolean> {
+  // Parse signature header: t=timestamp,v1=signature
+  const parts = signature.split(",");
+  const timestamp = parts.find((p) => p.startsWith("t="))?.slice(2);
+  const sig = parts.find((p) => p.startsWith("v1="))?.slice(3);
+
+  if (!timestamp || !sig) return false;
+
+  // Check timestamp is within tolerance (5 minutes)
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parseInt(timestamp)) > 300) return false;
+
+  // Compute expected signature
+  const signedPayload = `${timestamp}.${payload}`;
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signatureBytes = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(signedPayload)
+  );
+  const expectedSig = Array.from(new Uint8Array(signatureBytes))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  // Constant-time comparison
+  return sig === expectedSig;
+}
+
+export interface StripeWebhookConfig {
+  /**
+   * Stripe webhook signing secret (whsec_...).
+   * Required for security - verifies webhook signatures.
+   * Get this from Stripe Dashboard > Webhooks > Signing secret.
+   */
+  webhookSecret: string;
+}
+
+/**
+ * Create a Stripe webhook handler that processes affiliate-related events.
+ * Handles invoice.paid, charge.refunded, and checkout.session.completed events.
+ *
+ * @example
+ * ```typescript
+ * import { httpRouter } from "convex/server";
+ * import { createStripeWebhookHandler } from "chief_emerie";
+ * import { components } from "./_generated/api";
+ *
+ * const http = httpRouter();
+ *
+ * http.route({
+ *   path: "/webhooks/stripe",
+ *   method: "POST",
+ *   handler: createStripeWebhookHandler(components.affiliates, {
+ *     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+ *   }),
+ * });
+ *
+ * export default http;
+ * ```
+ */
+export function createStripeWebhookHandler(
+  component: ComponentApi,
+  config: StripeWebhookConfig
+) {
+  return httpActionGeneric(async (ctx, request) => {
+    // Get raw body for signature verification
+    const rawBody = await request.text();
+
+    // Verify signature (required)
+    const signature = request.headers.get("stripe-signature");
+    if (!signature) {
+      return new Response(
+        JSON.stringify({ error: "Missing stripe-signature header" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const isValid = await verifyStripeSignature(
+      rawBody,
+      signature,
+      config.webhookSecret
+    );
+    if (!isValid) {
+      return new Response(JSON.stringify({ error: "Invalid signature" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const event = JSON.parse(rawBody) as { type: string; data: { object: any } };
+
+    try {
+      switch (event.type) {
+        case "invoice.paid": {
+          const invoice = event.data.object;
+          await ctx.runMutation(component.commissions.createFromInvoice, {
+            stripeInvoiceId: invoice.id,
+            stripeCustomerId: invoice.customer,
+            stripeChargeId: invoice.charge,
+            stripeSubscriptionId: invoice.subscription,
+            stripeProductId: invoice.lines?.data?.[0]?.price?.product,
+            amountPaidCents: invoice.amount_paid,
+            currency: invoice.currency,
+            affiliateCode: invoice.metadata?.affiliate_code,
+          });
+          break;
+        }
+
+        case "charge.refunded": {
+          const charge = event.data.object;
+          await ctx.runMutation(component.commissions.reverseByCharge, {
+            stripeChargeId: charge.id,
+            reason: charge.refunds?.data?.[0]?.reason ?? "Charge refunded",
+          });
+          break;
+        }
+
+        case "checkout.session.completed": {
+          const session = event.data.object;
+          await ctx.runMutation(component.referrals.linkStripeCustomer, {
+            stripeCustomerId: session.customer,
+            userId: session.client_reference_id,
+            affiliateCode: session.metadata?.affiliate_code,
+          });
+          break;
+        }
+      }
+
+      return new Response(JSON.stringify({ received: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Stripe webhook error:", error);
+      return new Response(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : "Unknown error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  });
+}
+
+// =============================================================================
+// @convex-dev/stripe Integration
+// =============================================================================
+
+/**
+ * Get Stripe event handlers for affiliate tracking.
+ * Optionally merge with your own handlers (affiliate runs first).
+ *
+ * Handles:
+ * - invoice.paid → creates commission
+ * - charge.refunded → reverses commission
+ * - checkout.session.completed → links customer to affiliate
+ *
+ * @param component - The affiliate component API
+ * @param handlers - Optional additional handlers to merge (overlapping events run affiliate first, then yours)
+ *
+ * @example
+ * ```typescript
+ * import { getAffiliateStripeHandlers } from "chief_emerie";
+ *
+ * // Just affiliate handlers
+ * export const stripeWebhookHandlers = getAffiliateStripeHandlers(components.affiliates);
+ *
+ * // With your handlers merged
+ * export const stripeWebhookHandlers = getAffiliateStripeHandlers(
+ *   components.affiliates,
+ *   {
+ *     "invoice.paid": async (ctx, event) => { console.log("paid!"); },
+ *     "customer.subscription.created": async (ctx, event) => { ... },
+ *   }
+ * );
+ * ```
+ */
+export function getAffiliateStripeHandlers(
+  component: ComponentApi,
+  handlers?: StripeEventHandlers
+): StripeEventHandlers {
+  const affiliateHandlers: StripeEventHandlers = {
+    "invoice.paid": async (ctx, event) => {
+      const invoice = event.data.object as unknown as Record<string, unknown>;
+      await ctx.runMutation(component.commissions.createFromInvoice, {
+        stripeInvoiceId: invoice.id as string,
+        stripeCustomerId: invoice.customer as string,
+        stripeChargeId: (invoice.charge as string) ?? undefined,
+        stripeSubscriptionId: (invoice.subscription as string) ?? undefined,
+        stripeProductId:
+          ((invoice.lines as { data?: Array<{ price?: { product?: string } }> })
+            ?.data?.[0]?.price?.product as string) ?? undefined,
+        amountPaidCents: invoice.amount_paid as number,
+        currency: invoice.currency as string,
+        affiliateCode: (invoice.metadata as Record<string, string>)
+          ?.affiliate_code,
+      });
+    },
+
+    "charge.refunded": async (ctx, event) => {
+      const charge = event.data.object as unknown as Record<string, unknown>;
+      await ctx.runMutation(component.commissions.reverseByCharge, {
+        stripeChargeId: charge.id as string,
+        reason:
+          ((charge.refunds as { data?: Array<{ reason?: string }> })?.data?.[0]
+            ?.reason as string) ?? "Charge refunded",
+      });
+    },
+
+    "checkout.session.completed": async (ctx, event) => {
+      const session = event.data.object as unknown as Record<string, unknown>;
+      await ctx.runMutation(component.referrals.linkStripeCustomer, {
+        stripeCustomerId: session.customer as string,
+        userId: (session.client_reference_id as string) ?? undefined,
+        affiliateCode: (session.metadata as Record<string, string>)
+          ?.affiliate_code,
+      });
+    },
+  };
+
+  if (!handlers) return affiliateHandlers;
+
+  // Merge: for overlapping events, run affiliate first, then user's handler
+  const merged = { ...affiliateHandlers } as Record<
+    string,
+    (ctx: unknown, event: unknown) => Promise<void>
+  >;
+
+  for (const [eventType, handler] of Object.entries(handlers)) {
+    if (!handler) continue;
+    const affiliateHandler = merged[eventType];
+    if (affiliateHandler) {
+      merged[eventType] = async (ctx: unknown, event: unknown) => {
+        await affiliateHandler(ctx, event);
+        await (handler as (ctx: unknown, event: unknown) => Promise<void>)(
+          ctx,
+          event
+        );
+      };
+    } else {
+      merged[eventType] = handler as (
+        ctx: unknown,
+        event: unknown
+      ) => Promise<void>;
+    }
+  }
+
+  return merged as StripeEventHandlers;
 }
 
 // =============================================================================

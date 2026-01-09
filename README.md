@@ -190,72 +190,72 @@ export const onUserCreated = internalMutation({
 
 ### Stripe Webhook Integration
 
-The component provides internal mutations that you call from your Stripe webhook handlers. This gives you full control over webhook verification and event handling.
+#### With @convex-dev/stripe (Recommended)
+
+If you're using `@convex-dev/stripe`, use `getAffiliateStripeHandlers` to get type-safe handlers:
+
+```typescript
+// convex/stripeHandlers.ts
+import { getAffiliateStripeHandlers } from "chief_emerie";
+import { components } from "./_generated/api";
+
+// Just affiliate handlers
+export const stripeWebhookHandlers = getAffiliateStripeHandlers(components.affiliates);
+
+// Or with your handlers merged (affiliate runs first, then yours)
+export const stripeWebhookHandlers = getAffiliateStripeHandlers(
+  components.affiliates,
+  {
+    "invoice.paid": async (ctx, event) => {
+      // Runs AFTER affiliate commission tracking
+      console.log("Payment received!");
+    },
+    "customer.subscription.created": async (ctx, event) => {
+      // Your logic...
+    },
+  }
+);
+```
+
+Then use them in your HTTP routes:
+
+```typescript
+// convex/http.ts
+import { registerRoutes } from "@convex-dev/stripe";
+import { stripeWebhookHandlers } from "./stripeHandlers";
+
+registerRoutes(http, components.stripe, {
+  webhookPath: "/stripe/webhook",
+  events: stripeWebhookHandlers,
+});
+```
+
+#### Standalone Webhook Handler
+
+If you're not using `@convex-dev/stripe`, use the standalone handler with built-in signature verification:
 
 ```typescript
 // convex/http.ts
 import { httpRouter } from "convex/server";
-import { httpAction } from "./_generated/server";
 import { components } from "./_generated/api";
+import { createStripeWebhookHandler } from "chief_emerie";
 
 const http = httpRouter();
 
 http.route({
   path: "/webhooks/stripe",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    // Verify webhook signature (use @convex-dev/stripe or manual verification)
-    const signature = request.headers.get("stripe-signature");
-    if (!signature) {
-      return new Response("Missing signature", { status: 400 });
-    }
-
-    // Parse the event (add your signature verification here)
-    const body = await request.json();
-    const event = body as { type: string; data: { object: any } };
-
-    switch (event.type) {
-      case "invoice.paid": {
-        const invoice = event.data.object;
-        await ctx.runMutation(components.affiliates.commissions.createFromInvoice, {
-          stripeInvoiceId: invoice.id,
-          stripeCustomerId: invoice.customer,
-          stripeChargeId: invoice.charge,
-          stripeSubscriptionId: invoice.subscription,
-          stripeProductId: invoice.lines?.data?.[0]?.price?.product,
-          amountPaidCents: invoice.amount_paid,
-          currency: invoice.currency,
-          affiliateCode: invoice.metadata?.affiliate_code,
-        });
-        break;
-      }
-
-      case "charge.refunded": {
-        const charge = event.data.object;
-        await ctx.runMutation(components.affiliates.commissions.reverseByCharge, {
-          stripeChargeId: charge.id,
-          reason: charge.refunds?.data?.[0]?.reason ?? "Charge refunded",
-        });
-        break;
-      }
-
-      case "checkout.session.completed": {
-        const session = event.data.object;
-        await ctx.runMutation(components.affiliates.referrals.linkStripeCustomer, {
-          stripeCustomerId: session.customer,
-          userId: session.client_reference_id,
-          affiliateCode: session.metadata?.affiliate_code,
-        });
-        break;
-      }
-    }
-
-    return new Response(JSON.stringify({ received: true }), { status: 200 });
+  handler: createStripeWebhookHandler(components.affiliates, {
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
   }),
 });
 
 export default http;
 ```
+
+Set `STRIPE_WEBHOOK_SECRET` in your Convex environment variables.
+
+Both approaches handle `invoice.paid`, `charge.refunded`, and `checkout.session.completed` events automatically
 
 ### Recording Payouts
 
