@@ -3,24 +3,17 @@ import {
   httpActionGeneric,
   mutationGeneric,
   queryGeneric,
-  internalMutationGeneric,
-  internalActionGeneric,
+  paginationOptsValidator,
 } from "convex/server";
-import type {
-  Auth,
-  GenericActionCtx,
-  GenericMutationCtx,
-  GenericQueryCtx,
-  GenericDataModel,
-  HttpRouter,
-} from "convex/server";
+import type { Auth, HttpRouter } from "convex/server";
 import { v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
 import {
   affiliateStatusValidator,
   payoutTermValidator,
   commissionTypeValidator,
-  payoutMethodValidator,
+  commissionStatusValidator,
+  payoutStatusValidator,
 } from "../component/validators.js";
 
 // =============================================================================
@@ -59,676 +52,115 @@ export interface AffiliateConfig {
   baseUrl?: string;
 
   /**
-   * Stripe secret key (passed to Connect actions).
+   * Stripe secret key for Connect payouts.
    */
   stripeSecretKey?: string;
 }
 
-export interface AffiliateRegistration {
-  userId: string;
-  email: string;
-  displayName?: string;
-  website?: string;
-  socialMedia?: string;
-  campaignId?: string;
-  customCode?: string;
+export interface CreateAffiliateApiConfig extends AffiliateConfig {
+  /**
+   * Authentication function that returns the user ID.
+   * Called for all authenticated endpoints.
+   */
+  auth: (ctx: { auth: Auth }) => Promise<string>;
+
+  /**
+   * Optional admin check function.
+   * If not provided, admin endpoints will use the auth function only.
+   */
+  isAdmin?: (ctx: { auth: Auth }) => Promise<boolean>;
 }
 
-export interface PortalData {
-  affiliate: {
-    _id: string;
-    code: string;
-    displayName?: string;
-    status: string;
-    stats: {
-      totalClicks: number;
-      totalSignups: number;
-      totalConversions: number;
-      totalRevenueCents: number;
-      totalCommissionsCents: number;
-      pendingCommissionsCents: number;
-      paidCommissionsCents: number;
-    };
-    stripeConnectStatus?: string;
-  };
-  campaign: {
-    name: string;
-    commissionType: string;
-    commissionValue: number;
-  };
-  recentCommissions: Array<{
-    _id: string;
-    saleAmountCents: number;
-    commissionAmountCents: number;
-    currency: string;
-    status: string;
-    createdAt: number;
-  }>;
-  pendingPayout: {
-    amountCents: number;
-    count: number;
-  };
-}
-
-export interface AdminDashboard {
-  totalAffiliates: number;
-  pendingApprovals: number;
-  activeAffiliates: number;
-  totalClicks: number;
-  totalSignups: number;
-  totalConversions: number;
-  totalRevenueCents: number;
-  totalCommissionsCents: number;
-  pendingPayoutsCents: number;
-  paidPayoutsCents: number;
-  activeCampaigns: number;
-}
-
-// Context types
-type QueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
-type MutationCtx = Pick<
-  GenericMutationCtx<GenericDataModel>,
-  "runQuery" | "runMutation"
->;
-type ActionCtx = Pick<
-  GenericActionCtx<GenericDataModel>,
-  "runQuery" | "runMutation" | "runAction"
->;
+// Context types for internal use
+type QueryCtx = { runQuery: any; auth: Auth };
+type MutationCtx = { runQuery: any; runMutation: any; auth: Auth };
+type ActionCtx = { runQuery: any; runMutation: any; runAction: any; auth: Auth };
 
 // =============================================================================
-// AffiliateManager Class
+// createAffiliateApi - Main API Factory
 // =============================================================================
 
 /**
- * Main client wrapper for the Affiliate component.
- * Use this class to interact with the affiliate system from your Convex functions.
+ * Create a complete affiliate API with all queries, mutations, and actions.
+ * Returns ready-to-use Convex functions that can be directly exported.
+ *
+ * @example
+ * ```typescript
+ * // convex/affiliates.ts
+ * import { createAffiliateApi } from "chief_emerie";
+ * import { components } from "./_generated/api";
+ *
+ * export const {
+ *   trackClick,
+ *   register,
+ *   getPortalData,
+ *   adminDashboard,
+ * } = createAffiliateApi(components.affiliates, {
+ *   defaultCommissionValue: 25,
+ *   auth: async (ctx) => {
+ *     const identity = await ctx.auth.getUserIdentity();
+ *     if (!identity) throw new Error("Not authenticated");
+ *     return identity.subject;
+ *   },
+ * });
+ * ```
  */
-export class AffiliateManager {
-  private component: ComponentApi;
-  private config: AffiliateConfig;
-
-  constructor(component: ComponentApi, config: AffiliateConfig = {}) {
-    this.component = component;
-    this.config = {
-      defaultCommissionType: "percentage",
-      defaultCommissionValue: 20,
-      defaultPayoutTerm: "NET-30",
-      minPayoutCents: 5000, // $50 minimum
-      defaultCookieDurationDays: 30,
-      ...config,
-    };
-  }
-
-  // ===========================================================================
-  // Setup & Initialization
-  // ===========================================================================
-
-  /**
-   * Initialize the affiliate system with default settings.
-   * Should be called once during app setup.
-   */
-  async initialize(ctx: MutationCtx): Promise<void> {
-    // Check if already initialized
-    const existing = await ctx.runQuery(this.component.settings.get);
-    if (existing) {
-      return;
-    }
-
-    // Initialize settings
-    await ctx.runMutation(this.component.settings.initialize, {
-      defaultCommissionType: this.config.defaultCommissionType!,
-      defaultCommissionValue: this.config.defaultCommissionValue!,
-      defaultPayoutTerm: this.config.defaultPayoutTerm!,
-      defaultMinPayoutCents: this.config.minPayoutCents!,
-      defaultCookieDurationDays: this.config.defaultCookieDurationDays!,
-    });
-
-    // Create default campaign
-    await ctx.runMutation(this.component.campaigns.create, {
-      name: "Default Campaign",
-      slug: "default",
-      commissionType: this.config.defaultCommissionType!,
-      commissionValue: this.config.defaultCommissionValue!,
-      payoutTerm: this.config.defaultPayoutTerm!,
-      cookieDurationDays: this.config.defaultCookieDurationDays!,
-      isDefault: true,
-    });
-  }
-
-  // ===========================================================================
-  // Attribution (Better Auth Integration)
-  // ===========================================================================
-
-  /**
-   * Attribute a user signup to an affiliate.
-   * Call this after user registration to link the referral.
-   *
-   * @param ctx - Mutation context
-   * @param userId - The new user's ID from Better Auth
-   * @param referralCode - The affiliate code from URL params (optional)
-   * @param referralId - The referral ID from cookie/storage (optional)
-   */
-  async attributeSignup(
-    ctx: MutationCtx,
-    params: {
-      userId: string;
-      referralCode?: string;
-      referralId?: string;
-    }
-  ): Promise<{ attributed: boolean; affiliateCode?: string }> {
-    // First try by referral ID (from cookie/storage)
-    if (params.referralId) {
-      const referral = await ctx.runQuery(
-        this.component.referrals.getByReferralId,
-        { referralId: params.referralId }
-      );
-      if (referral && referral.status === "clicked") {
-        await ctx.runMutation(this.component.referrals.attributeSignup, {
-          referralId: referral._id,
-          userId: params.userId,
-        });
-        const affiliate = await ctx.runQuery(
-          this.component.affiliates.getByUserId,
-          { userId: "" } // Placeholder - we need the affiliate code
-        );
-        return { attributed: true };
-      }
-    }
-
-    // Try by affiliate code (from URL params)
-    if (params.referralCode) {
-      const result = await ctx.runMutation(
-        this.component.referrals.attributeSignupByCode,
-        {
-          userId: params.userId,
-          affiliateCode: params.referralCode,
-        }
-      );
-      return {
-        attributed: result.success,
-        affiliateCode: result.success ? params.referralCode : undefined,
-      };
-    }
-
-    return { attributed: false };
-  }
-
-  // ===========================================================================
-  // Stripe Webhook Handlers
-  // ===========================================================================
-
-  /**
-   * Handle Stripe invoice.paid webhook event.
-   * Creates a commission for the attributed affiliate.
-   */
-  async handleInvoicePaid(
-    ctx: MutationCtx,
-    invoice: {
-      id: string;
-      customer: string;
-      subscription?: string;
-      amount_paid: number;
-      currency: string;
-      metadata?: { affiliate_code?: string };
-      lines?: {
-        data: Array<{
-          price?: { product?: string };
-        }>;
-      };
-      charge?: string;
-    }
-  ): Promise<string | null> {
-    const productId = invoice.lines?.data[0]?.price?.product;
-
-    const commissionId = await ctx.runMutation(
-      this.component.internal.stripe.handleInvoicePaid,
-      {
-        invoiceId: invoice.id,
-        stripeCustomerId: invoice.customer,
-        subscriptionId: invoice.subscription,
-        amountPaidCents: invoice.amount_paid,
-        currency: invoice.currency,
-        affiliateCode: invoice.metadata?.affiliate_code,
-        productId: typeof productId === "string" ? productId : undefined,
-        chargeId: typeof invoice.charge === "string" ? invoice.charge : undefined,
-      }
-    );
-
-    return commissionId;
-  }
-
-  /**
-   * Handle Stripe charge.refunded webhook event.
-   * Reverses the commission for the refunded charge.
-   */
-  async handleChargeRefunded(
-    ctx: MutationCtx,
-    charge: {
-      id: string;
-      customer: string;
-      amount_refunded: number;
-      refunds?: {
-        data: Array<{ reason?: string }>;
-      };
-    }
-  ): Promise<void> {
-    await ctx.runMutation(
-      this.component.internal.stripe.handleChargeRefunded,
-      {
-        chargeId: charge.id,
-        stripeCustomerId:
-          typeof charge.customer === "string" ? charge.customer : "",
-        refundAmountCents: charge.amount_refunded,
-        reason: charge.refunds?.data[0]?.reason,
-      }
-    );
-  }
-
-  /**
-   * Handle Stripe checkout.session.completed webhook event.
-   * Links Stripe customer to referral for attribution.
-   */
-  async handleCheckoutCompleted(
-    ctx: MutationCtx,
-    session: {
-      id: string;
-      customer: string;
-      client_reference_id?: string;
-      metadata?: { affiliate_code?: string };
-    }
-  ): Promise<void> {
-    await ctx.runMutation(
-      this.component.internal.stripe.handleCheckoutCompleted,
-      {
-        sessionId: session.id,
-        stripeCustomerId:
-          typeof session.customer === "string" ? session.customer : "",
-        affiliateCode: session.metadata?.affiliate_code,
-        userId: session.client_reference_id,
-      }
-    );
-  }
-
-  // ===========================================================================
-  // Affiliate Registration
-  // ===========================================================================
-
-  /**
-   * Register a new affiliate.
-   * Returns the affiliate code.
-   */
-  async registerAffiliate(
-    ctx: MutationCtx,
-    params: AffiliateRegistration
-  ): Promise<{ affiliateId: string; code: string }> {
-    // Get campaign (use provided or default)
-    let campaignId = params.campaignId;
-    if (!campaignId) {
-      const defaultCampaign = await ctx.runQuery(
-        this.component.campaigns.getDefault
-      );
-      if (!defaultCampaign) {
-        throw new Error("No default campaign configured");
-      }
-      campaignId = defaultCampaign._id;
-    }
-
-    const result = await ctx.runMutation(this.component.affiliates.register, {
-      userId: params.userId,
-      email: params.email,
-      displayName: params.displayName,
-      website: params.website,
-      socialMedia: params.socialMedia,
-      campaignId: campaignId as any,
-      customCode: params.customCode,
-    });
-
-    return result;
-  }
-
-  // ===========================================================================
-  // Portal Data
-  // ===========================================================================
-
-  /**
-   * Get all data needed for the affiliate portal.
-   */
-  async getAffiliatePortalData(
-    ctx: QueryCtx,
-    userId: string
-  ): Promise<PortalData | null> {
-    return await ctx.runQuery(this.component.analytics.getPortalData, {
-      userId,
-    });
-  }
-
-  /**
-   * Get paginated commission history for an affiliate.
-   */
-  async getAffiliateCommissions(
-    ctx: QueryCtx,
-    params: {
-      affiliateId: string;
-      status?: "pending" | "approved" | "paid" | "reversed" | "processing";
-      paginationOpts: { numItems: number; cursor: string | null };
-    }
-  ) {
-    return await ctx.runQuery(this.component.commissions.listByAffiliate, {
-      affiliateId: params.affiliateId as any,
-      status: params.status,
-      paginationOpts: params.paginationOpts,
-    });
-  }
-
-  /**
-   * Get paginated payout history for an affiliate.
-   */
-  async getAffiliatePayouts(
-    ctx: QueryCtx,
-    params: {
-      affiliateId: string;
-      status?:
-        | "pending"
-        | "processing"
-        | "completed"
-        | "failed"
-        | "cancelled";
-      paginationOpts: { numItems: number; cursor: string | null };
-    }
-  ) {
-    return await ctx.runQuery(this.component.payouts.listByAffiliate, {
-      affiliateId: params.affiliateId as any,
-      status: params.status,
-      paginationOpts: params.paginationOpts,
-    });
-  }
-
-  // ===========================================================================
-  // Stripe Connect
-  // ===========================================================================
-
-  /**
-   * Create a Stripe Connect onboarding link for an affiliate.
-   */
-  async createConnectOnboardingLink(
-    ctx: ActionCtx,
-    params: {
-      affiliateId: string;
-      refreshUrl: string;
-      returnUrl: string;
-    }
-  ): Promise<{ accountId: string; url: string }> {
-    if (!this.config.stripeSecretKey) {
-      throw new Error("Stripe secret key not configured");
-    }
-
-    const result = await ctx.runAction(
-      this.component.internal.connect.createAccountLink,
-      {
-        affiliateId: params.affiliateId as any,
-        stripeSecretKey: this.config.stripeSecretKey,
-        refreshUrl: params.refreshUrl,
-        returnUrl: params.returnUrl,
-      }
-    );
-
-    return {
-      accountId: result.accountId,
-      url: result.accountLinkUrl,
-    };
-  }
-
-  /**
-   * Create a Stripe Connect dashboard login link for an affiliate.
-   */
-  async createConnectLoginLink(
-    ctx: ActionCtx,
-    stripeConnectAccountId: string
-  ): Promise<string> {
-    if (!this.config.stripeSecretKey) {
-      throw new Error("Stripe secret key not configured");
-    }
-
-    const result = await ctx.runAction(
-      this.component.internal.connect.createLoginLink,
-      {
-        stripeSecretKey: this.config.stripeSecretKey,
-        stripeConnectAccountId,
-      }
-    );
-
-    return result.url;
-  }
-
-  // ===========================================================================
-  // Admin Functions
-  // ===========================================================================
-
-  /**
-   * Get admin dashboard overview.
-   */
-  async getAdminDashboard(ctx: QueryCtx): Promise<AdminDashboard> {
-    return await ctx.runQuery(this.component.analytics.getAdminDashboard);
-  }
-
-  /**
-   * List affiliates with optional filters.
-   */
-  async listAffiliates(
-    ctx: QueryCtx,
-    params?: {
-      status?: "pending" | "approved" | "rejected" | "suspended";
-      campaignId?: string;
-      limit?: number;
-    }
-  ) {
-    return await ctx.runQuery(this.component.affiliates.list, {
-      status: params?.status,
-      campaignId: params?.campaignId as any,
-      limit: params?.limit,
-    });
-  }
-
-  /**
-   * Approve an affiliate application.
-   */
-  async approveAffiliate(ctx: MutationCtx, affiliateId: string): Promise<void> {
-    await ctx.runMutation(this.component.affiliates.approve, {
-      affiliateId: affiliateId as any,
-    });
-  }
-
-  /**
-   * Reject an affiliate application.
-   */
-  async rejectAffiliate(
-    ctx: MutationCtx,
-    affiliateId: string
-  ): Promise<void> {
-    await ctx.runMutation(this.component.affiliates.reject, {
-      affiliateId: affiliateId as any,
-    });
-  }
-
-  /**
-   * Suspend an affiliate.
-   */
-  async suspendAffiliate(
-    ctx: MutationCtx,
-    affiliateId: string
-  ): Promise<void> {
-    await ctx.runMutation(this.component.affiliates.suspend, {
-      affiliateId: affiliateId as any,
-    });
-  }
-
-  /**
-   * Trigger payout processing for all eligible affiliates.
-   */
-  async processPayouts(ctx: ActionCtx): Promise<{
-    triggered: number;
-    affiliateIds: string[];
-  }> {
-    if (!this.config.stripeSecretKey) {
-      throw new Error("Stripe secret key not configured");
-    }
-
-    return await ctx.runAction(
-      this.component.internal.workflows.processAllDuePayouts,
-      {
-        stripeSecretKey: this.config.stripeSecretKey,
-        minPayoutCents: this.config.minPayoutCents!,
-      }
-    );
-  }
-
-  // ===========================================================================
-  // Campaign Management
-  // ===========================================================================
-
-  /**
-   * List all campaigns.
-   */
-  async listCampaigns(ctx: QueryCtx, includeInactive = false) {
-    return await ctx.runQuery(this.component.campaigns.list, {
-      activeOnly: !includeInactive,
-    });
-  }
-
-  /**
-   * Create a new campaign.
-   */
-  async createCampaign(
-    ctx: MutationCtx,
-    params: {
-      name: string;
-      slug: string;
-      description?: string;
-      commissionType: "percentage" | "fixed";
-      commissionValue: number;
-      payoutTerm: "NET-0" | "NET-15" | "NET-30" | "NET-60" | "NET-90";
-      cookieDurationDays?: number;
-      commissionDuration?: "lifetime" | "max_payments" | "max_months";
-      commissionDurationValue?: number;
-      allowedProducts?: string[];
-      excludedProducts?: string[];
-    }
-  ) {
-    return await ctx.runMutation(this.component.campaigns.create, {
-      ...params,
-      cookieDurationDays:
-        params.cookieDurationDays ?? this.config.defaultCookieDurationDays!,
-    });
-  }
-
-  // ===========================================================================
-  // Utilities
-  // ===========================================================================
-
-  /**
-   * Generate an affiliate link with the given code and path.
-   */
-  generateAffiliateLink(
-    code: string,
-    path = "/",
-    subId?: string
-  ): string {
-    const baseUrl = this.config.baseUrl ?? "";
-    const url = new URL(path, baseUrl);
-    url.searchParams.set("ref", code);
-    if (subId) {
-      url.searchParams.set("sub", subId);
-    }
-    return url.toString();
-  }
-
-  /**
-   * Parse referral info from URL search params.
-   */
-  parseReferralParams(searchParams: URLSearchParams): {
-    code?: string;
-    subId?: string;
-  } {
-    return {
-      code: searchParams.get("ref") ?? undefined,
-      subId: searchParams.get("sub") ?? undefined,
-    };
-  }
-}
-
-// =============================================================================
-// Legacy API (for backwards compatibility)
-// =============================================================================
-
-/**
- * For re-exporting of an API accessible from React clients.
- * Creates query/mutation/action exports for use in the host app.
- */
-export function exposeApi(
+export function createAffiliateApi(
   component: ComponentApi,
-  options: {
-    /**
-     * Authenticate the request and return the user ID.
-     */
-    auth: (
-      ctx: { auth: Auth },
-      operation:
-        | { type: "read" }
-        | { type: "write" }
-        | { type: "admin" }
-    ) => Promise<string>;
-  }
+  config: CreateAffiliateApiConfig
 ) {
+  const defaults = {
+    defaultCommissionType: config.defaultCommissionType ?? "percentage",
+    defaultCommissionValue: config.defaultCommissionValue ?? 20,
+    defaultPayoutTerm: config.defaultPayoutTerm ?? "NET-30",
+    defaultCookieDurationDays: config.defaultCookieDurationDays ?? 30,
+    minPayoutCents: config.minPayoutCents ?? 5000,
+  };
+
+  // Helper to ensure default campaign exists (lazy initialization)
+  const ensureDefaultCampaign = async (ctx: MutationCtx) => {
+    let campaign = await ctx.runQuery(component.campaigns.getDefault);
+    if (!campaign) {
+      await ctx.runMutation(component.campaigns.create, {
+        name: "Default Campaign",
+        slug: "default",
+        commissionType: defaults.defaultCommissionType,
+        commissionValue: defaults.defaultCommissionValue,
+        payoutTerm: defaults.defaultPayoutTerm,
+        cookieDurationDays: defaults.defaultCookieDurationDays,
+        minPayoutCents: defaults.minPayoutCents,
+        isDefault: true,
+      });
+      campaign = await ctx.runQuery(component.campaigns.getDefault);
+    }
+    return campaign!;
+  };
+
+  // Helper to check admin access
+  const requireAdmin = async (ctx: { auth: Auth }) => {
+    if (config.isAdmin) {
+      const isAdmin = await config.isAdmin(ctx);
+      if (!isAdmin) throw new Error("Not authorized - admin access required");
+    } else {
+      // Fall back to just requiring auth
+      await config.auth(ctx);
+    }
+  };
+
+  // Helper to get affiliate by userId
+  const getAffiliateByUserId = async (ctx: QueryCtx, userId: string) => {
+    return ctx.runQuery(component.affiliates.getByUserId, { userId });
+  };
+
   return {
-    // Affiliate Portal
-    getPortalData: queryGeneric({
-      args: {},
-      handler: async (ctx) => {
-        const userId = await options.auth(ctx, { type: "read" });
-        return await ctx.runQuery(component.analytics.getPortalData, {
-          userId,
-        });
-      },
-    }),
+    // =========================================================================
+    // PUBLIC ENDPOINTS (no authentication required)
+    // =========================================================================
 
-    getAffiliate: queryGeneric({
-      args: {},
-      handler: async (ctx) => {
-        const userId = await options.auth(ctx, { type: "read" });
-        return await ctx.runQuery(component.affiliates.getByUserId, {
-          userId,
-        });
-      },
-    }),
-
-    // Registration
-    register: mutationGeneric({
-      args: {
-        email: v.string(),
-        displayName: v.optional(v.string()),
-        website: v.optional(v.string()),
-        socialMedia: v.optional(v.string()),
-        customCode: v.optional(v.string()),
-      },
-      handler: async (ctx, args) => {
-        const userId = await options.auth(ctx, { type: "write" });
-        const defaultCampaign = await ctx.runQuery(component.campaigns.getDefault);
-        if (!defaultCampaign) {
-          throw new Error("No default campaign configured");
-        }
-        return await ctx.runMutation(component.affiliates.register, {
-          userId,
-          email: args.email,
-          displayName: args.displayName,
-          website: args.website,
-          socialMedia: args.socialMedia,
-          campaignId: defaultCampaign._id,
-          customCode: args.customCode,
-        });
-      },
-    }),
-
-    // Track referral click (public - no auth required)
+    /**
+     * Track when a visitor clicks an affiliate link.
+     * Returns a referral ID that should be stored client-side.
+     */
     trackClick: mutationGeneric({
       args: {
         affiliateCode: v.string(),
@@ -739,36 +171,95 @@ export function exposeApi(
         subId: v.optional(v.string()),
       },
       handler: async (ctx, args) => {
-        return await ctx.runMutation(component.referrals.trackClick, args);
+        return ctx.runMutation(component.referrals.trackClick, args);
       },
     }),
 
-    // Commissions
+    /**
+     * Validate an affiliate code and get basic info.
+     */
+    validateCode: queryGeneric({
+      args: { code: v.string() },
+      handler: async (ctx, args) => {
+        const affiliate = await ctx.runQuery(component.affiliates.getByCode, {
+          code: args.code.toUpperCase(),
+        });
+        if (!affiliate) return null;
+        return {
+          valid: affiliate.status === "approved",
+          displayName: affiliate.displayName,
+          code: affiliate.code,
+        };
+      },
+    }),
+
+    // =========================================================================
+    // AUTHENTICATED ENDPOINTS (require user login)
+    // =========================================================================
+
+    /**
+     * Register as a new affiliate.
+     */
+    register: mutationGeneric({
+      args: {
+        email: v.string(),
+        displayName: v.optional(v.string()),
+        website: v.optional(v.string()),
+        socialMedia: v.optional(v.string()),
+        customCode: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        const userId = await config.auth(ctx);
+        const campaign = await ensureDefaultCampaign(ctx);
+        return ctx.runMutation(component.affiliates.register, {
+          userId,
+          email: args.email,
+          displayName: args.displayName,
+          website: args.website,
+          socialMedia: args.socialMedia,
+          campaignId: campaign._id,
+          customCode: args.customCode,
+        });
+      },
+    }),
+
+    /**
+     * Get the current user's affiliate profile.
+     */
+    getAffiliate: queryGeneric({
+      args: {},
+      handler: async (ctx) => {
+        const userId = await config.auth(ctx);
+        return ctx.runQuery(component.affiliates.getByUserId, { userId });
+      },
+    }),
+
+    /**
+     * Get complete portal data for the affiliate dashboard.
+     */
+    getPortalData: queryGeneric({
+      args: {},
+      handler: async (ctx) => {
+        const userId = await config.auth(ctx);
+        return ctx.runQuery(component.analytics.getPortalData, { userId });
+      },
+    }),
+
+    /**
+     * List commissions with pagination.
+     */
     listCommissions: queryGeneric({
       args: {
-        status: v.optional(
-          v.union(
-            v.literal("pending"),
-            v.literal("approved"),
-            v.literal("paid"),
-            v.literal("reversed"),
-            v.literal("processing")
-          )
-        ),
-        paginationOpts: v.object({
-          numItems: v.number(),
-          cursor: v.union(v.string(), v.null()),
-        }),
+        status: v.optional(commissionStatusValidator),
+        paginationOpts: paginationOptsValidator,
       },
       handler: async (ctx, args) => {
-        const userId = await options.auth(ctx, { type: "read" });
-        const affiliate = await ctx.runQuery(component.affiliates.getByUserId, {
-          userId,
-        });
+        const userId = await config.auth(ctx);
+        const affiliate = await getAffiliateByUserId(ctx, userId);
         if (!affiliate) {
           return { page: [], isDone: true, continueCursor: "" };
         }
-        return await ctx.runQuery(component.commissions.listByAffiliate, {
+        return ctx.runQuery(component.commissions.listByAffiliate, {
           affiliateId: affiliate._id,
           status: args.status,
           paginationOpts: args.paginationOpts,
@@ -776,49 +267,201 @@ export function exposeApi(
       },
     }),
 
-    // Payouts
+    /**
+     * List payouts with pagination.
+     */
     listPayouts: queryGeneric({
+      args: {
+        status: v.optional(payoutStatusValidator),
+        paginationOpts: paginationOptsValidator,
+      },
+      handler: async (ctx, args) => {
+        const userId = await config.auth(ctx);
+        const affiliate = await getAffiliateByUserId(ctx, userId);
+        if (!affiliate) {
+          return { page: [], isDone: true, continueCursor: "" };
+        }
+        return ctx.runQuery(component.payouts.listByAffiliate, {
+          affiliateId: affiliate._id,
+          status: args.status,
+          paginationOpts: args.paginationOpts,
+        });
+      },
+    }),
+
+    /**
+     * List referrals/clicks.
+     */
+    listReferrals: queryGeneric({
       args: {
         status: v.optional(
           v.union(
-            v.literal("pending"),
-            v.literal("processing"),
-            v.literal("completed"),
-            v.literal("failed"),
-            v.literal("cancelled")
+            v.literal("clicked"),
+            v.literal("signed_up"),
+            v.literal("converted"),
+            v.literal("expired")
           )
         ),
-        paginationOpts: v.object({
-          numItems: v.number(),
-          cursor: v.union(v.string(), v.null()),
-        }),
+        limit: v.optional(v.number()),
       },
       handler: async (ctx, args) => {
-        const userId = await options.auth(ctx, { type: "read" });
-        const affiliate = await ctx.runQuery(component.affiliates.getByUserId, {
-          userId,
-        });
+        const userId = await config.auth(ctx);
+        const affiliate = await getAffiliateByUserId(ctx, userId);
         if (!affiliate) {
-          return { page: [], isDone: true, continueCursor: "" };
+          return [];
         }
-        return await ctx.runQuery(component.payouts.listByAffiliate, {
+        return ctx.runQuery(component.referrals.listByAffiliate, {
           affiliateId: affiliate._id,
           status: args.status,
-          paginationOpts: args.paginationOpts,
+          limit: args.limit,
         });
       },
     }),
 
-    // Admin: Dashboard
+    // =========================================================================
+    // STRIPE CONNECT ENDPOINTS
+    // =========================================================================
+
+    /**
+     * Create a Stripe Connect onboarding link for the affiliate.
+     */
+    createConnectOnboardingLink: actionGeneric({
+      args: {
+        returnUrl: v.string(),
+        refreshUrl: v.string(),
+      },
+      handler: async (ctx, args) => {
+        if (!config.stripeSecretKey) {
+          throw new Error("Stripe secret key not configured");
+        }
+        const userId = await config.auth(ctx);
+        const affiliate = await ctx.runQuery(component.affiliates.getByUserId, {
+          userId,
+        });
+        if (!affiliate) {
+          throw new Error("User is not an affiliate");
+        }
+        return ctx.runAction(component.internal.connect.createAccountLink, {
+          affiliateId: affiliate._id,
+          stripeSecretKey: config.stripeSecretKey,
+          refreshUrl: args.refreshUrl,
+          returnUrl: args.returnUrl,
+        });
+      },
+    }),
+
+    /**
+     * Create a Stripe Connect dashboard login link.
+     */
+    createConnectLoginLink: actionGeneric({
+      args: {},
+      handler: async (ctx) => {
+        if (!config.stripeSecretKey) {
+          throw new Error("Stripe secret key not configured");
+        }
+        const userId = await config.auth(ctx);
+        const affiliate = await ctx.runQuery(component.affiliates.getByUserId, {
+          userId,
+        });
+        if (!affiliate?.stripeConnectAccountId) {
+          throw new Error("Affiliate has no connected Stripe account");
+        }
+        return ctx.runAction(component.internal.connect.createLoginLink, {
+          stripeSecretKey: config.stripeSecretKey,
+          stripeConnectAccountId: affiliate.stripeConnectAccountId,
+        });
+      },
+    }),
+
+    // =========================================================================
+    // UTILITY FUNCTIONS
+    // =========================================================================
+
+    /**
+     * Generate an affiliate link for the current user.
+     */
+    generateLink: queryGeneric({
+      args: {
+        path: v.optional(v.string()),
+        subId: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        const userId = await config.auth(ctx);
+        const affiliate = await ctx.runQuery(component.affiliates.getByUserId, {
+          userId,
+        });
+        if (!affiliate) {
+          throw new Error("User is not an affiliate");
+        }
+        const baseUrl = config.baseUrl ?? "";
+        const url = new URL(args.path ?? "/", baseUrl);
+        url.searchParams.set("ref", affiliate.code);
+        if (args.subId) {
+          url.searchParams.set("sub", args.subId);
+        }
+        return url.toString();
+      },
+    }),
+
+    /**
+     * Attribute a signup to an affiliate (call after user registration).
+     */
+    attributeSignup: mutationGeneric({
+      args: {
+        userId: v.string(),
+        referralCode: v.optional(v.string()),
+        referralId: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        // Try by referral ID first
+        if (args.referralId) {
+          const referral = await ctx.runQuery(
+            component.referrals.getByReferralId,
+            { referralId: args.referralId }
+          );
+          if (referral && referral.status === "clicked") {
+            await ctx.runMutation(component.referrals.attributeSignup, {
+              referralId: referral._id,
+              userId: args.userId,
+            });
+            return { attributed: true };
+          }
+        }
+
+        // Try by affiliate code
+        if (args.referralCode) {
+          const result = await ctx.runMutation(
+            component.referrals.attributeSignupByCode,
+            {
+              userId: args.userId,
+              affiliateCode: args.referralCode,
+            }
+          );
+          return { attributed: result.success, affiliateCode: args.referralCode };
+        }
+
+        return { attributed: false };
+      },
+    }),
+
+    // =========================================================================
+    // ADMIN ENDPOINTS
+    // =========================================================================
+
+    /**
+     * Get admin dashboard overview.
+     */
     adminDashboard: queryGeneric({
       args: {},
       handler: async (ctx) => {
-        await options.auth(ctx, { type: "admin" });
-        return await ctx.runQuery(component.analytics.getAdminDashboard);
+        await requireAdmin(ctx);
+        return ctx.runQuery(component.analytics.getAdminDashboard);
       },
     }),
 
-    // Admin: List affiliates
+    /**
+     * List all affiliates with optional filters.
+     */
     adminListAffiliates: queryGeneric({
       args: {
         status: v.optional(affiliateStatusValidator),
@@ -826,33 +469,14 @@ export function exposeApi(
         limit: v.optional(v.number()),
       },
       handler: async (ctx, args) => {
-        await options.auth(ctx, { type: "admin" });
-        return await ctx.runQuery(component.affiliates.list, args);
+        await requireAdmin(ctx);
+        return ctx.runQuery(component.affiliates.list, args);
       },
     }),
 
-    // Admin: Approve affiliate
-    adminApproveAffiliate: mutationGeneric({
-      args: { affiliateId: v.id("affiliates") },
-      handler: async (ctx, args) => {
-        await options.auth(ctx, { type: "admin" });
-        return await ctx.runMutation(component.affiliates.approve, args);
-      },
-    }),
-
-    // Admin: Reject affiliate
-    adminRejectAffiliate: mutationGeneric({
-      args: {
-        affiliateId: v.id("affiliates"),
-        reason: v.optional(v.string()),
-      },
-      handler: async (ctx, args) => {
-        await options.auth(ctx, { type: "admin" });
-        return await ctx.runMutation(component.affiliates.reject, args);
-      },
-    }),
-
-    // Admin: Top affiliates
+    /**
+     * Get top performing affiliates.
+     */
     adminTopAffiliates: queryGeneric({
       args: {
         sortBy: v.optional(
@@ -865,52 +489,182 @@ export function exposeApi(
         limit: v.optional(v.number()),
       },
       handler: async (ctx, args) => {
-        await options.auth(ctx, { type: "admin" });
-        return await ctx.runQuery(component.analytics.getTopAffiliates, args);
+        await requireAdmin(ctx);
+        return ctx.runQuery(component.analytics.getTopAffiliates, args);
+      },
+    }),
+
+    /**
+     * Approve an affiliate application.
+     */
+    adminApproveAffiliate: mutationGeneric({
+      args: { affiliateId: v.id("affiliates") },
+      handler: async (ctx, args) => {
+        await requireAdmin(ctx);
+        return ctx.runMutation(component.affiliates.approve, args);
+      },
+    }),
+
+    /**
+     * Reject an affiliate application.
+     */
+    adminRejectAffiliate: mutationGeneric({
+      args: {
+        affiliateId: v.id("affiliates"),
+        reason: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        await requireAdmin(ctx);
+        return ctx.runMutation(component.affiliates.reject, args);
+      },
+    }),
+
+    /**
+     * Suspend an active affiliate.
+     */
+    adminSuspendAffiliate: mutationGeneric({
+      args: { affiliateId: v.id("affiliates") },
+      handler: async (ctx, args) => {
+        await requireAdmin(ctx);
+        return ctx.runMutation(component.affiliates.suspend, args);
+      },
+    }),
+
+    /**
+     * Process all due payouts.
+     */
+    adminProcessPayouts: actionGeneric({
+      args: {},
+      handler: async (ctx) => {
+        await requireAdmin(ctx);
+        if (!config.stripeSecretKey) {
+          throw new Error("Stripe secret key not configured");
+        }
+        return ctx.runAction(component.internal.workflows.processAllDuePayouts, {
+          stripeSecretKey: config.stripeSecretKey,
+          minPayoutCents: defaults.minPayoutCents,
+        });
+      },
+    }),
+
+    /**
+     * List all campaigns.
+     */
+    adminListCampaigns: queryGeneric({
+      args: {
+        activeOnly: v.optional(v.boolean()),
+      },
+      handler: async (ctx, args) => {
+        await requireAdmin(ctx);
+        return ctx.runQuery(component.campaigns.list, args);
+      },
+    }),
+
+    /**
+     * Create a new campaign.
+     */
+    adminCreateCampaign: mutationGeneric({
+      args: {
+        name: v.string(),
+        slug: v.string(),
+        description: v.optional(v.string()),
+        commissionType: commissionTypeValidator,
+        commissionValue: v.number(),
+        payoutTerm: v.optional(payoutTermValidator),
+        cookieDurationDays: v.optional(v.number()),
+        minPayoutCents: v.optional(v.number()),
+        allowedProducts: v.optional(v.array(v.string())),
+        excludedProducts: v.optional(v.array(v.string())),
+      },
+      handler: async (ctx, args) => {
+        await requireAdmin(ctx);
+        return ctx.runMutation(component.campaigns.create, {
+          ...args,
+          payoutTerm: args.payoutTerm ?? defaults.defaultPayoutTerm,
+          cookieDurationDays:
+            args.cookieDurationDays ?? defaults.defaultCookieDurationDays,
+          minPayoutCents: args.minPayoutCents ?? defaults.minPayoutCents,
+        });
+      },
+    }),
+
+    // =========================================================================
+    // STRIPE WEBHOOK HANDLERS (for internal use)
+    // =========================================================================
+
+    /**
+     * Handle Stripe invoice.paid webhook.
+     */
+    handleInvoicePaid: mutationGeneric({
+      args: {
+        invoiceId: v.string(),
+        stripeCustomerId: v.string(),
+        subscriptionId: v.optional(v.string()),
+        amountPaidCents: v.number(),
+        currency: v.string(),
+        affiliateCode: v.optional(v.string()),
+        productId: v.optional(v.string()),
+        chargeId: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        return ctx.runMutation(component.internal.stripe.handleInvoicePaid, args);
+      },
+    }),
+
+    /**
+     * Handle Stripe charge.refunded webhook.
+     */
+    handleChargeRefunded: mutationGeneric({
+      args: {
+        chargeId: v.string(),
+        stripeCustomerId: v.string(),
+        refundAmountCents: v.number(),
+        reason: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        return ctx.runMutation(
+          component.internal.stripe.handleChargeRefunded,
+          args
+        );
+      },
+    }),
+
+    /**
+     * Handle Stripe checkout.session.completed webhook.
+     */
+    handleCheckoutCompleted: mutationGeneric({
+      args: {
+        sessionId: v.string(),
+        stripeCustomerId: v.string(),
+        affiliateCode: v.optional(v.string()),
+        userId: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        return ctx.runMutation(
+          component.internal.stripe.handleCheckoutCompleted,
+          args
+        );
       },
     }),
   };
 }
 
+// =============================================================================
+// HTTP Routes Helper
+// =============================================================================
+
 /**
- * Register HTTP routes for webhook handling.
+ * Register HTTP routes for affiliate functionality.
+ * Useful for public API endpoints and webhook handling.
  */
 export function registerRoutes(
   http: HttpRouter,
   component: ComponentApi,
   options: {
     pathPrefix?: string;
-    stripeWebhookSecret?: string;
   } = {}
 ) {
   const prefix = options.pathPrefix ?? "/affiliates";
-
-  // Stripe webhook endpoint
-  // Note: The host app should handle signature verification
-  // This just provides a route template
-  http.route({
-    path: `${prefix}/webhooks/stripe`,
-    method: "POST",
-    handler: httpActionGeneric(async (ctx, request) => {
-      // Host app should verify webhook signature and call appropriate
-      // AffiliateManager methods. This is just a placeholder that
-      // returns documentation.
-      return new Response(
-        JSON.stringify({
-          message: "Use AffiliateManager methods in your webhook handler",
-          methods: [
-            "handleInvoicePaid",
-            "handleChargeRefunded",
-            "handleCheckoutCompleted",
-          ],
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }),
-  });
 
   // Get affiliate by code (public endpoint for link validation)
   http.route({
@@ -921,13 +675,10 @@ export function registerRoutes(
       const code = url.pathname.split("/").pop();
 
       if (!code) {
-        return new Response(
-          JSON.stringify({ error: "Code required" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
+        return new Response(JSON.stringify({ error: "Code required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       const affiliate = await ctx.runQuery(component.affiliates.getByCode, {
@@ -935,13 +686,10 @@ export function registerRoutes(
       });
 
       if (!affiliate) {
-        return new Response(
-          JSON.stringify({ error: "Affiliate not found" }),
-          {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
+        return new Response(JSON.stringify({ error: "Affiliate not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       return new Response(
@@ -957,6 +705,40 @@ export function registerRoutes(
       );
     }),
   });
+}
+
+// =============================================================================
+// Utility Functions
+// =============================================================================
+
+/**
+ * Generate an affiliate link with the given code and path.
+ */
+export function generateAffiliateLink(
+  baseUrl: string,
+  code: string,
+  path = "/",
+  subId?: string
+): string {
+  const url = new URL(path, baseUrl);
+  url.searchParams.set("ref", code);
+  if (subId) {
+    url.searchParams.set("sub", subId);
+  }
+  return url.toString();
+}
+
+/**
+ * Parse referral info from URL search params.
+ */
+export function parseReferralParams(searchParams: URLSearchParams): {
+  code?: string;
+  subId?: string;
+} {
+  return {
+    code: searchParams.get("ref") ?? undefined,
+    subId: searchParams.get("sub") ?? undefined,
+  };
 }
 
 // =============================================================================

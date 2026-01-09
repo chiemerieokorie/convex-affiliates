@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api } from "./_generated/api.js";
+import { api, internal } from "./_generated/api.js";
 import { initConvexTest } from "./setup.test.js";
 
 describe("affiliate component", () => {
@@ -12,30 +12,11 @@ describe("affiliate component", () => {
     vi.useRealTimers();
   });
 
-  describe("settings", () => {
-    test("initialize creates default settings", async () => {
-      const t = initConvexTest();
-
-      await t.mutation(api.settings.initialize, {
-        defaultCommissionType: "percentage",
-        defaultCommissionValue: 20,
-        defaultPayoutTerm: "NET-30",
-        defaultMinPayoutCents: 5000,
-        defaultCookieDurationDays: 30,
-      });
-
-      const settings = await t.query(api.settings.get);
-      expect(settings).toBeDefined();
-      expect(settings?.defaultCommissionType).toBe("percentage");
-      expect(settings?.defaultCommissionValue).toBe(20);
-    });
-  });
-
   describe("campaigns", () => {
     test("create and get campaign", async () => {
       const t = initConvexTest();
 
-      const campaignId = await t.mutation(api.campaigns.create, {
+      const campaignId = await t.mutation(internal.campaigns.create, {
         name: "Test Campaign",
         slug: "test-campaign",
         commissionType: "percentage",
@@ -56,7 +37,7 @@ describe("affiliate component", () => {
     test("list campaigns", async () => {
       const t = initConvexTest();
 
-      await t.mutation(api.campaigns.create, {
+      await t.mutation(internal.campaigns.create, {
         name: "Campaign 1",
         slug: "campaign-1",
         commissionType: "percentage",
@@ -65,7 +46,7 @@ describe("affiliate component", () => {
         cookieDurationDays: 30,
       });
 
-      await t.mutation(api.campaigns.create, {
+      await t.mutation(internal.campaigns.create, {
         name: "Campaign 2",
         slug: "campaign-2",
         commissionType: "fixed",
@@ -86,7 +67,7 @@ describe("affiliate component", () => {
       const t = initConvexTest();
 
       // First create a campaign
-      const campaignId = await t.mutation(api.campaigns.create, {
+      const campaignId = await t.mutation(internal.campaigns.create, {
         name: "Default Campaign",
         slug: "default",
         commissionType: "percentage",
@@ -97,7 +78,7 @@ describe("affiliate component", () => {
       });
 
       // Register affiliate
-      const result = await t.mutation(api.affiliates.register, {
+      const result = await t.mutation(internal.affiliates.register, {
         userId: "user-123",
         email: "affiliate@example.com",
         displayName: "Test Affiliate",
@@ -112,7 +93,7 @@ describe("affiliate component", () => {
     test("get affiliate by code", async () => {
       const t = initConvexTest();
 
-      const campaignId = await t.mutation(api.campaigns.create, {
+      const campaignId = await t.mutation(internal.campaigns.create, {
         name: "Default Campaign",
         slug: "default",
         commissionType: "percentage",
@@ -122,7 +103,7 @@ describe("affiliate component", () => {
         isDefault: true,
       });
 
-      const result = await t.mutation(api.affiliates.register, {
+      const result = await t.mutation(internal.affiliates.register, {
         userId: "user-456",
         email: "affiliate2@example.com",
         campaignId,
@@ -139,7 +120,7 @@ describe("affiliate component", () => {
     test("approve affiliate", async () => {
       const t = initConvexTest();
 
-      const campaignId = await t.mutation(api.campaigns.create, {
+      const campaignId = await t.mutation(internal.campaigns.create, {
         name: "Default Campaign",
         slug: "default",
         commissionType: "percentage",
@@ -149,7 +130,7 @@ describe("affiliate component", () => {
         isDefault: true,
       });
 
-      const result = await t.mutation(api.affiliates.register, {
+      const result = await t.mutation(internal.affiliates.register, {
         userId: "user-789",
         email: "affiliate3@example.com",
         campaignId,
@@ -162,7 +143,7 @@ describe("affiliate component", () => {
       expect(affiliate?.status).toBe("pending");
 
       // Approve
-      await t.mutation(api.affiliates.approve, {
+      await t.mutation(internal.affiliates.approve, {
         affiliateId: result.affiliateId,
       });
 
@@ -178,7 +159,7 @@ describe("affiliate component", () => {
     test("track click creates referral", async () => {
       const t = initConvexTest();
 
-      const campaignId = await t.mutation(api.campaigns.create, {
+      const campaignId = await t.mutation(internal.campaigns.create, {
         name: "Default Campaign",
         slug: "default",
         commissionType: "percentage",
@@ -188,14 +169,14 @@ describe("affiliate component", () => {
         isDefault: true,
       });
 
-      const affiliateResult = await t.mutation(api.affiliates.register, {
+      const affiliateResult = await t.mutation(internal.affiliates.register, {
         userId: "user-ref",
         email: "referrer@example.com",
         campaignId,
       });
 
       // Approve the affiliate
-      await t.mutation(api.affiliates.approve, {
+      await t.mutation(internal.affiliates.approve, {
         affiliateId: affiliateResult.affiliateId,
       });
 
@@ -212,7 +193,7 @@ describe("affiliate component", () => {
     test("attribute signup to referral", async () => {
       const t = initConvexTest();
 
-      const campaignId = await t.mutation(api.campaigns.create, {
+      const campaignId = await t.mutation(internal.campaigns.create, {
         name: "Default Campaign",
         slug: "default",
         commissionType: "percentage",
@@ -222,13 +203,13 @@ describe("affiliate component", () => {
         isDefault: true,
       });
 
-      const affiliateResult = await t.mutation(api.affiliates.register, {
+      const affiliateResult = await t.mutation(internal.affiliates.register, {
         userId: "user-attr",
         email: "attributer@example.com",
         campaignId,
       });
 
-      await t.mutation(api.affiliates.approve, {
+      await t.mutation(internal.affiliates.approve, {
         affiliateId: affiliateResult.affiliateId,
       });
 

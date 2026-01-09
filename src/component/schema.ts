@@ -17,18 +17,6 @@ import {
 
 export default defineSchema({
   // ============================================
-  // Global Settings (single document)
-  // ============================================
-  settings: defineTable({
-    defaultCommissionType: commissionTypeValidator,
-    defaultCommissionValue: v.number(),
-    defaultCookieDurationDays: v.number(),
-    defaultMinPayoutCents: v.number(),
-    defaultPayoutTerm: payoutTermValidator,
-    fraudDetectionEnabled: v.boolean(),
-  }),
-
-  // ============================================
   // Campaigns
   // ============================================
   campaigns: defineTable({

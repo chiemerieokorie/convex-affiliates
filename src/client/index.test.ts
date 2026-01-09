@@ -1,17 +1,15 @@
 import { describe, expect, test } from "vitest";
-import { AffiliateManager } from "./index.js";
+import { generateAffiliateLink } from "./index.js";
 import { components, initConvexTest } from "./setup.test.js";
 
 describe("client tests", () => {
-  test("AffiliateManager generates affiliate link correctly", async () => {
-    const manager = new AffiliateManager(components.affiliates, {
-      baseUrl: "https://example.com",
-    });
+  test("generateAffiliateLink generates link correctly", async () => {
+    const baseUrl = "https://example.com";
 
-    const link = manager.generateAffiliateLink("ABC123", "/pricing");
+    const link = generateAffiliateLink(baseUrl, "ABC123", "/pricing");
     expect(link).toBe("https://example.com/pricing?ref=ABC123");
 
-    const linkWithSubId = manager.generateAffiliateLink("ABC123", "/pricing", "campaign1");
+    const linkWithSubId = generateAffiliateLink(baseUrl, "ABC123", "/pricing", "campaign1");
     expect(linkWithSubId).toBe("https://example.com/pricing?ref=ABC123&sub=campaign1");
   });
 

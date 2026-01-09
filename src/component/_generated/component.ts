@@ -64,54 +64,6 @@ type PaginationOpts = {
  * A utility for referencing a Convex component's exposed API.
  */
 export type ComponentApi<Name extends string | undefined = string | undefined> = {
-  // Settings module
-  settings: {
-    get: FunctionReference<
-      "query",
-      "public",
-      Record<string, never>,
-      {
-        _id: Id<"settings">;
-        _creationTime: number;
-        defaultCommissionType: CommissionType;
-        defaultCommissionValue: number;
-        defaultPayoutTerm: PayoutTerm;
-        defaultCookieDurationDays: number;
-        defaultMinPayoutCents: number;
-        fraudDetectionEnabled: boolean;
-      } | null,
-      Name
-    >;
-    initialize: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        defaultCommissionType?: CommissionType;
-        defaultCommissionValue?: number;
-        defaultPayoutTerm?: PayoutTerm;
-        defaultCookieDurationDays?: number;
-        defaultMinPayoutCents?: number;
-        fraudDetectionEnabled?: boolean;
-      },
-      Id<"settings">,
-      Name
-    >;
-    update: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        defaultCommissionType?: CommissionType;
-        defaultCommissionValue?: number;
-        defaultPayoutTerm?: PayoutTerm;
-        defaultCookieDurationDays?: number;
-        defaultMinPayoutCents?: number;
-        fraudDetectionEnabled?: boolean;
-      },
-      null,
-      Name
-    >;
-  };
-
   // Campaigns module
   campaigns: {
     list: FunctionReference<

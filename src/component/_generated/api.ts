@@ -15,7 +15,6 @@ import type * as commissions from "../commissions.js";
 import type * as crons from "../crons.js";
 import type * as payouts from "../payouts.js";
 import type * as referrals from "../referrals.js";
-import type * as settings from "../settings.js";
 import type * as internal_connect from "../internal/connect.js";
 import type * as internal_stripe from "../internal/stripe.js";
 import type * as internal_workflows from "../internal/workflows.js";
@@ -36,7 +35,6 @@ type InternalModules = {
   crons: typeof crons;
   payouts: typeof payouts;
   referrals: typeof referrals;
-  settings: typeof settings;
 };
 
 const fullApi = anyApi as unknown as ApiFromModules<InternalModules>;

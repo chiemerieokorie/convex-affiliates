@@ -43,15 +43,16 @@ app.use(affiliates);
 export default app;
 ```
 
-### 2. Create the AffiliateManager
+### 2. Create and Export the API
 
 Create `convex/affiliates.ts`:
 
 ```typescript
 import { components } from "./_generated/api";
-import { AffiliateManager } from "chief_emerie";
+import { createAffiliateApi } from "chief_emerie";
 
-export const affiliates = new AffiliateManager(components.affiliates, {
+// Create the API with your config
+const affiliates = createAffiliateApi(components.affiliates, {
   // Commission defaults
   defaultCommissionType: "percentage",
   defaultCommissionValue: 20, // 20%
@@ -64,25 +65,60 @@ export const affiliates = new AffiliateManager(components.affiliates, {
 
   // Stripe secret key for Connect payouts (optional)
   stripeSecretKey: process.env.STRIPE_SECRET_KEY,
-});
-```
 
-### 3. Initialize the System
+  // Authentication callback - return the user ID
+  auth: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    return identity.subject;
+  },
 
-Run this once during app setup:
-
-```typescript
-import { internalMutation } from "./_generated/server";
-import { affiliates } from "./affiliates";
-
-export const initializeAffiliates = internalMutation({
-  handler: async (ctx) => {
-    await affiliates.initialize(ctx);
+  // Optional: Admin authorization callback
+  isAdmin: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    return identity?.tokenIdentifier?.includes("admin") ?? false;
   },
 });
+
+// Re-export ready-to-use functions
+export const {
+  // Public (no auth required)
+  trackClick,
+  validateCode,
+
+  // Authenticated user functions
+  register,
+  getAffiliate,
+  getPortalData,
+  listCommissions,
+  listPayouts,
+  listReferrals,
+  generateLink,
+  attributeSignup,
+
+  // Stripe Connect
+  createConnectOnboardingLink,
+  createConnectLoginLink,
+
+  // Admin functions
+  adminDashboard,
+  adminListAffiliates,
+  adminTopAffiliates,
+  adminApproveAffiliate,
+  adminRejectAffiliate,
+  adminSuspendAffiliate,
+  adminProcessPayouts,
+  adminListCampaigns,
+  adminCreateCampaign,
+
+  // Webhook handlers (use in HTTP routes)
+  handleInvoicePaid,
+  handleChargeRefunded,
+  handleCheckoutCompleted,
+} = affiliates;
 ```
 
-### 4. Deploy
+### 3. Deploy
 
 ```bash
 npx convex deploy
@@ -90,73 +126,76 @@ npx convex deploy
 
 ## Usage Guide
 
-### Affiliate Registration
+### Calling Functions from Your App
 
-Allow users to register as affiliates:
+All exported functions are ready to use from your frontend:
 
-```typescript
-// convex/affiliates.ts
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-import { affiliates } from "./affiliates";
+```tsx
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../convex/_generated/api";
 
-export const register = mutation({
-  args: {
-    email: v.string(),
-    displayName: v.optional(v.string()),
-    website: v.optional(v.string()),
-    customCode: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+function AffiliatePortal() {
+  // Query affiliate data
+  const portal = useQuery(api.affiliates.getPortalData);
+  const commissions = useQuery(api.affiliates.listCommissions, { limit: 10 });
 
-    return await affiliates.registerAffiliate(ctx, {
-      userId: identity.subject,
-      email: args.email,
-      displayName: args.displayName,
-      website: args.website,
-      customCode: args.customCode, // Optional custom affiliate code
+  // Register as affiliate
+  const register = useMutation(api.affiliates.register);
+
+  const handleRegister = async () => {
+    await register({
+      email: "me@example.com",
+      displayName: "My Brand",
     });
-  },
-});
+  };
+
+  // ...
+}
 ```
 
 ### Referral Tracking
 
-Track when visitors click affiliate links:
+Track clicks when visitors land on your site with an affiliate code:
 
-```typescript
-// convex/affiliates.ts
-export const trackClick = mutation({
-  args: {
-    affiliateCode: v.string(),
-    landingPage: v.string(),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.runMutation(components.affiliates.referrals.trackClick, {
-      affiliateCode: args.affiliateCode,
-      landingPage: args.landingPage,
-    });
-  },
-});
+```tsx
+import { useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
+import { useEffect } from "react";
+
+function ReferralTracker() {
+  const trackClick = useMutation(api.affiliates.trackClick);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("ref") || params.get("via");
+
+    if (code) {
+      trackClick({ affiliateCode: code, landingPage: window.location.pathname });
+    }
+  }, []);
+
+  return null;
+}
 ```
 
 ### Attribution (Better Auth Integration)
 
-Attribute signups to affiliates after user registration:
+Attribute signups to affiliates after user registration. In your Better Auth hook or signup handler:
 
 ```typescript
-// In your Better Auth hook or signup handler
-import { affiliates } from "./affiliates";
+// convex/users.ts
+import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { v } from "convex/values";
 
 export const onUserCreated = internalMutation({
   args: { userId: v.string(), referralCode: v.optional(v.string()) },
   handler: async (ctx, args) => {
     if (args.referralCode) {
-      await affiliates.attributeSignup(ctx, {
+      // attributeSignup is already exported from your affiliates.ts
+      await ctx.runMutation(internal.affiliates.attributeSignup, {
         userId: args.userId,
-        referralCode: args.referralCode,
+        affiliateCode: args.referralCode,
       });
     }
   },
@@ -165,13 +204,13 @@ export const onUserCreated = internalMutation({
 
 ### Stripe Webhook Integration
 
-Handle Stripe webhooks to create commissions automatically:
+Handle Stripe webhooks to create commissions automatically. The webhook handlers are already exported from your `affiliates.ts`:
 
 ```typescript
 // convex/http.ts
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import Stripe from "stripe";
 
 const http = httpRouter();
@@ -192,17 +231,17 @@ http.route({
 
     switch (event.type) {
       case "invoice.paid":
-        await ctx.runMutation(internal.affiliates.handleInvoicePaid, {
+        await ctx.runMutation(api.affiliates.handleInvoicePaid, {
           invoice: event.data.object,
         });
         break;
       case "charge.refunded":
-        await ctx.runMutation(internal.affiliates.handleChargeRefunded, {
+        await ctx.runMutation(api.affiliates.handleChargeRefunded, {
           charge: event.data.object,
         });
         break;
       case "checkout.session.completed":
-        await ctx.runMutation(internal.affiliates.handleCheckoutCompleted, {
+        await ctx.runMutation(api.affiliates.handleCheckoutCompleted, {
           session: event.data.object,
         });
         break;
@@ -215,129 +254,93 @@ http.route({
 export default http;
 ```
 
-```typescript
-// convex/affiliates.ts (add these handlers)
-export const handleInvoicePaid = internalMutation({
-  args: { invoice: v.any() },
-  handler: async (ctx, args) => {
-    await affiliates.handleInvoicePaid(ctx, args.invoice);
-  },
-});
-
-export const handleChargeRefunded = internalMutation({
-  args: { charge: v.any() },
-  handler: async (ctx, args) => {
-    await affiliates.handleChargeRefunded(ctx, args.charge);
-  },
-});
-
-export const handleCheckoutCompleted = internalMutation({
-  args: { session: v.any() },
-  handler: async (ctx, args) => {
-    await affiliates.handleCheckoutCompleted(ctx, args.session);
-  },
-});
-```
-
 ### Portal Data
 
-Get data for affiliate dashboards:
+Query affiliate dashboard data from your frontend:
 
-```typescript
-// convex/affiliates.ts
-export const getPortalData = query({
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
+```tsx
+import { useQuery } from "convex/react";
+import { api } from "../convex/_generated/api";
 
-    return await affiliates.getAffiliatePortalData(ctx, identity.subject);
-  },
-});
+function Dashboard() {
+  const portal = useQuery(api.affiliates.getPortalData);
+
+  if (!portal) return <div>Loading...</div>;
+
+  return (
+    <div>
+      <h1>Welcome, {portal.affiliate.displayName}</h1>
+      <p>Your code: {portal.affiliate.code}</p>
+      <p>Total earnings: ${portal.affiliate.stats.paidCommissionsCents / 100}</p>
+    </div>
+  );
+}
 ```
 
 ### Admin Functions
 
-```typescript
-// convex/admin.ts
-import { affiliates } from "./affiliates";
+All admin functions are exported and check authorization via your `isAdmin` callback:
 
-export const getDashboard = query({
-  handler: async (ctx) => {
-    await requireAdmin(ctx);
-    return await affiliates.getAdminDashboard(ctx);
-  },
-});
+```tsx
+import { useQuery, useMutation, useAction } from "convex/react";
+import { api } from "../convex/_generated/api";
 
-export const listAffiliates = query({
-  args: {
-    status: v.optional(v.union(
-      v.literal("pending"),
-      v.literal("approved"),
-      v.literal("rejected"),
-      v.literal("suspended")
-    )),
-  },
-  handler: async (ctx, args) => {
-    await requireAdmin(ctx);
-    return await affiliates.listAffiliates(ctx, { status: args.status });
-  },
-});
+function AdminDashboard() {
+  const dashboard = useQuery(api.affiliates.adminDashboard);
+  const affiliates = useQuery(api.affiliates.adminListAffiliates, { status: "pending" });
+  const approve = useMutation(api.affiliates.adminApproveAffiliate);
+  const processPayouts = useAction(api.affiliates.adminProcessPayouts);
 
-export const approveAffiliate = mutation({
-  args: { affiliateId: v.string() },
-  handler: async (ctx, args) => {
-    await requireAdmin(ctx);
-    await affiliates.approveAffiliate(ctx, args.affiliateId);
-  },
-});
+  return (
+    <div>
+      <h1>Admin Dashboard</h1>
+      <p>Total affiliates: {dashboard?.totalAffiliates}</p>
+      <p>Pending approval: {affiliates?.length}</p>
 
-export const processPayouts = action({
-  handler: async (ctx) => {
-    await requireAdmin(ctx);
-    return await affiliates.processPayouts(ctx);
-  },
-});
+      {affiliates?.map((aff) => (
+        <button key={aff._id} onClick={() => approve({ affiliateId: aff._id })}>
+          Approve {aff.displayName}
+        </button>
+      ))}
+
+      <button onClick={() => processPayouts()}>Process Payouts</button>
+    </div>
+  );
+}
 ```
 
 ## React Integration
 
-### Setup Hooks
-
-```typescript
-// lib/affiliate-hooks.ts
-import { api } from "../convex/_generated/api";
-import { createAffiliateHooks } from "chief_emerie/react";
-
-// Create hooks bound to your API
-export const {
-  useAffiliate,
-  useAffiliatePortal,
-  useAffiliateCommissions,
-  useAffiliatePayouts,
-  useRegisterAffiliate,
-  useTrackReferral,
-  useAdminDashboard,
-  useAffiliateList,
-  useApproveAffiliate,
-} = createAffiliateHooks(api.affiliates);
-```
+Since all functions are exported directly from your `convex/affiliates.ts`, use standard Convex hooks:
 
 ### Track Referrals on Page Load
 
 ```tsx
 // components/ReferralTracker.tsx
-import { useTrackReferralOnLoad } from "chief_emerie/react";
 import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
+import { useEffect, useRef } from "react";
 
 export function ReferralTracker() {
   const trackClick = useMutation(api.affiliates.trackClick);
+  const tracked = useRef(false);
 
-  const { tracked, referralId } = useTrackReferralOnLoad(async (params) => {
-    return await trackClick(params);
-  });
+  useEffect(() => {
+    if (tracked.current) return;
 
-  return null; // Invisible tracker component
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("ref") || params.get("via");
+
+    if (code) {
+      tracked.current = true;
+      trackClick({
+        affiliateCode: code,
+        landingPage: window.location.pathname,
+      });
+    }
+  }, [trackClick]);
+
+  return null;
 }
 ```
 
@@ -345,13 +348,17 @@ export function ReferralTracker() {
 
 ```tsx
 // components/AffiliatePortal.tsx
-import { useAffiliatePortal } from "../lib/affiliate-hooks";
-import { formatCents } from "chief_emerie/react";
+import { useQuery } from "convex/react";
+import { api } from "../convex/_generated/api";
 
 export function AffiliatePortal() {
-  const portal = useAffiliatePortal();
+  const portal = useQuery(api.affiliates.getPortalData);
+  const commissions = useQuery(api.affiliates.listCommissions, { limit: 10 });
 
   if (!portal) return <div>Loading...</div>;
+
+  const formatCents = (cents: number) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 
   return (
     <div>
@@ -362,16 +369,12 @@ export function AffiliatePortal() {
         <div>Clicks: {portal.affiliate.stats.totalClicks}</div>
         <div>Signups: {portal.affiliate.stats.totalSignups}</div>
         <div>Conversions: {portal.affiliate.stats.totalConversions}</div>
-        <div>
-          Pending: {formatCents(portal.affiliate.stats.pendingCommissionsCents)}
-        </div>
-        <div>
-          Paid: {formatCents(portal.affiliate.stats.paidCommissionsCents)}
-        </div>
+        <div>Pending: {formatCents(portal.affiliate.stats.pendingCommissionsCents)}</div>
+        <div>Paid: {formatCents(portal.affiliate.stats.paidCommissionsCents)}</div>
       </div>
 
       <h2>Recent Commissions</h2>
-      {portal.recentCommissions.map((c) => (
+      {commissions?.data.map((c) => (
         <div key={c._id}>
           {formatCents(c.commissionAmountCents)} - {c.status}
         </div>
@@ -384,20 +387,23 @@ export function AffiliatePortal() {
 ### Link Generator
 
 ```tsx
-import { useAffiliateLinkGenerator, useCopyToClipboard } from "chief_emerie/react";
+import { useState } from "react";
 
-export function LinkGenerator({ code }: { code: string }) {
-  const { generate } = useAffiliateLinkGenerator("https://yourapp.com", code);
-  const { copy, copied } = useCopyToClipboard();
+export function LinkGenerator({ code, baseUrl }: { code: string; baseUrl: string }) {
+  const [copied, setCopied] = useState(false);
 
-  const link = generate("/pricing");
+  const link = `${baseUrl}?ref=${code}`;
+
+  const copy = () => {
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div>
       <input value={link} readOnly />
-      <button onClick={() => copy(link)}>
-        {copied ? "Copied!" : "Copy"}
-      </button>
+      <button onClick={copy}>{copied ? "Copied!" : "Copy"}</button>
     </div>
   );
 }
@@ -405,64 +411,66 @@ export function LinkGenerator({ code }: { code: string }) {
 
 ## API Reference
 
-### AffiliateManager
+### createAffiliateApi
 
 ```typescript
-class AffiliateManager {
-  constructor(component: ComponentApi, config: AffiliateConfig)
-
-  // Setup
-  initialize(ctx: MutationCtx): Promise<void>
-
-  // Attribution
-  attributeSignup(ctx, params): Promise<{ attributed: boolean; affiliateCode?: string }>
-
-  // Stripe Webhooks
-  handleInvoicePaid(ctx, invoice): Promise<string | null>
-  handleChargeRefunded(ctx, charge): Promise<void>
-  handleCheckoutCompleted(ctx, session): Promise<void>
-
-  // Registration
-  registerAffiliate(ctx, params): Promise<{ affiliateId: string; code: string }>
-
-  // Portal
-  getAffiliatePortalData(ctx, userId): Promise<PortalData | null>
-  getAffiliateCommissions(ctx, params): Promise<PaginatedResult>
-  getAffiliatePayouts(ctx, params): Promise<PaginatedResult>
-
-  // Stripe Connect
-  createConnectOnboardingLink(ctx, params): Promise<{ accountId: string; url: string }>
-  createConnectLoginLink(ctx, accountId): Promise<string>
-
-  // Admin
-  getAdminDashboard(ctx): Promise<AdminDashboard>
-  listAffiliates(ctx, params?): Promise<Affiliate[]>
-  approveAffiliate(ctx, affiliateId): Promise<void>
-  rejectAffiliate(ctx, affiliateId): Promise<void>
-  suspendAffiliate(ctx, affiliateId): Promise<void>
-  processPayouts(ctx): Promise<{ triggered: number; affiliateIds: string[] }>
-
-  // Campaigns
-  listCampaigns(ctx, includeInactive?): Promise<Campaign[]>
-  createCampaign(ctx, params): Promise<string>
-
-  // Utilities
-  generateAffiliateLink(code, path?, subId?): string
-  parseReferralParams(searchParams): { code?: string; subId?: string }
-}
+function createAffiliateApi(
+  component: ComponentApi,
+  config: AffiliateApiConfig
+): AffiliateApi;
 ```
+
+Returns an object with ready-to-export Convex functions:
+
+| Function | Type | Auth | Description |
+|----------|------|------|-------------|
+| `trackClick` | mutation | public | Track affiliate link click |
+| `validateCode` | query | public | Validate affiliate code |
+| `register` | mutation | user | Register as affiliate |
+| `getAffiliate` | query | user | Get current user's affiliate |
+| `getPortalData` | query | user | Get dashboard data |
+| `listCommissions` | query | user | List user's commissions |
+| `listPayouts` | query | user | List user's payouts |
+| `listReferrals` | query | user | List user's referrals |
+| `generateLink` | query | user | Generate affiliate link |
+| `attributeSignup` | mutation | user | Attribute signup to referral |
+| `createConnectOnboardingLink` | action | user | Stripe Connect onboarding |
+| `createConnectLoginLink` | action | user | Stripe Connect dashboard |
+| `handleInvoicePaid` | mutation | internal | Stripe webhook handler |
+| `handleChargeRefunded` | mutation | internal | Stripe webhook handler |
+| `handleCheckoutCompleted` | mutation | internal | Stripe webhook handler |
+| `adminDashboard` | query | admin | Admin dashboard stats |
+| `adminListAffiliates` | query | admin | List all affiliates |
+| `adminTopAffiliates` | query | admin | Top performing affiliates |
+| `adminApproveAffiliate` | mutation | admin | Approve affiliate |
+| `adminRejectAffiliate` | mutation | admin | Reject affiliate |
+| `adminSuspendAffiliate` | mutation | admin | Suspend affiliate |
+| `adminProcessPayouts` | action | admin | Process pending payouts |
+| `adminListCampaigns` | query | admin | List campaigns |
+| `adminCreateCampaign` | mutation | admin | Create campaign |
 
 ### Configuration
 
 ```typescript
-interface AffiliateConfig {
+interface AffiliateApiConfig {
+  // Commission defaults
   defaultCommissionType?: "percentage" | "fixed";
-  defaultCommissionValue?: number;
+  defaultCommissionValue?: number; // Percentage (0-100) or cents for fixed
   defaultPayoutTerm?: "NET-0" | "NET-15" | "NET-30" | "NET-60" | "NET-90";
   minPayoutCents?: number;
   defaultCookieDurationDays?: number;
+
+  // URLs
   baseUrl?: string;
+
+  // Stripe
   stripeSecretKey?: string;
+
+  // Authentication callback (required for user functions)
+  auth: (ctx: { auth: Auth }) => Promise<string>;
+
+  // Admin authorization callback (optional, defaults to allowing all)
+  isAdmin?: (ctx: { auth: Auth }) => Promise<boolean>;
 }
 ```
 
@@ -491,22 +499,26 @@ interface Campaign {
 ## Stripe Connect Setup
 
 1. Enable Stripe Connect in your Stripe dashboard
-2. Set the `stripeSecretKey` in your AffiliateManager config
-3. Create onboarding links for affiliates:
+2. Set the `stripeSecretKey` in your config
+3. Use the exported `createConnectOnboardingLink` action:
 
-```typescript
-export const getConnectOnboardingLink = action({
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    const affiliate = await ctx.runQuery(api.affiliates.getAffiliate);
+```tsx
+import { useAction } from "convex/react";
+import { api } from "../convex/_generated/api";
 
-    return await affiliates.createConnectOnboardingLink(ctx, {
-      affiliateId: affiliate._id,
-      refreshUrl: "https://yourapp.com/affiliate/connect/refresh",
+function ConnectButton() {
+  const createOnboardingLink = useAction(api.affiliates.createConnectOnboardingLink);
+
+  const handleConnect = async () => {
+    const { url } = await createOnboardingLink({
       returnUrl: "https://yourapp.com/affiliate/connect/complete",
+      refreshUrl: "https://yourapp.com/affiliate/connect/refresh",
     });
-  },
-});
+    window.location.href = url;
+  };
+
+  return <button onClick={handleConnect}>Connect with Stripe</button>;
+}
 ```
 
 ## Local Development
