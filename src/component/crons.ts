@@ -1,5 +1,5 @@
 import { cronJobs } from "convex/server";
-import { internal } from "./_generated/api.js";
+import { api } from "./_generated/api.js";
 
 const crons = cronJobs();
 
@@ -10,7 +10,7 @@ const crons = cronJobs();
 crons.daily(
   "expire referrals",
   { hourUTC: 2, minuteUTC: 0 },
-  internal.referrals.expireReferrals
+  api.referrals.expireReferrals
 );
 
 export default crons;

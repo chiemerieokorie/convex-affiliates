@@ -1,4 +1,4 @@
-import { query, internalMutation } from "./_generated/server.js";
+import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import {
   affiliateStatusValidator,
@@ -157,13 +157,13 @@ export const list = query({
 });
 
 // ============================================
-// Internal Mutations
+// Mutations
 // ============================================
 
 /**
  * Register a new affiliate.
  */
-export const register = internalMutation({
+export const register = mutation({
   args: {
     userId: v.string(),
     email: v.string(),
@@ -240,7 +240,7 @@ export const register = internalMutation({
 /**
  * Approve an affiliate application.
  */
-export const approve = internalMutation({
+export const approve = mutation({
   args: {
     affiliateId: v.id("affiliates"),
   },
@@ -267,7 +267,7 @@ export const approve = internalMutation({
 /**
  * Reject an affiliate application.
  */
-export const reject = internalMutation({
+export const reject = mutation({
   args: {
     affiliateId: v.id("affiliates"),
   },
@@ -294,7 +294,7 @@ export const reject = internalMutation({
 /**
  * Suspend an affiliate.
  */
-export const suspend = internalMutation({
+export const suspend = mutation({
   args: {
     affiliateId: v.id("affiliates"),
   },
@@ -321,7 +321,7 @@ export const suspend = internalMutation({
 /**
  * Reactivate a suspended affiliate.
  */
-export const reactivate = internalMutation({
+export const reactivate = mutation({
   args: {
     affiliateId: v.id("affiliates"),
   },
@@ -348,7 +348,7 @@ export const reactivate = internalMutation({
 /**
  * Update affiliate profile.
  */
-export const updateProfile = internalMutation({
+export const updateProfile = mutation({
   args: {
     affiliateId: v.id("affiliates"),
     displayName: v.optional(v.string()),
@@ -383,7 +383,7 @@ export const updateProfile = internalMutation({
 /**
  * Set custom commission rate for an affiliate.
  */
-export const setCustomCommission = internalMutation({
+export const setCustomCommission = mutation({
   args: {
     affiliateId: v.id("affiliates"),
     commissionType: commissionTypeValidator,
@@ -409,7 +409,7 @@ export const setCustomCommission = internalMutation({
 /**
  * Update affiliate stats (called after events).
  */
-export const updateStats = internalMutation({
+export const updateStats = mutation({
   args: {
     affiliateId: v.id("affiliates"),
     incrementClicks: v.optional(v.number()),

@@ -1,4 +1,4 @@
-import { query, internalMutation } from "./_generated/server.js";
+import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import {
   eventTypeValidator,
@@ -302,13 +302,13 @@ export const getConversionFunnel = query({
 });
 
 // ============================================
-// Internal Mutations
+// Mutations
 // ============================================
 
 /**
  * Record an analytics event.
  */
-export const recordEvent = internalMutation({
+export const recordEvent = mutation({
   args: {
     affiliateId: v.id("affiliates"),
     type: eventTypeValidator,

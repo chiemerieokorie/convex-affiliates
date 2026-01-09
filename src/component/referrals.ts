@@ -1,4 +1,4 @@
-import { query, mutation, internalMutation } from "./_generated/server.js";
+import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import { referralStatusValidator } from "./validators.js";
 
@@ -247,14 +247,14 @@ export const trackClick = mutation({
 });
 
 // ============================================
-// Internal Mutations
+// Mutations (Host App Callable)
 // ============================================
 
 /**
  * Attribute a signup to a referral.
  * Called during user registration when referral code is present.
  */
-export const attributeSignup = internalMutation({
+export const attributeSignup = mutation({
   args: {
     referralId: v.string(), // The referral tracking ID
     userId: v.string(), // Better Auth user ID
@@ -381,7 +381,7 @@ export const attributeSignupByCode = mutation({
  * Called by host app's webhook handler when checkout.session.completed event is received.
  * This creates attribution between a Stripe customer and an affiliate.
  */
-export const linkStripeCustomer = internalMutation({
+export const linkStripeCustomer = mutation({
   args: {
     stripeCustomerId: v.string(),
     userId: v.optional(v.string()),
@@ -464,7 +464,7 @@ export const linkStripeCustomer = internalMutation({
 /**
  * Convert a referral (mark as converted after payment).
  */
-export const convertReferral = internalMutation({
+export const convertReferral = mutation({
   args: {
     referralId: v.id("referrals"),
   },
@@ -505,7 +505,7 @@ export const convertReferral = internalMutation({
 /**
  * Expire old referrals (called by cron).
  */
-export const expireReferrals = internalMutation({
+export const expireReferrals = mutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {

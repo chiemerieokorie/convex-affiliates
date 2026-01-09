@@ -1,4 +1,4 @@
-import { query, internalMutation } from "./_generated/server.js";
+import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import {
   commissionTypeValidator,
@@ -160,13 +160,13 @@ export const getDefault = query({
 });
 
 // ============================================
-// Internal Mutations
+// Mutations
 // ============================================
 
 /**
  * Create a new campaign.
  */
-export const create = internalMutation({
+export const create = mutation({
   args: {
     name: v.string(),
     slug: v.string(),
@@ -230,7 +230,7 @@ export const create = internalMutation({
 /**
  * Update an existing campaign.
  */
-export const update = internalMutation({
+export const update = mutation({
   args: {
     campaignId: v.id("campaigns"),
     name: v.optional(v.string()),
@@ -297,7 +297,7 @@ export const update = internalMutation({
 /**
  * Set a campaign as the default.
  */
-export const setDefault = internalMutation({
+export const setDefault = mutation({
   args: {
     campaignId: v.id("campaigns"),
   },
@@ -330,7 +330,7 @@ export const setDefault = internalMutation({
 /**
  * Archive (soft delete) a campaign.
  */
-export const archive = internalMutation({
+export const archive = mutation({
   args: {
     campaignId: v.id("campaigns"),
   },

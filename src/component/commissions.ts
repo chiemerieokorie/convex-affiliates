@@ -1,4 +1,4 @@
-import { query, internalQuery, internalMutation } from "./_generated/server.js";
+import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import {
@@ -78,14 +78,14 @@ export const getPendingTotal = query({
 });
 
 // ============================================
-// Internal Queries
+// Queries
 // ============================================
 
 /**
  * Calculate commission amount for a sale.
  * Checks for: affiliate custom rate > product rate > campaign rate > default rate
  */
-export const calculateCommission = internalQuery({
+export const calculateCommission = query({
   args: {
     affiliateId: v.id("affiliates"),
     saleAmountCents: v.number(),
@@ -194,7 +194,7 @@ export const calculateCommission = internalQuery({
 /**
  * Get commissions that are due for payout.
  */
-export const getDueForPayout = internalQuery({
+export const getDueForPayout = query({
   args: {
     affiliateId: v.id("affiliates"),
   },
@@ -226,13 +226,13 @@ export const getDueForPayout = internalQuery({
 });
 
 // ============================================
-// Internal Mutations
+// Mutations
 // ============================================
 
 /**
  * Create a new commission record.
  */
-export const create = internalMutation({
+export const create = mutation({
   args: {
     affiliateId: v.id("affiliates"),
     referralId: v.id("referrals"),
@@ -306,7 +306,7 @@ export const create = internalMutation({
 /**
  * Approve a pending commission.
  */
-export const approve = internalMutation({
+export const approve = mutation({
   args: {
     commissionId: v.id("commissions"),
   },
@@ -333,7 +333,7 @@ export const approve = internalMutation({
 /**
  * Mark a commission as paid.
  */
-export const markPaid = internalMutation({
+export const markPaid = mutation({
   args: {
     commissionId: v.id("commissions"),
     payoutId: v.id("payouts"),
@@ -377,7 +377,7 @@ export const markPaid = internalMutation({
 /**
  * Reverse a commission (refund/chargeback).
  */
-export const reverse = internalMutation({
+export const reverse = mutation({
   args: {
     commissionId: v.id("commissions"),
     reason: v.string(),
@@ -431,7 +431,7 @@ export const reverse = internalMutation({
 /**
  * Find commission by Stripe invoice ID.
  */
-export const getByStripeInvoice = internalQuery({
+export const getByStripeInvoice = query({
   args: {
     stripeInvoiceId: v.string(),
   },
@@ -464,7 +464,7 @@ export const getByStripeInvoice = internalQuery({
 /**
  * Find commission by Stripe charge ID.
  */
-export const getByStripeCharge = internalQuery({
+export const getByStripeCharge = query({
   args: {
     stripeChargeId: v.string(),
   },
@@ -494,15 +494,11 @@ export const getByStripeCharge = internalQuery({
   },
 });
 
-// ============================================
-// Public Mutations (for webhook handlers)
-// ============================================
-
 /**
  * Create a commission from a paid invoice.
  * Called by host app's webhook handler when invoice.paid event is received.
  */
-export const createFromInvoice = internalMutation({
+export const createFromInvoice = mutation({
   args: {
     stripeInvoiceId: v.string(),
     stripeCustomerId: v.string(),
@@ -743,7 +739,7 @@ export const createFromInvoice = internalMutation({
  * Reverse a commission by Stripe charge ID.
  * Called by host app's webhook handler when charge.refunded event is received.
  */
-export const reverseByCharge = internalMutation({
+export const reverseByCharge = mutation({
   args: {
     stripeChargeId: v.string(),
     reason: v.optional(v.string()),

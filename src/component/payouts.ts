@@ -1,4 +1,4 @@
-import { query, mutation, internalQuery, internalMutation } from "./_generated/server.js";
+import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { payoutStatusValidator, payoutMethodValidator } from "./validators.js";
@@ -67,13 +67,13 @@ export const get = query({
 });
 
 // ============================================
-// Internal Queries
+// Queries
 // ============================================
 
 /**
  * List pending payouts for processing.
  */
-export const listPending = internalQuery({
+export const listPending = query({
   args: {
     limit: v.optional(v.number()),
   },
@@ -107,7 +107,7 @@ export const listPending = internalQuery({
 /**
  * Get affiliates that are due for payout.
  */
-export const getAffiliatesDueForPayout = internalQuery({
+export const getAffiliatesDueForPayout = query({
   args: {
     minPayoutCents: v.number(),
   },
@@ -165,13 +165,13 @@ export const getAffiliatesDueForPayout = internalQuery({
 });
 
 // ============================================
-// Internal Mutations
+// Mutations
 // ============================================
 
 /**
  * Create a new payout.
  */
-export const create = internalMutation({
+export const create = mutation({
   args: {
     affiliateId: v.id("affiliates"),
     amountCents: v.number(),
@@ -212,7 +212,7 @@ export const create = internalMutation({
 /**
  * Mark payout as completed.
  */
-export const markCompleted = internalMutation({
+export const markCompleted = mutation({
   args: {
     payoutId: v.id("payouts"),
   },
@@ -265,7 +265,7 @@ export const markCompleted = internalMutation({
 /**
  * Cancel a pending payout.
  */
-export const cancel = internalMutation({
+export const cancel = mutation({
   args: {
     payoutId: v.id("payouts"),
     notes: v.optional(v.string()),
@@ -303,16 +303,12 @@ export const cancel = internalMutation({
   },
 });
 
-// ============================================
-// Public Mutations (for manual payout recording)
-// ============================================
-
 /**
  * Record a manual payout for an affiliate.
  * This creates a payout record and marks all due commissions as paid.
  * Used when payouts are processed outside of Stripe Connect (e.g., PayPal, bank transfer).
  */
-export const record = internalMutation({
+export const record = mutation({
   args: {
     affiliateId: v.id("affiliates"),
     amountCents: v.number(),
