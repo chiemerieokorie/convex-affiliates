@@ -15,9 +15,6 @@ import type * as commissions from "../commissions.js";
 import type * as crons from "../crons.js";
 import type * as payouts from "../payouts.js";
 import type * as referrals from "../referrals.js";
-import type * as internal_connect from "../internal/connect.js";
-import type * as internal_stripe from "../internal/stripe.js";
-import type * as internal_workflows from "../internal/workflows.js";
 
 import type {
   ApiFromModules,
@@ -63,13 +60,6 @@ export const api: FilterApi<
 export const internal: FilterApi<
   typeof fullApi,
   FunctionReference<any, "internal">
-> & {
-  // Add internal modules explicitly
-  internal: {
-    connect: typeof internal_connect;
-    stripe: typeof internal_stripe;
-    workflows: typeof internal_workflows;
-  };
-} = anyApi as any;
+> = anyApi as any;
 
 export const components = componentsGeneric() as unknown as {};

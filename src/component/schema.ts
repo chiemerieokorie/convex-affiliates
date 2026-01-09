@@ -12,6 +12,7 @@ import {
   eventTypeValidator,
   socialsValidator,
   customCopyValidator,
+  promoContentValidator,
   affiliateStatsValidator,
 } from "./validators.js";
 
@@ -65,7 +66,7 @@ export default defineSchema({
     // Profile (affiliate can customize)
     displayName: v.optional(v.string()),
     bio: v.optional(v.string()),
-    avatarUrl: v.optional(v.string()),
+    promoContent: v.optional(promoContentValidator), // { type: "youtube_video", url: "...", title: "..." }
     website: v.optional(v.string()),
 
     // Socials
@@ -78,7 +79,7 @@ export default defineSchema({
     customCommissionType: v.optional(commissionTypeValidator),
     customCommissionValue: v.optional(v.number()),
 
-    // Payout info (Stripe Connect)
+    // Payout info (Stripe Connect or manual)
     payoutMethod: v.optional(payoutMethodValidator),
     stripeConnectAccountId: v.optional(v.string()),
     stripeConnectStatus: v.optional(
@@ -223,8 +224,6 @@ export default defineSchema({
 
     // Method
     method: payoutMethodValidator,
-    stripeConnectAccountId: v.optional(v.string()),
-    stripeTransferId: v.optional(v.string()),
 
     // Period
     periodStart: v.number(),
@@ -239,10 +238,7 @@ export default defineSchema({
 
     // Timestamps
     createdAt: v.number(),
-    processedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
-    failedAt: v.optional(v.number()),
-    failureReason: v.optional(v.string()),
   })
     .index("by_affiliate", ["affiliateId"])
     .index("by_status", ["status"])

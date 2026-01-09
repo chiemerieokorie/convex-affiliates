@@ -6,6 +6,7 @@ import {
   payoutMethodValidator,
   socialsValidator,
   customCopyValidator,
+  promoContentValidator,
   affiliateStatsValidator,
   generateAffiliateCode,
 } from "./validators.js";
@@ -30,17 +31,13 @@ export const getByCode = query({
       code: v.string(),
       displayName: v.optional(v.string()),
       bio: v.optional(v.string()),
-      avatarUrl: v.optional(v.string()),
+      promoContent: v.optional(promoContentValidator),
       website: v.optional(v.string()),
       socials: v.optional(socialsValidator),
       customCopy: v.optional(customCopyValidator),
       customCommissionType: v.optional(commissionTypeValidator),
       customCommissionValue: v.optional(v.number()),
       payoutMethod: v.optional(payoutMethodValidator),
-      stripeConnectAccountId: v.optional(v.string()),
-      stripeConnectStatus: v.optional(
-        v.union(v.literal("pending"), v.literal("enabled"), v.literal("disabled"))
-      ),
       payoutEmail: v.optional(v.string()),
       status: affiliateStatusValidator,
       stats: affiliateStatsValidator,
@@ -73,17 +70,13 @@ export const getByUserId = query({
       code: v.string(),
       displayName: v.optional(v.string()),
       bio: v.optional(v.string()),
-      avatarUrl: v.optional(v.string()),
+      promoContent: v.optional(promoContentValidator),
       website: v.optional(v.string()),
       socials: v.optional(socialsValidator),
       customCopy: v.optional(customCopyValidator),
       customCommissionType: v.optional(commissionTypeValidator),
       customCommissionValue: v.optional(v.number()),
       payoutMethod: v.optional(payoutMethodValidator),
-      stripeConnectAccountId: v.optional(v.string()),
-      stripeConnectStatus: v.optional(
-        v.union(v.literal("pending"), v.literal("enabled"), v.literal("disabled"))
-      ),
       payoutEmail: v.optional(v.string()),
       status: affiliateStatusValidator,
       stats: affiliateStatsValidator,
@@ -118,17 +111,13 @@ export const list = query({
       code: v.string(),
       displayName: v.optional(v.string()),
       bio: v.optional(v.string()),
-      avatarUrl: v.optional(v.string()),
+      promoContent: v.optional(promoContentValidator),
       website: v.optional(v.string()),
       socials: v.optional(socialsValidator),
       customCopy: v.optional(customCopyValidator),
       customCommissionType: v.optional(commissionTypeValidator),
       customCommissionValue: v.optional(v.number()),
       payoutMethod: v.optional(payoutMethodValidator),
-      stripeConnectAccountId: v.optional(v.string()),
-      stripeConnectStatus: v.optional(
-        v.union(v.literal("pending"), v.literal("enabled"), v.literal("disabled"))
-      ),
       payoutEmail: v.optional(v.string()),
       status: affiliateStatusValidator,
       stats: affiliateStatsValidator,
@@ -364,7 +353,7 @@ export const updateProfile = internalMutation({
     affiliateId: v.id("affiliates"),
     displayName: v.optional(v.string()),
     bio: v.optional(v.string()),
-    avatarUrl: v.optional(v.string()),
+    promoContent: v.optional(promoContentValidator),
     website: v.optional(v.string()),
     socials: v.optional(socialsValidator),
     customCopy: v.optional(customCopyValidator),
@@ -380,7 +369,7 @@ export const updateProfile = internalMutation({
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
     if (args.displayName !== undefined) updates.displayName = args.displayName;
     if (args.bio !== undefined) updates.bio = args.bio;
-    if (args.avatarUrl !== undefined) updates.avatarUrl = args.avatarUrl;
+    if (args.promoContent !== undefined) updates.promoContent = args.promoContent;
     if (args.website !== undefined) updates.website = args.website;
     if (args.socials !== undefined) updates.socials = args.socials;
     if (args.customCopy !== undefined) updates.customCopy = args.customCopy;
@@ -410,37 +399,6 @@ export const setCustomCommission = internalMutation({
     await ctx.db.patch(args.affiliateId, {
       customCommissionType: args.commissionType,
       customCommissionValue: args.commissionValue,
-      updatedAt: Date.now(),
-    });
-
-    return null;
-  },
-});
-
-/**
- * Update affiliate's Stripe Connect account info.
- */
-export const updateStripeConnect = internalMutation({
-  args: {
-    affiliateId: v.id("affiliates"),
-    stripeConnectAccountId: v.string(),
-    stripeConnectStatus: v.union(
-      v.literal("pending"),
-      v.literal("enabled"),
-      v.literal("disabled")
-    ),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const affiliate = await ctx.db.get(args.affiliateId);
-    if (!affiliate) {
-      throw new Error("Affiliate not found");
-    }
-
-    await ctx.db.patch(args.affiliateId, {
-      payoutMethod: "stripe_connect",
-      stripeConnectAccountId: args.stripeConnectAccountId,
-      stripeConnectStatus: args.stripeConnectStatus,
       updatedAt: Date.now(),
     });
 

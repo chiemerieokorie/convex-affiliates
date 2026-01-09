@@ -15,13 +15,12 @@ import type { Id } from "./dataModel.js";
 type CommissionType = "percentage" | "fixed";
 type AffiliateStatus = "pending" | "approved" | "suspended" | "rejected";
 type CommissionStatus = "pending" | "approved" | "processing" | "paid" | "reversed";
-type PayoutStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
+type PayoutStatus = "pending" | "completed" | "cancelled";
 type PayoutTerm = "NET-0" | "NET-15" | "NET-30" | "NET-60" | "NET-90";
 type CommissionDuration = "lifetime" | "max_payments" | "max_months";
 type ReferralStatus = "clicked" | "signed_up" | "converted" | "expired";
-type PayoutMethod = "stripe_connect" | "manual";
+type PayoutMethod = "manual" | "bank_transfer" | "paypal" | "other";
 type EventType = "click" | "signup" | "conversion" | "refund" | "payout";
-type StripeConnectStatus = "pending" | "enabled" | "disabled";
 
 // Affiliate stats type
 type AffiliateStats = {
@@ -251,8 +250,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         customCommissionType?: CommissionType;
         customCommissionValue?: number;
         payoutMethod?: PayoutMethod;
-        stripeConnectAccountId?: string;
-        stripeConnectStatus?: StripeConnectStatus;
         payoutEmail?: string;
         status: AffiliateStatus;
         stats: AffiliateStats;
@@ -280,8 +277,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         customCommissionType?: CommissionType;
         customCommissionValue?: number;
         payoutMethod?: PayoutMethod;
-        stripeConnectAccountId?: string;
-        stripeConnectStatus?: StripeConnectStatus;
         payoutEmail?: string;
         status: AffiliateStatus;
         stats: AffiliateStats;
@@ -309,8 +304,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         customCommissionType?: CommissionType;
         customCommissionValue?: number;
         payoutMethod?: PayoutMethod;
-        stripeConnectAccountId?: string;
-        stripeConnectStatus?: StripeConnectStatus;
         payoutEmail?: string;
         status: AffiliateStatus;
         stats: AffiliateStats;
@@ -359,17 +352,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "mutation",
       "internal",
       { affiliateId: Id<"affiliates">; commissionType: CommissionType; commissionValue: number },
-      null,
-      Name
-    >;
-    updateStripeConnect: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        affiliateId: Id<"affiliates">;
-        stripeConnectAccountId: string;
-        stripeConnectStatus: StripeConnectStatus;
-      },
       null,
       Name
     >;
@@ -529,7 +511,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     linkStripeCustomer: FunctionReference<
       "mutation",
       "internal",
-      { userId: string; stripeCustomerId: string },
+      { stripeCustomerId: string; userId?: string; affiliateCode?: string },
       null,
       Name
     >;
@@ -649,6 +631,29 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       { _id: Id<"commissions">; affiliateId: Id<"affiliates">; status: CommissionStatus } | null,
       Name
     >;
+    createFromInvoice: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        stripeInvoiceId: string;
+        stripeCustomerId: string;
+        stripeChargeId?: string;
+        stripeSubscriptionId?: string;
+        stripeProductId?: string;
+        amountPaidCents: number;
+        currency: string;
+        affiliateCode?: string;
+      },
+      Id<"commissions"> | null,
+      Name
+    >;
+    reverseByCharge: FunctionReference<
+      "mutation",
+      "internal",
+      { stripeChargeId: string; reason?: string },
+      null,
+      Name
+    >;
   };
 
   // Payouts module
@@ -664,18 +669,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         amountCents: number;
         currency: string;
         method: PayoutMethod;
-        stripeConnectAccountId?: string;
-        stripeTransferId?: string;
         periodStart: number;
         periodEnd: number;
         status: PayoutStatus;
         commissionsCount: number;
         notes?: string;
         createdAt: number;
-        processedAt?: number;
         completedAt?: number;
-        failedAt?: number;
-        failureReason?: string;
       }>,
       Name
     >;
@@ -690,18 +690,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         amountCents: number;
         currency: string;
         method: PayoutMethod;
-        stripeConnectAccountId?: string;
-        stripeTransferId?: string;
         periodStart: number;
         periodEnd: number;
         status: PayoutStatus;
         commissionsCount: number;
         notes?: string;
         createdAt: number;
-        processedAt?: number;
         completedAt?: number;
-        failedAt?: number;
-        failureReason?: string;
       } | null,
       Name
     >;
@@ -715,7 +710,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         amountCents: number;
         currency: string;
         method: PayoutMethod;
-        stripeConnectAccountId?: string;
       }>,
       Name
     >;
@@ -734,7 +728,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         amountCents: number;
         currency: string;
         method: PayoutMethod;
-        stripeConnectAccountId?: string;
         periodStart: number;
         periodEnd: number;
         commissionIds: Id<"commissions">[];
@@ -742,18 +735,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       Id<"payouts">,
       Name
     >;
-    markProcessing: FunctionReference<"mutation", "internal", { payoutId: Id<"payouts"> }, null, Name>;
     markCompleted: FunctionReference<
       "mutation",
       "internal",
-      { payoutId: Id<"payouts">; stripeTransferId?: string },
-      null,
-      Name
-    >;
-    markFailed: FunctionReference<
-      "mutation",
-      "internal",
-      { payoutId: Id<"payouts">; reason: string },
+      { payoutId: Id<"payouts"> },
       null,
       Name
     >;
@@ -762,6 +747,19 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { payoutId: Id<"payouts">; notes?: string },
       null,
+      Name
+    >;
+    record: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        affiliateId: Id<"affiliates">;
+        amountCents: number;
+        currency: string;
+        method: PayoutMethod;
+        notes?: string;
+      },
+      Id<"payouts">,
       Name
     >;
   };
@@ -779,7 +777,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           displayName?: string;
           status: AffiliateStatus;
           stats: AffiliateStats;
-          stripeConnectStatus?: StripeConnectStatus;
         };
         campaign: { name: string; commissionType: CommissionType; commissionValue: number };
         recentCommissions: Array<{
@@ -860,130 +857,5 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       }>,
       Name
     >;
-  };
-
-  // Internal stripe module
-  internal: {
-    stripe: {
-      handleInvoicePaid: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          invoiceId: string;
-          stripeCustomerId: string;
-          subscriptionId?: string;
-          amountPaidCents: number;
-          currency: string;
-          productId?: string;
-          chargeId?: string;
-          affiliateCode?: string;
-        },
-        Id<"commissions"> | null,
-        Name
-      >;
-      handleChargeRefunded: FunctionReference<
-        "mutation",
-        "internal",
-        { chargeId: string; stripeCustomerId: string; refundAmountCents: number; reason?: string },
-        null,
-        Name
-      >;
-      handleCheckoutCompleted: FunctionReference<
-        "mutation",
-        "internal",
-        { sessionId: string; stripeCustomerId: string; userId?: string; affiliateCode?: string },
-        null,
-        Name
-      >;
-    };
-    connect: {
-      createAccountLink: FunctionReference<
-        "action",
-        "internal",
-        {
-          affiliateId: Id<"affiliates">;
-          stripeSecretKey: string;
-          refreshUrl: string;
-          returnUrl: string;
-        },
-        { accountId: string; accountLinkUrl: string },
-        Name
-      >;
-      getAccountStatus: FunctionReference<
-        "action",
-        "internal",
-        { stripeSecretKey: string; stripeConnectAccountId: string },
-        {
-          chargesEnabled: boolean;
-          payoutsEnabled: boolean;
-          detailsSubmitted: boolean;
-          status: StripeConnectStatus;
-        },
-        Name
-      >;
-      processTransfer: FunctionReference<
-        "action",
-        "internal",
-        {
-          stripeSecretKey: string;
-          payoutId: Id<"payouts">;
-          stripeConnectAccountId: string;
-          amountCents: number;
-          currency: string;
-          description?: string;
-        },
-        { success: boolean; transferId?: string; error?: string },
-        Name
-      >;
-      createLoginLink: FunctionReference<
-        "action",
-        "internal",
-        { stripeSecretKey: string; stripeConnectAccountId: string },
-        { url: string },
-        Name
-      >;
-      handleAccountUpdated: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          stripeConnectAccountId: string;
-          chargesEnabled: boolean;
-          payoutsEnabled: boolean;
-          detailsSubmitted: boolean;
-        },
-        null,
-        Name
-      >;
-    };
-    workflows: {
-      processPayoutForAffiliate: FunctionReference<
-        "action",
-        "internal",
-        { affiliateId: Id<"affiliates">; stripeSecretKey: string; minPayoutCents: number },
-        {
-          success: boolean;
-          payoutId?: string;
-          amountCents?: number;
-          error?: string;
-          skipped?: boolean;
-          reason?: string;
-        },
-        Name
-      >;
-      triggerPayoutWorkflow: FunctionReference<
-        "mutation",
-        "internal",
-        { affiliateId: Id<"affiliates">; stripeSecretKey: string; minPayoutCents: number },
-        string,
-        Name
-      >;
-      processAllDuePayouts: FunctionReference<
-        "action",
-        "internal",
-        { stripeSecretKey: string; minPayoutCents: number },
-        { triggered: number; affiliateIds: string[] },
-        Name
-      >;
-    };
   };
 };

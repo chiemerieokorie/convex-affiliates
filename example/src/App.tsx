@@ -1,146 +1,121 @@
 import "./App.css";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useState } from "react";
 
-// Fake blog posts (not in database)
-const blogPosts = [
-  {
-    id: "blog-post-1",
-    title: "Getting Started with Convex Components",
-    content:
-      "Convex components are a powerful way to build reusable functionality that can be shared across different applications. In this post, we'll explore how to create and use components in your Convex applications.",
-    author: "Jane Doe",
-    date: "2024-01-15",
-  },
-  {
-    id: "blog-post-2",
-    title: "Building Scalable Comment Systems",
-    content:
-      "Comments are a fundamental feature of many web applications. Learn how to build a scalable comment system using Convex components that can handle thousands of comments efficiently.",
-    author: "John Smith",
-    date: "2024-01-20",
-  },
-];
+function AffiliateDemo() {
+  const [code, setCode] = useState("");
+  const trackClick = useMutation(api.example.trackClick);
 
-function BlogPostComments({ postId }: { postId: string }) {
-  const comments = useQuery(api.example.list, { targetId: postId });
-  const addComment = useMutation(api.example.add);
-  const translateComment = useAction(api.example.translateComment);
-  const [commentText, setCommentText] = useState("");
-
-  const handleAddComment = () => {
-    if (commentText.trim()) {
-      addComment({ text: commentText, targetId: postId });
-      setCommentText("");
+  const handleTrackClick = async () => {
+    if (code.trim()) {
+      const result = await trackClick({
+        affiliateCode: code,
+        landingPage: window.location.pathname,
+      });
+      if (result) {
+        alert(`Click tracked! Referral ID: ${result.referralId}`);
+      } else {
+        alert("Invalid or inactive affiliate code");
+      }
     }
-  };
-
-  const handleTranslateComment = async (commentId: string) => {
-    await translateComment({ commentId });
   };
 
   return (
     <div
       style={{
-        marginTop: "1.5rem",
-        padding: "1rem",
+        marginBottom: "2rem",
+        padding: "1.5rem",
         border: "1px solid rgba(128, 128, 128, 0.3)",
         borderRadius: "8px",
       }}
     >
-      <h4 style={{ marginTop: 0, marginBottom: "1rem" }}>
-        Comments ({comments?.length ?? 0})
-      </h4>
-      <div style={{ marginBottom: "1rem" }}>
+      <h2 style={{ marginTop: 0 }}>Track Referral Click</h2>
+      <p style={{ color: "rgba(128, 128, 128, 0.8)", fontSize: "0.9rem" }}>
+        Simulate tracking a click from an affiliate link
+      </p>
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
         <input
           type="text"
-          value={commentText}
-          onChange={(e) => setCommentText(e.target.value)}
-          placeholder="Enter a comment"
-          style={{ marginRight: "0.5rem", padding: "0.5rem", width: "70%" }}
-          onKeyPress={(e) => e.key === "Enter" && handleAddComment()}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="Enter affiliate code"
+          style={{ padding: "0.5rem", flex: 1 }}
         />
-        <button onClick={handleAddComment}>Add Comment</button>
+        <button onClick={handleTrackClick}>Track Click</button>
       </div>
-      <ul style={{ textAlign: "left", listStyle: "none", padding: 0 }}>
-        {comments?.map((comment) => (
-          <li
-            key={comment._id}
-            style={{
-              marginBottom: "0.5rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.5rem",
-              backgroundColor: "rgba(128, 128, 128, 0.1)",
-              borderRadius: "4px",
-            }}
-          >
-            <span style={{ flex: 1 }}>{comment.text}</span>
-            <button
-              onClick={() => handleTranslateComment(comment._id)}
-              style={{
-                padding: "0.25rem 0.5rem",
-                fontSize: "0.75rem",
-                backgroundColor: "#ff9800",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              🏴‍☠️ Translate to Pirate Talk
-            </button>
-          </li>
-        ))}
-        {comments?.length === 0 && (
-          <li
-            style={{ color: "rgba(128, 128, 128, 0.8)", fontStyle: "italic" }}
-          >
-            No comments yet. Be the first to comment!
-          </li>
-        )}
-      </ul>
+    </div>
+  );
+}
+
+function AdminDashboard() {
+  const dashboard = useQuery(api.example.adminDashboard);
+
+  if (!dashboard) {
+    return <div>Loading dashboard...</div>;
+  }
+
+  return (
+    <div
+      style={{
+        marginBottom: "2rem",
+        padding: "1.5rem",
+        border: "1px solid rgba(128, 128, 128, 0.3)",
+        borderRadius: "8px",
+      }}
+    >
+      <h2 style={{ marginTop: 0 }}>Admin Dashboard</h2>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+          gap: "1rem",
+        }}
+      >
+        <StatCard label="Total Affiliates" value={dashboard.totalAffiliates} />
+        <StatCard label="Pending Approvals" value={dashboard.pendingApprovals} />
+        <StatCard label="Active Affiliates" value={dashboard.activeAffiliates} />
+        <StatCard label="Total Clicks" value={dashboard.totalClicks} />
+        <StatCard label="Total Signups" value={dashboard.totalSignups} />
+        <StatCard label="Total Conversions" value={dashboard.totalConversions} />
+        <StatCard
+          label="Total Revenue"
+          value={`$${(dashboard.totalRevenueCents / 100).toFixed(2)}`}
+        />
+        <StatCard
+          label="Pending Payouts"
+          value={`$${(dashboard.pendingPayoutsCents / 100).toFixed(2)}`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div
+      style={{
+        padding: "1rem",
+        backgroundColor: "rgba(128, 128, 128, 0.1)",
+        borderRadius: "8px",
+        textAlign: "center",
+      }}
+    >
+      <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>{value}</div>
+      <div style={{ fontSize: "0.8rem", color: "rgba(128, 128, 128, 0.8)" }}>
+        {label}
+      </div>
     </div>
   );
 }
 
 function App() {
-  // Construct the HTTP endpoint URL
-  // Replace .convex.cloud with .convex.site for HTTP endpoints
-  const convexUrl = import.meta.env.VITE_CONVEX_URL.replace(".cloud", ".site");
-
   return (
     <>
-      <h1>Example App</h1>
+      <h1>Convex Affiliates Demo</h1>
       <div className="card">
-        {blogPosts.map((post) => (
-          <div
-            key={post.id}
-            style={{
-              marginBottom: "2rem",
-              padding: "1.5rem",
-              border: "1px solid rgba(128, 128, 128, 0.3)",
-              borderRadius: "8px",
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>{post.title}</h2>
-            <div
-              style={{
-                marginBottom: "0.5rem",
-                color: "rgba(128, 128, 128, 0.8)",
-                fontSize: "0.9rem",
-              }}
-            >
-              By {post.author} • {post.date}
-            </div>
-            <p style={{ lineHeight: "1.6", marginBottom: "1rem" }}>
-              {post.content}
-            </p>
-            <BlogPostComments postId={post.id} />
-          </div>
-        ))}
+        <AffiliateDemo />
+        <AdminDashboard />
         <div
           style={{
             marginTop: "1.5rem",
@@ -149,52 +124,22 @@ function App() {
             borderRadius: "8px",
           }}
         >
-          <h3>HTTP Endpoint Demo</h3>
+          <h3>About This Component</h3>
           <p style={{ fontSize: "0.9rem", marginBottom: "0.5rem" }}>
-            The component exposes an HTTP endpoint to get the latest comment:
+            This example demonstrates the Convex Affiliates component - a pure data
+            layer for affiliate marketing.
           </p>
-          <div
-            style={{
-              display: "flex",
-              gap: "0.5rem",
-              flexDirection: "column",
-              justifyContent: "center",
-            }}
-          >
-            {blogPosts.map((post) => {
-              const httpUrl =
-                convexUrl +
-                `/comments/last?targetId=${encodeURIComponent(post.id)}`;
-              return (
-                <a
-                  key={post.id}
-                  href={httpUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "inline-block",
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "#007bff",
-                    color: "white",
-                    textDecoration: "none",
-                    borderRadius: "4px",
-                    fontSize: "0.9rem",
-                  }}
-                >
-                  {post.title} - HTTP Endpoint
-                </a>
-              );
-            })}
-          </div>
+          <ul style={{ fontSize: "0.9rem", textAlign: "left" }}>
+            <li>Zero-cookie tracking via URL parameters</li>
+            <li>Flexible commission structures (percentage or fixed)</li>
+            <li>NET-0/15/30/60/90 payout scheduling</li>
+            <li>Manual payout recording (PayPal, bank transfer, etc.)</li>
+          </ul>
           <p style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.5rem" }}>
-            See <code>example/convex/http.ts</code> for the HTTP route
-            configuration
+            See <code>example/convex/example.ts</code> for API usage and{" "}
+            <code>example/convex/http.ts</code> for webhook integration
           </p>
         </div>
-        <p>
-          See <code>example/convex/example.ts</code> for all the ways to use
-          this component
-        </p>
       </div>
     </>
   );

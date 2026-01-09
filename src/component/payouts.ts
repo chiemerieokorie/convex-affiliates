@@ -1,4 +1,4 @@
-import { query, internalQuery, internalMutation } from "./_generated/server.js";
+import { query, mutation, internalQuery, internalMutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { payoutStatusValidator, payoutMethodValidator } from "./validators.js";
@@ -51,18 +51,13 @@ export const get = query({
       amountCents: v.number(),
       currency: v.string(),
       method: payoutMethodValidator,
-      stripeConnectAccountId: v.optional(v.string()),
-      stripeTransferId: v.optional(v.string()),
       periodStart: v.number(),
       periodEnd: v.number(),
       status: payoutStatusValidator,
       commissionsCount: v.number(),
       notes: v.optional(v.string()),
       createdAt: v.number(),
-      processedAt: v.optional(v.number()),
       completedAt: v.optional(v.number()),
-      failedAt: v.optional(v.number()),
-      failureReason: v.optional(v.string()),
     }),
     v.null()
   ),
@@ -89,7 +84,6 @@ export const listPending = internalQuery({
       amountCents: v.number(),
       currency: v.string(),
       method: payoutMethodValidator,
-      stripeConnectAccountId: v.optional(v.string()),
     })
   ),
   handler: async (ctx, args) => {
@@ -106,7 +100,6 @@ export const listPending = internalQuery({
       amountCents: p.amountCents,
       currency: p.currency,
       method: p.method,
-      stripeConnectAccountId: p.stripeConnectAccountId,
     }));
   },
 });
@@ -184,7 +177,6 @@ export const create = internalMutation({
     amountCents: v.number(),
     currency: v.string(),
     method: payoutMethodValidator,
-    stripeConnectAccountId: v.optional(v.string()),
     periodStart: v.number(),
     periodEnd: v.number(),
     commissionIds: v.array(v.id("commissions")),
@@ -198,7 +190,6 @@ export const create = internalMutation({
       amountCents: args.amountCents,
       currency: args.currency,
       method: args.method,
-      stripeConnectAccountId: args.stripeConnectAccountId,
       periodStart: args.periodStart,
       periodEnd: args.periodEnd,
       status: "pending",
@@ -219,39 +210,11 @@ export const create = internalMutation({
 });
 
 /**
- * Mark payout as processing.
- */
-export const markProcessing = internalMutation({
-  args: {
-    payoutId: v.id("payouts"),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const payout = await ctx.db.get(args.payoutId);
-    if (!payout) {
-      throw new Error("Payout not found");
-    }
-
-    if (payout.status !== "pending") {
-      throw new Error(`Cannot process payout with status: ${payout.status}`);
-    }
-
-    await ctx.db.patch(args.payoutId, {
-      status: "processing",
-      processedAt: Date.now(),
-    });
-
-    return null;
-  },
-});
-
-/**
  * Mark payout as completed.
  */
 export const markCompleted = internalMutation({
   args: {
     payoutId: v.id("payouts"),
-    stripeTransferId: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -264,7 +227,6 @@ export const markCompleted = internalMutation({
 
     await ctx.db.patch(args.payoutId, {
       status: "completed",
-      stripeTransferId: args.stripeTransferId,
       completedAt: now,
     });
 
@@ -293,46 +255,6 @@ export const markCompleted = internalMutation({
             affiliate.stats.paidCommissionsCents + payout.amountCents,
         },
         updatedAt: now,
-      });
-    }
-
-    return null;
-  },
-});
-
-/**
- * Mark payout as failed.
- */
-export const markFailed = internalMutation({
-  args: {
-    payoutId: v.id("payouts"),
-    reason: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const payout = await ctx.db.get(args.payoutId);
-    if (!payout) {
-      throw new Error("Payout not found");
-    }
-
-    const now = Date.now();
-
-    await ctx.db.patch(args.payoutId, {
-      status: "failed",
-      failedAt: now,
-      failureReason: args.reason,
-    });
-
-    // Revert commissions back to approved status
-    const commissions = await ctx.db
-      .query("commissions")
-      .withIndex("by_payout", (q) => q.eq("payoutId", args.payoutId))
-      .collect();
-
-    for (const commission of commissions) {
-      await ctx.db.patch(commission._id, {
-        status: "approved",
-        payoutId: undefined,
       });
     }
 
@@ -378,5 +300,81 @@ export const cancel = internalMutation({
     }
 
     return null;
+  },
+});
+
+// ============================================
+// Public Mutations (for manual payout recording)
+// ============================================
+
+/**
+ * Record a manual payout for an affiliate.
+ * This creates a payout record and marks all due commissions as paid.
+ * Used when payouts are processed outside of Stripe Connect (e.g., PayPal, bank transfer).
+ */
+export const record = internalMutation({
+  args: {
+    affiliateId: v.id("affiliates"),
+    amountCents: v.number(),
+    currency: v.string(),
+    method: payoutMethodValidator,
+    notes: v.optional(v.string()),
+  },
+  returns: v.id("payouts"),
+  handler: async (ctx, args) => {
+    const affiliate = await ctx.db.get(args.affiliateId);
+    if (!affiliate) {
+      throw new Error("Affiliate not found");
+    }
+
+    const now = Date.now();
+
+    // Get all approved commissions due for payout
+    const dueCommissions = await ctx.db
+      .query("commissions")
+      .withIndex("by_affiliate_status", (q) =>
+        q.eq("affiliateId", args.affiliateId).eq("status", "approved")
+      )
+      .filter((q) => q.lte(q.field("dueAt"), now))
+      .collect();
+
+    // Create the payout record
+    const payoutId = await ctx.db.insert("payouts", {
+      affiliateId: args.affiliateId,
+      amountCents: args.amountCents,
+      currency: args.currency,
+      method: args.method,
+      periodStart: dueCommissions.length > 0
+        ? Math.min(...dueCommissions.map(c => c.createdAt))
+        : now,
+      periodEnd: now,
+      status: "completed",
+      commissionsCount: dueCommissions.length,
+      notes: args.notes,
+      createdAt: now,
+      completedAt: now,
+    });
+
+    // Mark all due commissions as paid
+    for (const commission of dueCommissions) {
+      await ctx.db.patch(commission._id, {
+        status: "paid",
+        payoutId,
+        paidAt: now,
+      });
+    }
+
+    // Update affiliate stats
+    const totalPaid = dueCommissions.reduce((sum, c) => sum + c.commissionAmountCents, 0);
+    await ctx.db.patch(affiliate._id, {
+      stats: {
+        ...affiliate.stats,
+        pendingCommissionsCents: affiliate.stats.pendingCommissionsCents - totalPaid,
+        paidCommissionsCents: affiliate.stats.paidCommissionsCents + totalPaid,
+      },
+      updatedAt: now,
+    });
+
+    return payoutId;
   },
 });

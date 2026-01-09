@@ -18,9 +18,6 @@ const affiliates = createAffiliateApi(components.affiliates, {
   // URLs
   baseUrl: process.env.BASE_URL ?? "https://example.com",
 
-  // Stripe (optional)
-  stripeSecretKey: process.env.STRIPE_SECRET_KEY,
-
   // Authentication callback
   auth: async (ctx: { auth: Auth }) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -48,16 +45,13 @@ export const {
   // Authenticated user functions
   register,
   getAffiliate,
+  updateProfile,
   getPortalData,
   listCommissions,
   listPayouts,
   listReferrals,
   generateLink,
   attributeSignup,
-
-  // Stripe Connect
-  createConnectOnboardingLink,
-  createConnectLoginLink,
 
   // Admin functions
   adminDashboard,
@@ -66,12 +60,6 @@ export const {
   adminApproveAffiliate,
   adminRejectAffiliate,
   adminSuspendAffiliate,
-  adminProcessPayouts,
   adminListCampaigns,
   adminCreateCampaign,
-
-  // Webhook handlers
-  handleInvoicePaid,
-  handleChargeRefunded,
-  handleCheckoutCompleted,
 } = affiliates;

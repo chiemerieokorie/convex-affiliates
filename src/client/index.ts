@@ -1,5 +1,4 @@
 import {
-  actionGeneric,
   httpActionGeneric,
   mutationGeneric,
   queryGeneric,
@@ -14,6 +13,9 @@ import {
   commissionTypeValidator,
   commissionStatusValidator,
   payoutStatusValidator,
+  promoContentValidator,
+  socialsValidator,
+  customCopyValidator,
 } from "../component/validators.js";
 
 // =============================================================================
@@ -50,11 +52,6 @@ export interface AffiliateConfig {
    * Base URL for generating affiliate links.
    */
   baseUrl?: string;
-
-  /**
-   * Stripe secret key for Connect payouts.
-   */
-  stripeSecretKey?: string;
 }
 
 export interface CreateAffiliateApiConfig extends AffiliateConfig {
@@ -235,6 +232,34 @@ export function createAffiliateApi(
     }),
 
     /**
+     * Update the current user's affiliate profile.
+     */
+    updateProfile: mutationGeneric({
+      args: {
+        displayName: v.optional(v.string()),
+        bio: v.optional(v.string()),
+        promoContent: v.optional(promoContentValidator),
+        website: v.optional(v.string()),
+        socials: v.optional(socialsValidator),
+        customCopy: v.optional(customCopyValidator),
+        payoutEmail: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        const userId = await config.auth(ctx);
+        const affiliate = await ctx.runQuery(component.affiliates.getByUserId, {
+          userId,
+        });
+        if (!affiliate) {
+          throw new Error("User is not an affiliate");
+        }
+        return ctx.runMutation(component.affiliates.updateProfile, {
+          affiliateId: affiliate._id,
+          ...args,
+        });
+      },
+    }),
+
+    /**
      * Get complete portal data for the affiliate dashboard.
      */
     getPortalData: queryGeneric({
@@ -314,61 +339,6 @@ export function createAffiliateApi(
           affiliateId: affiliate._id,
           status: args.status,
           limit: args.limit,
-        });
-      },
-    }),
-
-    // =========================================================================
-    // STRIPE CONNECT ENDPOINTS
-    // =========================================================================
-
-    /**
-     * Create a Stripe Connect onboarding link for the affiliate.
-     */
-    createConnectOnboardingLink: actionGeneric({
-      args: {
-        returnUrl: v.string(),
-        refreshUrl: v.string(),
-      },
-      handler: async (ctx, args) => {
-        if (!config.stripeSecretKey) {
-          throw new Error("Stripe secret key not configured");
-        }
-        const userId = await config.auth(ctx);
-        const affiliate = await ctx.runQuery(component.affiliates.getByUserId, {
-          userId,
-        });
-        if (!affiliate) {
-          throw new Error("User is not an affiliate");
-        }
-        return ctx.runAction(component.internal.connect.createAccountLink, {
-          affiliateId: affiliate._id,
-          stripeSecretKey: config.stripeSecretKey,
-          refreshUrl: args.refreshUrl,
-          returnUrl: args.returnUrl,
-        });
-      },
-    }),
-
-    /**
-     * Create a Stripe Connect dashboard login link.
-     */
-    createConnectLoginLink: actionGeneric({
-      args: {},
-      handler: async (ctx) => {
-        if (!config.stripeSecretKey) {
-          throw new Error("Stripe secret key not configured");
-        }
-        const userId = await config.auth(ctx);
-        const affiliate = await ctx.runQuery(component.affiliates.getByUserId, {
-          userId,
-        });
-        if (!affiliate?.stripeConnectAccountId) {
-          throw new Error("Affiliate has no connected Stripe account");
-        }
-        return ctx.runAction(component.internal.connect.createLoginLink, {
-          stripeSecretKey: config.stripeSecretKey,
-          stripeConnectAccountId: affiliate.stripeConnectAccountId,
         });
       },
     }),
@@ -531,23 +501,6 @@ export function createAffiliateApi(
     }),
 
     /**
-     * Process all due payouts.
-     */
-    adminProcessPayouts: actionGeneric({
-      args: {},
-      handler: async (ctx) => {
-        await requireAdmin(ctx);
-        if (!config.stripeSecretKey) {
-          throw new Error("Stripe secret key not configured");
-        }
-        return ctx.runAction(component.internal.workflows.processAllDuePayouts, {
-          stripeSecretKey: config.stripeSecretKey,
-          minPayoutCents: defaults.minPayoutCents,
-        });
-      },
-    }),
-
-    /**
      * List all campaigns.
      */
     adminListCampaigns: queryGeneric({
@@ -585,65 +538,6 @@ export function createAffiliateApi(
             args.cookieDurationDays ?? defaults.defaultCookieDurationDays,
           minPayoutCents: args.minPayoutCents ?? defaults.minPayoutCents,
         });
-      },
-    }),
-
-    // =========================================================================
-    // STRIPE WEBHOOK HANDLERS (for internal use)
-    // =========================================================================
-
-    /**
-     * Handle Stripe invoice.paid webhook.
-     */
-    handleInvoicePaid: mutationGeneric({
-      args: {
-        invoiceId: v.string(),
-        stripeCustomerId: v.string(),
-        subscriptionId: v.optional(v.string()),
-        amountPaidCents: v.number(),
-        currency: v.string(),
-        affiliateCode: v.optional(v.string()),
-        productId: v.optional(v.string()),
-        chargeId: v.optional(v.string()),
-      },
-      handler: async (ctx, args) => {
-        return ctx.runMutation(component.internal.stripe.handleInvoicePaid, args);
-      },
-    }),
-
-    /**
-     * Handle Stripe charge.refunded webhook.
-     */
-    handleChargeRefunded: mutationGeneric({
-      args: {
-        chargeId: v.string(),
-        stripeCustomerId: v.string(),
-        refundAmountCents: v.number(),
-        reason: v.optional(v.string()),
-      },
-      handler: async (ctx, args) => {
-        return ctx.runMutation(
-          component.internal.stripe.handleChargeRefunded,
-          args
-        );
-      },
-    }),
-
-    /**
-     * Handle Stripe checkout.session.completed webhook.
-     */
-    handleCheckoutCompleted: mutationGeneric({
-      args: {
-        sessionId: v.string(),
-        stripeCustomerId: v.string(),
-        affiliateCode: v.optional(v.string()),
-        userId: v.optional(v.string()),
-      },
-      handler: async (ctx, args) => {
-        return ctx.runMutation(
-          component.internal.stripe.handleCheckoutCompleted,
-          args
-        );
       },
     }),
   };

@@ -1,19 +1,18 @@
 # Convex Affiliates
 
-A comprehensive affiliate marketing component for [Convex](https://convex.dev) with zero-cookie tracking, Stripe Connect payouts, and workflow-based NET-15/30/60/90 scheduling.
+A comprehensive affiliate marketing component for [Convex](https://convex.dev) with zero-cookie tracking, flexible commission structures, and seamless Stripe integration.
 
 [![npm version](https://badge.fury.io/js/chief_emerie.svg)](https://www.npmjs.com/package/chief_emerie)
 
 ## Features
 
 - **Zero-Cookie Tracking** - URL parameter-based attribution that works without cookies
-- **Stripe Integration** - Automatic commission creation from Stripe webhooks
-- **Stripe Connect Payouts** - Pay affiliates directly via Stripe Connect
+- **Stripe Integration** - Easy webhook handlers for automatic commission creation
 - **Flexible Commission Structures** - Percentage or fixed, with tiered and product-specific rates
 - **Campaign Management** - Multiple campaigns with different terms
-- **Workflow-Based Payouts** - NET-0/15/30/60/90 scheduling with durable execution
-- **React Hooks** - Ready-to-use hooks for affiliate portals
-- **Headless Components** - Unstyled components for full customization
+- **NET-0/15/30/60/90 Scheduling** - Configurable payout terms with automatic due date calculation
+- **Manual Payout Recording** - Record payouts made via PayPal, bank transfer, or other methods
+- **Pure Data Layer** - Component handles data, your app handles integrations
 
 ## Installation
 
@@ -24,7 +23,7 @@ npm install chief_emerie
 ### Peer Dependencies
 
 ```bash
-npm install convex @convex-dev/workflow stripe
+npm install convex
 ```
 
 ## Quick Start
@@ -63,9 +62,6 @@ const affiliates = createAffiliateApi(components.affiliates, {
   // Your app's base URL for generating affiliate links
   baseUrl: process.env.BASE_URL ?? "https://yourapp.com",
 
-  // Stripe secret key for Connect payouts (optional)
-  stripeSecretKey: process.env.STRIPE_SECRET_KEY,
-
   // Authentication callback - return the user ID
   auth: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -96,10 +92,6 @@ export const {
   generateLink,
   attributeSignup,
 
-  // Stripe Connect
-  createConnectOnboardingLink,
-  createConnectLoginLink,
-
   // Admin functions
   adminDashboard,
   adminListAffiliates,
@@ -107,14 +99,8 @@ export const {
   adminApproveAffiliate,
   adminRejectAffiliate,
   adminSuspendAffiliate,
-  adminProcessPayouts,
   adminListCampaigns,
   adminCreateCampaign,
-
-  // Webhook handlers (use in HTTP routes)
-  handleInvoicePaid,
-  handleChargeRefunded,
-  handleCheckoutCompleted,
 } = affiliates;
 ```
 
@@ -204,14 +190,13 @@ export const onUserCreated = internalMutation({
 
 ### Stripe Webhook Integration
 
-Handle Stripe webhooks to create commissions automatically. The webhook handlers are already exported from your `affiliates.ts`:
+The component provides internal mutations that you call from your Stripe webhook handlers. This gives you full control over webhook verification and event handling.
 
 ```typescript
 // convex/http.ts
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
-import Stripe from "stripe";
+import { components } from "./_generated/api";
 
 const http = httpRouter();
 
@@ -219,39 +204,72 @@ http.route({
   path: "/webhooks/stripe",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-    const signature = request.headers.get("stripe-signature")!;
-    const body = await request.text();
-
-    const event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
-
-    switch (event.type) {
-      case "invoice.paid":
-        await ctx.runMutation(api.affiliates.handleInvoicePaid, {
-          invoice: event.data.object,
-        });
-        break;
-      case "charge.refunded":
-        await ctx.runMutation(api.affiliates.handleChargeRefunded, {
-          charge: event.data.object,
-        });
-        break;
-      case "checkout.session.completed":
-        await ctx.runMutation(api.affiliates.handleCheckoutCompleted, {
-          session: event.data.object,
-        });
-        break;
+    // Verify webhook signature (use @convex-dev/stripe or manual verification)
+    const signature = request.headers.get("stripe-signature");
+    if (!signature) {
+      return new Response("Missing signature", { status: 400 });
     }
 
-    return new Response("OK", { status: 200 });
+    // Parse the event (add your signature verification here)
+    const body = await request.json();
+    const event = body as { type: string; data: { object: any } };
+
+    switch (event.type) {
+      case "invoice.paid": {
+        const invoice = event.data.object;
+        await ctx.runMutation(components.affiliates.commissions.createFromInvoice, {
+          stripeInvoiceId: invoice.id,
+          stripeCustomerId: invoice.customer,
+          stripeChargeId: invoice.charge,
+          stripeSubscriptionId: invoice.subscription,
+          stripeProductId: invoice.lines?.data?.[0]?.price?.product,
+          amountPaidCents: invoice.amount_paid,
+          currency: invoice.currency,
+          affiliateCode: invoice.metadata?.affiliate_code,
+        });
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object;
+        await ctx.runMutation(components.affiliates.commissions.reverseByCharge, {
+          stripeChargeId: charge.id,
+          reason: charge.refunds?.data?.[0]?.reason ?? "Charge refunded",
+        });
+        break;
+      }
+
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        await ctx.runMutation(components.affiliates.referrals.linkStripeCustomer, {
+          stripeCustomerId: session.customer,
+          userId: session.client_reference_id,
+          affiliateCode: session.metadata?.affiliate_code,
+        });
+        break;
+      }
+    }
+
+    return new Response(JSON.stringify({ received: true }), { status: 200 });
   }),
 });
 
 export default http;
+```
+
+### Recording Payouts
+
+Record payouts when you pay affiliates (via PayPal, bank transfer, etc.):
+
+```typescript
+// In your admin panel or payout handler
+await ctx.runMutation(components.affiliates.payouts.record, {
+  affiliateId: affiliate._id,
+  amountCents: 5000, // $50.00
+  currency: "usd",
+  method: "paypal", // or "bank_transfer", "manual", "other"
+  notes: "Monthly payout for December 2024",
+});
 ```
 
 ### Portal Data
@@ -282,14 +300,13 @@ function Dashboard() {
 All admin functions are exported and check authorization via your `isAdmin` callback:
 
 ```tsx
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 
 function AdminDashboard() {
   const dashboard = useQuery(api.affiliates.adminDashboard);
   const affiliates = useQuery(api.affiliates.adminListAffiliates, { status: "pending" });
   const approve = useMutation(api.affiliates.adminApproveAffiliate);
-  const processPayouts = useAction(api.affiliates.adminProcessPayouts);
 
   return (
     <div>
@@ -302,8 +319,6 @@ function AdminDashboard() {
           Approve {aff.displayName}
         </button>
       ))}
-
-      <button onClick={() => processPayouts()}>Process Payouts</button>
     </div>
   );
 }
@@ -374,7 +389,7 @@ export function AffiliatePortal() {
       </div>
 
       <h2>Recent Commissions</h2>
-      {commissions?.data.map((c) => (
+      {commissions?.page.map((c) => (
         <div key={c._id}>
           {formatCents(c.commissionAmountCents)} - {c.status}
         </div>
@@ -434,20 +449,25 @@ Returns an object with ready-to-export Convex functions:
 | `listReferrals` | query | user | List user's referrals |
 | `generateLink` | query | user | Generate affiliate link |
 | `attributeSignup` | mutation | user | Attribute signup to referral |
-| `createConnectOnboardingLink` | action | user | Stripe Connect onboarding |
-| `createConnectLoginLink` | action | user | Stripe Connect dashboard |
-| `handleInvoicePaid` | mutation | internal | Stripe webhook handler |
-| `handleChargeRefunded` | mutation | internal | Stripe webhook handler |
-| `handleCheckoutCompleted` | mutation | internal | Stripe webhook handler |
 | `adminDashboard` | query | admin | Admin dashboard stats |
 | `adminListAffiliates` | query | admin | List all affiliates |
 | `adminTopAffiliates` | query | admin | Top performing affiliates |
 | `adminApproveAffiliate` | mutation | admin | Approve affiliate |
 | `adminRejectAffiliate` | mutation | admin | Reject affiliate |
 | `adminSuspendAffiliate` | mutation | admin | Suspend affiliate |
-| `adminProcessPayouts` | action | admin | Process pending payouts |
 | `adminListCampaigns` | query | admin | List campaigns |
 | `adminCreateCampaign` | mutation | admin | Create campaign |
+
+### Component Mutations (for webhook handlers)
+
+Call these directly via `components.affiliates.*`:
+
+| Function | Description |
+|----------|-------------|
+| `commissions.createFromInvoice` | Create commission from Stripe invoice data |
+| `commissions.reverseByCharge` | Reverse commission on refund |
+| `referrals.linkStripeCustomer` | Link Stripe customer to affiliate referral |
+| `payouts.record` | Record a manual payout |
 
 ### Configuration
 
@@ -462,9 +482,6 @@ interface AffiliateApiConfig {
 
   // URLs
   baseUrl?: string;
-
-  // Stripe
-  stripeSecretKey?: string;
 
   // Authentication callback (required for user functions)
   auth: (ctx: { auth: Auth }) => Promise<string>;
@@ -490,48 +507,73 @@ interface Campaign {
   commissionDuration?: "lifetime" | "max_payments" | "max_months";
   commissionDurationValue?: number;
 
-  // Product restrictions
+  // Product restrictions (Stripe product IDs)
   allowedProducts?: string[];
   excludedProducts?: string[];
 }
 ```
 
-## Stripe Connect Setup
+### Payout Methods
 
-1. Enable Stripe Connect in your Stripe dashboard
-2. Set the `stripeSecretKey` in your config
-3. Use the exported `createConnectOnboardingLink` action:
+When recording payouts, use one of these methods:
 
-```tsx
-import { useAction } from "convex/react";
-import { api } from "../convex/_generated/api";
+- `manual` - Generic manual payout
+- `bank_transfer` - Bank/wire transfer
+- `paypal` - PayPal payment
+- `other` - Other payment method
 
-function ConnectButton() {
-  const createOnboardingLink = useAction(api.affiliates.createConnectOnboardingLink);
+## Architecture
 
-  const handleConnect = async () => {
-    const { url } = await createOnboardingLink({
-      returnUrl: "https://yourapp.com/affiliate/connect/complete",
-      refreshUrl: "https://yourapp.com/affiliate/connect/refresh",
-    });
-    window.location.href = url;
-  };
+This component follows a **pure data layer** pattern:
 
-  return <button onClick={handleConnect}>Connect with Stripe</button>;
-}
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│                          HOST APP                                │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  Stripe Webhook Handler (your code)                       │   │
+│  │  - Verify webhook signatures                              │   │
+│  │  - Parse events                                           │   │
+│  │  - Call component mutations                               │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              AFFILIATES COMPONENT (Pure Data)             │   │
+│  │                                                           │   │
+│  │  Internal mutations for host app to call:                 │   │
+│  │  - commissions.createFromInvoice(invoiceData)             │   │
+│  │  - commissions.reverseByCharge(chargeId)                  │   │
+│  │  - referrals.linkStripeCustomer(customerId, code)         │   │
+│  │  - payouts.record(affiliateId, amount, method)            │   │
+│  │                                                           │   │
+│  │  NO Stripe SDK, NO Node.js runtime dependencies           │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+This design:
+- Keeps the component lightweight and portable
+- Gives you full control over webhook handling and verification
+- Works with any payment processor (not just Stripe)
+- Allows flexible payout methods (PayPal, bank transfer, crypto, etc.)
 
 ## Local Development
 
 ```bash
-# Link the component locally
-npm link
+# Clone and install
+git clone https://github.com/your-org/convex-affiliates
+cd convex-affiliates
+npm install
 
-# In your app
-npm link chief_emerie
+# Run development (backend + example app)
+npm run dev
 
-# Run Convex dev
-npx convex dev
+# Run tests
+npm run test
+
+# Build
+npm run build
 ```
 
 ## License

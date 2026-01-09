@@ -493,3 +493,322 @@ export const getByStripeCharge = internalQuery({
     };
   },
 });
+
+// ============================================
+// Public Mutations (for webhook handlers)
+// ============================================
+
+/**
+ * Create a commission from a paid invoice.
+ * Called by host app's webhook handler when invoice.paid event is received.
+ */
+export const createFromInvoice = internalMutation({
+  args: {
+    stripeInvoiceId: v.string(),
+    stripeCustomerId: v.string(),
+    stripeChargeId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
+    stripeProductId: v.optional(v.string()),
+    amountPaidCents: v.number(),
+    currency: v.string(),
+    affiliateCode: v.optional(v.string()),
+  },
+  returns: v.union(v.id("commissions"), v.null()),
+  handler: async (ctx, args) => {
+    // Skip zero-amount invoices
+    if (args.amountPaidCents <= 0) {
+      return null;
+    }
+
+    // First, try to find referral by Stripe customer ID
+    let referral = await ctx.db
+      .query("referrals")
+      .withIndex("by_stripeCustomer", (q) =>
+        q.eq("stripeCustomerId", args.stripeCustomerId)
+      )
+      .first();
+
+    // If not found and we have an affiliate code, try to attribute directly
+    if (!referral && args.affiliateCode) {
+      const code = args.affiliateCode;
+      const affiliate = await ctx.db
+        .query("affiliates")
+        .withIndex("by_code", (q) => q.eq("code", code.toUpperCase()))
+        .first();
+
+      if (affiliate && affiliate.status === "approved") {
+        // Create a referral for this customer
+        const now = Date.now();
+        const campaign = await ctx.db.get(affiliate.campaignId);
+        if (campaign && campaign.isActive) {
+          const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
+          const referralId = await ctx.db.insert("referrals", {
+            affiliateId: affiliate._id,
+            referralId: crypto.randomUUID(),
+            landingPage: "/checkout",
+            stripeCustomerId: args.stripeCustomerId,
+            status: "converted",
+            clickedAt: now,
+            convertedAt: now,
+            expiresAt,
+          });
+          referral = await ctx.db.get(referralId);
+        }
+      }
+    }
+
+    if (!referral) {
+      return null; // No attribution found
+    }
+
+    // Check if referral is valid (affiliate approved)
+    const affiliate = await ctx.db.get(referral.affiliateId);
+    if (!affiliate || affiliate.status !== "approved") {
+      return null;
+    }
+
+    // Check for existing commission for this invoice (deduplication)
+    const existingCommission = await ctx.db
+      .query("commissions")
+      .withIndex("by_stripeInvoice", (q) => q.eq("stripeInvoiceId", args.stripeInvoiceId))
+      .first();
+
+    if (existingCommission) {
+      return existingCommission._id; // Already processed
+    }
+
+    // Get campaign to check commission duration rules
+    const campaign = await ctx.db.get(affiliate.campaignId);
+    if (!campaign || !campaign.isActive) {
+      return null;
+    }
+
+    // For subscriptions, track payment number and check duration limits
+    let paymentNumber: number | undefined;
+    if (args.stripeSubscriptionId) {
+      // Count existing commissions for this subscription
+      const existingForSub = await ctx.db
+        .query("commissions")
+        .filter((q) =>
+          q.eq(q.field("stripeSubscriptionId"), args.stripeSubscriptionId)
+        )
+        .collect();
+      paymentNumber = existingForSub.length + 1;
+
+      // Check commission duration rules
+      if (campaign.commissionDuration === "max_payments") {
+        const maxPayments = campaign.commissionDurationValue ?? 1;
+        if (paymentNumber > maxPayments) {
+          return null; // Exceeded max payments
+        }
+      } else if (campaign.commissionDuration === "max_months") {
+        const firstCommission = existingForSub[0];
+        if (firstCommission) {
+          const maxMonths = campaign.commissionDurationValue ?? 12;
+          const monthsElapsed = Math.floor(
+            (Date.now() - firstCommission.createdAt) / (30 * 24 * 60 * 60 * 1000)
+          );
+          if (monthsElapsed >= maxMonths) {
+            return null; // Exceeded max months
+          }
+        }
+      }
+      // "lifetime" has no limits
+    }
+
+    // Check product restrictions
+    if (args.stripeProductId) {
+      if (campaign.excludedProducts?.includes(args.stripeProductId)) {
+        return null; // Product excluded
+      }
+      if (
+        campaign.allowedProducts &&
+        campaign.allowedProducts.length > 0 &&
+        !campaign.allowedProducts.includes(args.stripeProductId)
+      ) {
+        return null; // Product not in allowed list
+      }
+    }
+
+    // Calculate commission amount (inline logic to avoid ctx.runQuery in mutation)
+    let commissionType: CommissionType = campaign.commissionType;
+    let commissionRate: number = campaign.commissionValue;
+    let commissionAmountCents: number;
+
+    // Priority 1: Affiliate custom rate
+    if (affiliate.customCommissionType && affiliate.customCommissionValue !== undefined) {
+      commissionType = affiliate.customCommissionType;
+      commissionRate = affiliate.customCommissionValue;
+    } else if (args.stripeProductId) {
+      // Priority 2: Product-specific rate
+      const productCommission = await ctx.db
+        .query("productCommissions")
+        .withIndex("by_campaign_product", (q) =>
+          q.eq("campaignId", affiliate.campaignId).eq("stripeProductId", args.stripeProductId!)
+        )
+        .first();
+
+      if (productCommission) {
+        commissionType = productCommission.commissionType;
+        commissionRate = productCommission.commissionValue;
+      } else {
+        // Priority 3: Check for tiered commission based on affiliate performance
+        const tiers = await ctx.db
+          .query("commissionTiers")
+          .withIndex("by_campaign", (q) => q.eq("campaignId", affiliate.campaignId))
+          .collect();
+
+        if (tiers.length > 0) {
+          const sortedTiers = tiers.sort((a, b) => b.minReferrals - a.minReferrals);
+          const applicableTier = sortedTiers.find(
+            (t) => affiliate.stats.totalConversions >= t.minReferrals
+          );
+          if (applicableTier) {
+            commissionType = applicableTier.commissionType;
+            commissionRate = applicableTier.commissionValue;
+          }
+        }
+      }
+    }
+
+    // Calculate the actual commission amount
+    commissionAmountCents = calculateCommissionAmount(
+      args.amountPaidCents,
+      commissionType,
+      commissionRate
+    );
+
+    const now = Date.now();
+    const dueAt = now + getPayoutTermDelayMs(campaign.payoutTerm);
+
+    // Create commission record directly
+    const commissionId = await ctx.db.insert("commissions", {
+      affiliateId: affiliate._id,
+      referralId: referral._id,
+      stripeCustomerId: args.stripeCustomerId,
+      stripeInvoiceId: args.stripeInvoiceId,
+      stripeChargeId: args.stripeChargeId,
+      stripeSubscriptionId: args.stripeSubscriptionId,
+      stripeProductId: args.stripeProductId,
+      paymentNumber,
+      saleAmountCents: args.amountPaidCents,
+      commissionAmountCents,
+      commissionRate,
+      commissionType,
+      currency: args.currency,
+      status: "pending" as const,
+      dueAt,
+      createdAt: now,
+    });
+
+    // Update affiliate stats with commission
+    await ctx.db.patch(affiliate._id, {
+      stats: {
+        ...affiliate.stats,
+        totalRevenueCents: affiliate.stats.totalRevenueCents + args.amountPaidCents,
+        totalCommissionsCents: affiliate.stats.totalCommissionsCents + commissionAmountCents,
+        pendingCommissionsCents: affiliate.stats.pendingCommissionsCents + commissionAmountCents,
+        totalConversions: referral.status !== "converted"
+          ? affiliate.stats.totalConversions + 1
+          : affiliate.stats.totalConversions,
+      },
+      updatedAt: now,
+    });
+
+    // Mark referral as converted if not already
+    if (referral.status !== "converted") {
+      await ctx.db.patch(referral._id, {
+        status: "converted" as const,
+        convertedAt: now,
+      });
+    }
+
+    // Record analytics event
+    await ctx.db.insert("events", {
+      affiliateId: affiliate._id,
+      type: "conversion" as const,
+      metadata: JSON.stringify({
+        invoiceId: args.stripeInvoiceId,
+        amountCents: args.amountPaidCents,
+        commissionCents: commissionAmountCents,
+      }),
+      timestamp: now,
+    });
+
+    return commissionId;
+  },
+});
+
+/**
+ * Reverse a commission by Stripe charge ID.
+ * Called by host app's webhook handler when charge.refunded event is received.
+ */
+export const reverseByCharge = internalMutation({
+  args: {
+    stripeChargeId: v.string(),
+    reason: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    // Find commission by charge ID
+    const commission = await ctx.db
+      .query("commissions")
+      .withIndex("by_stripeCharge", (q) => q.eq("stripeChargeId", args.stripeChargeId))
+      .first();
+
+    if (!commission) {
+      return null; // No commission found for this charge
+    }
+
+    if (commission.status === "reversed") {
+      return null; // Already reversed
+    }
+
+    const now = Date.now();
+    const wasPending = commission.status === "pending" || commission.status === "approved";
+    const reason = args.reason ?? "Charge refunded";
+
+    // Reverse the commission directly
+    await ctx.db.patch(commission._id, {
+      status: "reversed" as const,
+      reversedAt: now,
+      reversalReason: reason,
+    });
+
+    // Update affiliate stats
+    const affiliate = await ctx.db.get(commission.affiliateId);
+    if (affiliate) {
+      const updates = {
+        ...affiliate.stats,
+        totalCommissionsCents:
+          affiliate.stats.totalCommissionsCents - commission.commissionAmountCents,
+      };
+
+      if (wasPending) {
+        updates.pendingCommissionsCents =
+          affiliate.stats.pendingCommissionsCents - commission.commissionAmountCents;
+      } else if (commission.status === "paid") {
+        updates.paidCommissionsCents =
+          affiliate.stats.paidCommissionsCents - commission.commissionAmountCents;
+      }
+
+      await ctx.db.patch(affiliate._id, {
+        stats: updates,
+        updatedAt: now,
+      });
+    }
+
+    // Record analytics event directly
+    await ctx.db.insert("events", {
+      affiliateId: commission.affiliateId,
+      type: "refund" as const,
+      metadata: JSON.stringify({
+        chargeId: args.stripeChargeId,
+        commissionReversedCents: commission.commissionAmountCents,
+      }),
+      timestamp: now,
+    });
+
+    return null;
+  },
+});

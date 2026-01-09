@@ -1,6 +1,6 @@
 {
   "name": "chief_emerie",
-  "description": "A comprehensive affiliate marketing component for Convex with zero-cookie tracking, Stripe Connect payouts, and workflow-based NET-15/30/60/90 scheduling.",
+  "description": "A comprehensive affiliate marketing component for Convex with zero-cookie tracking and NET-15/30/60/90 payout scheduling.",
   "repository": "github:chiemerieokorie/affiliates",
   "homepage": "https://github.com/chiemerieokorie/affiliates#readme",
   "bugs": {
@@ -73,14 +73,11 @@
     }
   },
   "peerDependencies": {
-    "@convex-dev/workflow": "^0.1.0",
     "convex": "^1.29.3",
-    "react": "^18.3.1 || ^19.0.0",
-    "stripe": "^17.0.0"
+    "react": "^18.3.1 || ^19.0.0"
   },
   "devDependencies": {
     "@convex-dev/eslint-plugin": "^1.1.1",
-    "@convex-dev/workflow": "^0.1.5",
     "@semantic-release/changelog": "^6.0.0",
     "@semantic-release/git": "^10.0.0",
     "conventional-changelog-conventionalcommits": "^8.0.0",
@@ -107,7 +104,6 @@
     "prettier": "3.6.2",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "stripe": "^17.7.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.47.0",
     "vite": "7.2.6",

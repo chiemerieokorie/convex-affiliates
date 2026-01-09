@@ -1,7 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server.js";
-import { components, internal } from "./_generated/api.js";
-import { registerRoutes, AffiliateManager } from "chief_emerie";
+import { components } from "./_generated/api.js";
+import { registerRoutes } from "chief_emerie";
 
 const http = httpRouter();
 
@@ -12,7 +12,6 @@ const http = httpRouter();
 // Register HTTP routes for the affiliate component
 // This exposes endpoints like:
 // - GET /affiliates/affiliate/:code - Validate affiliate code
-// - POST /affiliates/webhooks/stripe - Stripe webhook endpoint (placeholder)
 registerRoutes(http, components.affiliates, {
   pathPrefix: "/affiliates",
 });
@@ -21,16 +20,21 @@ registerRoutes(http, components.affiliates, {
 // Stripe Webhook Handler
 // =============================================================================
 
-// You should implement your own Stripe webhook handler to verify signatures
-// and call the appropriate AffiliateManager methods.
+// Example Stripe webhook handler that calls the affiliate component's public mutations.
+// In production, you should use @convex-dev/stripe for proper webhook signature verification.
+//
+// For proper setup with @convex-dev/stripe:
+// 1. Install: npm install @convex-dev/stripe
+// 2. Configure stripe component in convex.config.ts
+// 3. Use registerRoutes() with event handlers that call these mutations
+//
+// See: https://github.com/get-convex/convex-stripe
 http.route({
   path: "/webhooks/stripe",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    // In production, you would:
-    // 1. Verify the Stripe webhook signature
-    // 2. Parse the event
-    // 3. Call the appropriate handler
+    // In production, you would verify the Stripe webhook signature.
+    // This example is for demonstration purposes only.
 
     const stripeSignature = request.headers.get("stripe-signature");
     if (!stripeSignature) {
@@ -40,7 +44,7 @@ http.route({
       });
     }
 
-    // For now, this is a placeholder. In production:
+    // For production, use @convex-dev/stripe to verify signatures:
     // const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
     // const event = stripe.webhooks.constructEvent(
     //   await request.text(),
@@ -57,61 +61,46 @@ http.route({
     try {
       switch (event.type) {
         case "invoice.paid": {
+          // Create a commission when an invoice is paid
           const invoice = event.data.object;
           await ctx.runMutation(
-            components.affiliates.internal.stripe.handleInvoicePaid,
+            components.affiliates.commissions.createFromInvoice,
             {
-              invoiceId: invoice.id,
+              stripeInvoiceId: invoice.id,
               stripeCustomerId: invoice.customer,
-              subscriptionId: invoice.subscription,
+              stripeSubscriptionId: invoice.subscription,
+              stripeChargeId: invoice.charge,
+              stripeProductId: invoice.lines?.data?.[0]?.price?.product,
               amountPaidCents: invoice.amount_paid,
               currency: invoice.currency,
               affiliateCode: invoice.metadata?.affiliate_code,
-              productId: invoice.lines?.data?.[0]?.price?.product,
-              chargeId: invoice.charge,
             }
           );
           break;
         }
 
         case "charge.refunded": {
+          // Reverse commission when a charge is refunded
           const charge = event.data.object;
           await ctx.runMutation(
-            components.affiliates.internal.stripe.handleChargeRefunded,
+            components.affiliates.commissions.reverseByCharge,
             {
-              chargeId: charge.id,
-              stripeCustomerId: charge.customer,
-              refundAmountCents: charge.amount_refunded,
-              reason: charge.refunds?.data?.[0]?.reason,
+              stripeChargeId: charge.id,
+              reason: charge.refunds?.data?.[0]?.reason ?? "Charge refunded",
             }
           );
           break;
         }
 
         case "checkout.session.completed": {
+          // Link Stripe customer to affiliate referral
           const session = event.data.object;
           await ctx.runMutation(
-            components.affiliates.internal.stripe.handleCheckoutCompleted,
+            components.affiliates.referrals.linkStripeCustomer,
             {
-              sessionId: session.id,
               stripeCustomerId: session.customer,
-              affiliateCode: session.metadata?.affiliate_code,
               userId: session.client_reference_id,
-            }
-          );
-          break;
-        }
-
-        case "account.updated": {
-          // Handle Stripe Connect account updates
-          const account = event.data.object;
-          await ctx.runMutation(
-            components.affiliates.internal.connect.handleAccountUpdated,
-            {
-              stripeConnectAccountId: account.id,
-              chargesEnabled: account.charges_enabled ?? false,
-              payoutsEnabled: account.payouts_enabled ?? false,
-              detailsSubmitted: account.details_submitted ?? false,
+              affiliateCode: session.metadata?.affiliate_code,
             }
           );
           break;

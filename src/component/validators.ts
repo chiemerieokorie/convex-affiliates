@@ -88,29 +88,24 @@ export type CommissionStatus =
 
 export const payoutStatusValidator = v.union(
   v.literal("pending"),
-  v.literal("processing"),
   v.literal("completed"),
-  v.literal("failed"),
   v.literal("cancelled")
 );
 
-export type PayoutStatus =
-  | "pending"
-  | "processing"
-  | "completed"
-  | "failed"
-  | "cancelled";
+export type PayoutStatus = "pending" | "completed" | "cancelled";
 
 // ============================================
-// Payout Method (Stripe Connect)
+// Payout Method
 // ============================================
 
 export const payoutMethodValidator = v.union(
-  v.literal("stripe_connect"),
-  v.literal("manual")
+  v.literal("manual"),
+  v.literal("bank_transfer"),
+  v.literal("paypal"),
+  v.literal("other")
 );
 
-export type PayoutMethod = "stripe_connect" | "manual";
+export type PayoutMethod = "manual" | "bank_transfer" | "paypal" | "other";
 
 // ============================================
 // Event Types
@@ -146,6 +141,37 @@ export const customCopyValidator = v.object({
   headline: v.optional(v.string()),
   description: v.optional(v.string()),
   cta: v.optional(v.string()),
+});
+
+// ============================================
+// Promo Content Type Validator
+// ============================================
+
+export const promoContentTypeValidator = v.union(
+  v.literal("youtube_video"),
+  v.literal("blog"),
+  v.literal("twitter"),
+  v.literal("instagram"),
+  v.literal("tiktok"),
+  v.literal("other")
+);
+
+export type PromoContentType =
+  | "youtube_video"
+  | "blog"
+  | "twitter"
+  | "instagram"
+  | "tiktok"
+  | "other";
+
+// ============================================
+// Promo Content Object Validator
+// ============================================
+
+export const promoContentValidator = v.object({
+  type: promoContentTypeValidator,
+  url: v.string(),
+  title: v.optional(v.string()),
 });
 
 // ============================================

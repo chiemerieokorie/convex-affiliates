@@ -26,13 +26,6 @@ export const getPortalData = query({
         displayName: v.optional(v.string()),
         status: affiliateStatusValidator,
         stats: affiliateStatsValidator,
-        stripeConnectStatus: v.optional(
-          v.union(
-            v.literal("pending"),
-            v.literal("enabled"),
-            v.literal("disabled")
-          )
-        ),
       }),
       campaign: v.object({
         name: v.string(),
@@ -111,7 +104,6 @@ export const getPortalData = query({
         displayName: affiliate.displayName,
         status: affiliate.status,
         stats: affiliate.stats,
-        stripeConnectStatus: affiliate.stripeConnectStatus,
       },
       campaign: {
         name: campaign.name,
