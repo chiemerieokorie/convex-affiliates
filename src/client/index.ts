@@ -44,7 +44,42 @@ import {
   socialsValidator,
   customCopyValidator,
 } from "../component/validators.js";
-import type { StripeEventHandlers } from "@convex-dev/stripe";
+
+// =============================================================================
+// Stripe Handler Types (local definition to avoid duplicate type issues)
+// =============================================================================
+
+/**
+ * Generic Stripe event handler context type.
+ * Matches the ctx parameter from @convex-dev/stripe handlers.
+ */
+type StripeHandlerCtx = {
+  runQuery: (query: any, args?: any) => Promise<any>;
+  runMutation: (mutation: any, args?: any) => Promise<any>;
+  runAction: (action: any, args?: any) => Promise<any>;
+};
+
+/**
+ * Generic Stripe event type.
+ * Matches the event parameter from @convex-dev/stripe handlers.
+ */
+type StripeEvent = {
+  type: string;
+  data: { object: unknown };
+};
+
+/**
+ * Generic Stripe event handler function type.
+ */
+type StripeHandler = (ctx: StripeHandlerCtx, event: StripeEvent) => Promise<void>;
+
+/**
+ * Map of Stripe event types to their handlers.
+ * Compatible with @convex-dev/stripe's AffiliateStripeHandlers type.
+ */
+export type AffiliateStripeHandlers = {
+  [eventType: string]: StripeHandler | undefined;
+};
 
 // =============================================================================
 // Types
@@ -814,30 +849,18 @@ export function createStripeWebhookHandler(
  * - checkout.session.completed → links customer to affiliate
  *
  * @param component - The affiliate component API
- * @param handlers - Optional additional handlers to merge (overlapping events run affiliate first, then yours)
  *
  * @example
  * ```typescript
  * import { getAffiliateStripeHandlers } from "chief_emerie";
  *
- * // Just affiliate handlers
- * export const stripeWebhookHandlers = getAffiliateStripeHandlers(components.affiliates);
- *
- * // With your handlers merged
- * export const stripeWebhookHandlers = getAffiliateStripeHandlers(
- *   components.affiliates,
- *   {
- *     "invoice.paid": async (ctx, event) => { console.log("paid!"); },
- *     "customer.subscription.created": async (ctx, event) => { ... },
- *   }
- * );
+ * export const affiliateHandlers = getAffiliateStripeHandlers(components.affiliates);
  * ```
  */
 export function getAffiliateStripeHandlers(
-  component: UseApi<ComponentApi>,
-  handlers?: StripeEventHandlers
-): StripeEventHandlers {
-  const affiliateHandlers: StripeEventHandlers = {
+  component: UseApi<ComponentApi>
+): AffiliateStripeHandlers {
+  return {
     "invoice.paid": async (ctx, event) => {
       const invoice = event.data.object as unknown as Record<string, unknown>;
       await ctx.runMutation(component.commissions.createFromInvoice, {
@@ -875,35 +898,6 @@ export function getAffiliateStripeHandlers(
       });
     },
   };
-
-  if (!handlers) return affiliateHandlers;
-
-  // Merge: for overlapping events, run affiliate first, then user's handler
-  const merged = { ...affiliateHandlers } as Record<
-    string,
-    (ctx: unknown, event: unknown) => Promise<void>
-  >;
-
-  for (const [eventType, handler] of Object.entries(handlers)) {
-    if (!handler) continue;
-    const affiliateHandler = merged[eventType];
-    if (affiliateHandler) {
-      merged[eventType] = async (ctx: unknown, event: unknown) => {
-        await affiliateHandler(ctx, event);
-        await (handler as (ctx: unknown, event: unknown) => Promise<void>)(
-          ctx,
-          event
-        );
-      };
-    } else {
-      merged[eventType] = handler as (
-        ctx: unknown,
-        event: unknown
-      ) => Promise<void>;
-    }
-  }
-
-  return merged as StripeEventHandlers;
 }
 
 // =============================================================================

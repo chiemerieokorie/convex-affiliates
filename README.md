@@ -200,36 +200,11 @@ If you're using `@convex-dev/stripe`, use `getAffiliateStripeHandlers` to get ty
 import { getAffiliateStripeHandlers } from "chief_emerie";
 import { components } from "./_generated/api";
 
-// Just affiliate handlers
-export const stripeWebhookHandlers = getAffiliateStripeHandlers(components.affiliates);
-
-// Or with your handlers merged (affiliate runs first, then yours)
-export const stripeWebhookHandlers = getAffiliateStripeHandlers(
-  components.affiliates,
-  {
-    "invoice.paid": async (ctx, event) => {
-      // Runs AFTER affiliate commission tracking
-      console.log("Payment received!");
-    },
-    "customer.subscription.created": async (ctx, event) => {
-      // Your logic...
-    },
-  }
-);
+// Get affiliate handlers for invoice.paid, charge.refunded, checkout.session.completed
+export const affiliateHandlers = getAffiliateStripeHandlers(components.affiliates);
 ```
 
-Then use them in your HTTP routes:
-
-```typescript
-// convex/http.ts
-import { registerRoutes } from "@convex-dev/stripe";
-import { stripeWebhookHandlers } from "./stripeHandlers";
-
-registerRoutes(http, components.stripe, {
-  webhookPath: "/stripe/webhook",
-  events: stripeWebhookHandlers,
-});
-```
+Then use them in your Stripe webhook setup. You can combine with your own handlers as needed.
 
 #### Standalone Webhook Handler
 
