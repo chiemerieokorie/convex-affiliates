@@ -62,17 +62,18 @@ const affiliates = createAffiliateApi(components.affiliates, {
   // Your app's base URL for generating affiliate links
   baseUrl: process.env.BASE_URL ?? "https://yourapp.com",
 
-  // Authentication callback - return the user ID
+  // Authentication callback - works with any Convex auth provider
   auth: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    return identity.subject;
+    return identity.subject; // User ID from JWT token
   },
 
   // Optional: Admin authorization callback
   isAdmin: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    return identity?.tokenIdentifier?.includes("admin") ?? false;
+    // Example: check email domain or custom claim
+    return identity?.email?.endsWith("@yourcompany.com") ?? false;
   },
 });
 
@@ -558,6 +559,37 @@ This design:
 - Works with any payment processor (not just Stripe)
 - Allows flexible payout methods (PayPal, bank transfer, crypto, etc.)
 
+## Troubleshooting
+
+### TypeScript type errors with components.affiliates
+
+If you get type errors when passing `components.affiliates` to `createAffiliateApi`, you can use a type assertion:
+
+```typescript
+import { createAffiliateApi, ComponentApi } from "chief_emerie";
+
+const affiliates = createAffiliateApi(
+  components.affiliates as unknown as ComponentApi,
+  { ... }
+);
+```
+
+This may be needed if your TypeScript configuration differs from the component's.
+
+### Authentication with different providers
+
+The `auth` callback receives the full Convex context, but the type only shows `{ auth: Auth }`. The recommended pattern works with any Convex-compatible auth provider:
+
+```typescript
+auth: async (ctx) => {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Not authenticated");
+  return identity.subject; // User ID from JWT token
+},
+```
+
+For Better Auth or other providers, the `identity.subject` contains the user ID from your auth provider's JWT token.
+
 ## Local Development
 
 ```bash
@@ -572,7 +604,7 @@ npm run dev
 # Run tests
 npm run test
 
-# Build
+# Build (automatically cleans dist/ first)
 npm run build
 ```
 

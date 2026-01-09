@@ -685,6 +685,14 @@ export function createStripeWebhookHandler(
   component: ComponentApi,
   config: StripeWebhookConfig
 ) {
+  // Validate webhook secret at creation time for helpful error messages
+  if (!config.webhookSecret) {
+    throw new Error(
+      "webhookSecret is required for Stripe webhook handler. " +
+        "Set STRIPE_WEBHOOK_SECRET in your Convex environment variables."
+    );
+  }
+
   return httpActionGeneric(async (ctx, request) => {
     // Get raw body for signature verification
     const rawBody = await request.text();
