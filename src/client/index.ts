@@ -4,9 +4,36 @@ import {
   queryGeneric,
   paginationOptsValidator,
 } from "convex/server";
-import type { Auth, HttpRouter } from "convex/server";
+import type { Auth, FunctionReference, HttpRouter } from "convex/server";
 import { v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
+
+// =============================================================================
+// Type Utilities
+// =============================================================================
+
+/**
+ * Recursively transforms ComponentApi to accept any visibility.
+ * This allows host apps to pass `components.affiliates` without type assertions,
+ * regardless of how Convex generates the function reference visibility.
+ *
+ * @example
+ * ```typescript
+ * // Works without type assertions
+ * const affiliates = createAffiliateApi(components.affiliates, { ... });
+ * ```
+ */
+export type UseApi<API> = API extends FunctionReference<
+  infer FType,
+  infer _Visibility,
+  infer Args,
+  infer Returns,
+  infer Name
+>
+  ? FunctionReference<FType, "public" | "internal", Args, Returns, Name>
+  : API extends object
+    ? { [K in keyof API]: UseApi<API[K]> }
+    : API;
 import {
   affiliateStatusValidator,
   payoutTermValidator,
@@ -104,7 +131,7 @@ type ActionCtx = { runQuery: any; runMutation: any; runAction: any; auth: Auth }
  * ```
  */
 export function createAffiliateApi(
-  component: ComponentApi,
+  component: UseApi<ComponentApi>,
   config: CreateAffiliateApiConfig
 ) {
   const defaults = {
@@ -554,7 +581,7 @@ export function createAffiliateApi(
  */
 export function registerRoutes(
   http: HttpRouter,
-  component: ComponentApi,
+  component: UseApi<ComponentApi>,
   options: {
     pathPrefix?: string;
   } = {}
@@ -682,7 +709,7 @@ export interface StripeWebhookConfig {
  * ```
  */
 export function createStripeWebhookHandler(
-  component: ComponentApi,
+  component: UseApi<ComponentApi>,
   config: StripeWebhookConfig
 ) {
   // Validate webhook secret at creation time for helpful error messages
@@ -807,7 +834,7 @@ export function createStripeWebhookHandler(
  * ```
  */
 export function getAffiliateStripeHandlers(
-  component: ComponentApi,
+  component: UseApi<ComponentApi>,
   handlers?: StripeEventHandlers
 ): StripeEventHandlers {
   const affiliateHandlers: StripeEventHandlers = {
