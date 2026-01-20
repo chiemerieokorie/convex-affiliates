@@ -217,10 +217,28 @@ export const trackClick = mutation({
       return null; // Campaign not found or inactive
     }
 
+    const now = Date.now();
+
+    // FRAUD PREVENTION: IP velocity limiting
+    if (args.ipAddress) {
+      const maxClicksPerHour = campaign.maxClicksPerIpPerHour ?? 10; // Default: 10 clicks per hour
+      if (maxClicksPerHour > 0) {
+        const oneHourAgo = now - 60 * 60 * 1000;
+        const recentClicks = await ctx.db
+          .query("referrals")
+          .withIndex("by_ipAddress", (q) => q.eq("ipAddress", args.ipAddress))
+          .filter((q) => q.gte(q.field("clickedAt"), oneHourAgo))
+          .collect();
+
+        if (recentClicks.length >= maxClicksPerHour) {
+          return null; // Rate limit exceeded - silently reject
+        }
+      }
+    }
+
     // Generate a referral ID
     const referralId = crypto.randomUUID();
 
-    const now = Date.now();
     const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
 
     await ctx.db.insert("referrals", {
@@ -228,6 +246,7 @@ export const trackClick = mutation({
       referralId,
       landingPage: args.landingPage,
       subId: args.subId,
+      ipAddress: args.ipAddress, // Store for fraud analysis
       status: "clicked",
       clickedAt: now,
       expiresAt,
