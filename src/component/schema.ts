@@ -46,6 +46,11 @@ export default defineSchema({
     allowedProducts: v.optional(v.array(v.string())),
     excludedProducts: v.optional(v.array(v.string())),
 
+    // Two-sided rewards: Discount for referred customers
+    refereeDiscountType: v.optional(commissionTypeValidator), // "percentage" or "fixed"
+    refereeDiscountValue: v.optional(v.number()), // Percentage (0-100) or cents for fixed
+    refereeStripeCouponId: v.optional(v.string()), // Pre-created Stripe coupon ID
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })

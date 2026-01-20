@@ -1,6 +1,9 @@
 import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
-import { referralStatusValidator } from "./validators.js";
+import {
+  referralStatusValidator,
+  commissionTypeValidator,
+} from "./validators.js";
 
 // ============================================
 // Public Queries
@@ -170,6 +173,86 @@ export const listByAffiliate = query({
       .query("referrals")
       .withIndex("by_affiliate", (q) => q.eq("affiliateId", args.affiliateId))
       .take(limit);
+  },
+});
+
+/**
+ * Get the referee discount for a referral.
+ * Used by host apps to apply discounts during checkout.
+ * Returns discount details if the referral's campaign has a referee discount configured.
+ */
+export const getRefereeDiscount = query({
+  args: {
+    referralId: v.optional(v.string()),
+    affiliateCode: v.optional(v.string()),
+    userId: v.optional(v.string()),
+  },
+  returns: v.union(
+    v.object({
+      discountType: commissionTypeValidator,
+      discountValue: v.number(),
+      stripeCouponId: v.optional(v.string()),
+      affiliateCode: v.string(),
+      affiliateDisplayName: v.optional(v.string()),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    // Find the referral by any of the provided identifiers
+    let affiliate = null;
+
+    // Try by referral ID first
+    if (args.referralId) {
+      const referral = await ctx.db
+        .query("referrals")
+        .withIndex("by_referralId", (q) => q.eq("referralId", args.referralId!))
+        .first();
+      if (referral) {
+        affiliate = await ctx.db.get(referral.affiliateId);
+      }
+    }
+
+    // Try by user ID
+    if (!affiliate && args.userId) {
+      const referral = await ctx.db
+        .query("referrals")
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId!))
+        .first();
+      if (referral) {
+        affiliate = await ctx.db.get(referral.affiliateId);
+      }
+    }
+
+    // Try by affiliate code directly
+    if (!affiliate && args.affiliateCode) {
+      affiliate = await ctx.db
+        .query("affiliates")
+        .withIndex("by_code", (q) => q.eq("code", args.affiliateCode!.toUpperCase()))
+        .first();
+    }
+
+    if (!affiliate || affiliate.status !== "approved") {
+      return null;
+    }
+
+    // Get the campaign to check for referee discount
+    const campaign = await ctx.db.get(affiliate.campaignId);
+    if (!campaign || !campaign.isActive) {
+      return null;
+    }
+
+    // Check if campaign has a referee discount configured
+    if (!campaign.refereeDiscountType || campaign.refereeDiscountValue === undefined) {
+      return null;
+    }
+
+    return {
+      discountType: campaign.refereeDiscountType,
+      discountValue: campaign.refereeDiscountValue,
+      stripeCouponId: campaign.refereeStripeCouponId,
+      affiliateCode: affiliate.code,
+      affiliateDisplayName: affiliate.displayName,
+    };
   },
 });
 
