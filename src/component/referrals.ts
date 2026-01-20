@@ -1,6 +1,13 @@
 import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import { referralStatusValidator } from "./validators.js";
+import { RateLimiter } from "@convex-dev/rate-limiter";
+import { components } from "./_generated/api.js";
+
+// Rate limiter for IP-based click velocity limiting
+// Note: Type assertion needed because component types are generated at deployment time
+// When deployed, components.rateLimiter will be properly typed
+const rateLimiter = new RateLimiter((components as any).rateLimiter);
 
 // ============================================
 // Public Queries
@@ -219,18 +226,21 @@ export const trackClick = mutation({
 
     const now = Date.now();
 
-    // FRAUD PREVENTION: IP velocity limiting
+    // FRAUD PREVENTION: IP velocity limiting using @convex-dev/rate-limiter
+    // This provides atomic rate limiting without race conditions
     if (args.ipAddress) {
       const maxClicksPerHour = campaign.maxClicksPerIpPerHour ?? 10; // Default: 10 clicks per hour
       if (maxClicksPerHour > 0) {
-        const oneHourAgo = now - 60 * 60 * 1000;
-        const recentClicks = await ctx.db
-          .query("referrals")
-          .withIndex("by_ipAddress", (q) => q.eq("ipAddress", args.ipAddress))
-          .filter((q) => q.gte(q.field("clickedAt"), oneHourAgo))
-          .collect();
+        const { ok } = await rateLimiter.limit(ctx, "ipClickVelocity", {
+          key: args.ipAddress,
+          config: {
+            kind: "fixed window",
+            rate: maxClicksPerHour,
+            period: 60 * 60 * 1000, // 1 hour in milliseconds
+          },
+        });
 
-        if (recentClicks.length >= maxClicksPerHour) {
+        if (!ok) {
           return null; // Rate limit exceeded - silently reject
         }
       }
