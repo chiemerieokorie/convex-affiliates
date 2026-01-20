@@ -281,6 +281,12 @@ export const attributeSignup = mutation({
       return null; // Already signed up or converted
     }
 
+    // FRAUD PREVENTION: Block self-referrals
+    const affiliate = await ctx.db.get(referral.affiliateId);
+    if (affiliate && affiliate.userId === args.userId) {
+      return null; // Affiliate cannot refer themselves
+    }
+
     const now = Date.now();
 
     // Update referral with user ID
@@ -291,7 +297,6 @@ export const attributeSignup = mutation({
     });
 
     // Update affiliate stats
-    const affiliate = await ctx.db.get(referral.affiliateId);
     if (affiliate) {
       await ctx.db.patch(affiliate._id, {
         stats: {
@@ -328,6 +333,11 @@ export const attributeSignupByCode = mutation({
 
     if (!affiliate || affiliate.status !== "approved") {
       return { success: false };
+    }
+
+    // FRAUD PREVENTION: Block self-referrals
+    if (affiliate.userId === args.userId) {
+      return { success: false }; // Affiliate cannot refer themselves
     }
 
     // Check if user already has a referral
@@ -397,6 +407,12 @@ export const linkStripeCustomer = mutation({
         .first();
 
       if (referral && !referral.stripeCustomerId) {
+        // FRAUD PREVENTION: Block self-referrals
+        const affiliate = await ctx.db.get(referral.affiliateId);
+        if (affiliate && affiliate.userId === args.userId) {
+          return null; // Affiliate cannot refer themselves
+        }
+
         // Link Stripe customer to existing referral
         await ctx.db.patch(referral._id, {
           stripeCustomerId: args.stripeCustomerId,
@@ -414,6 +430,11 @@ export const linkStripeCustomer = mutation({
         .first();
 
       if (affiliate && affiliate.status === "approved") {
+        // FRAUD PREVENTION: Block self-referrals
+        if (args.userId && affiliate.userId === args.userId) {
+          return null; // Affiliate cannot refer themselves
+        }
+
         // Check if customer already has a referral
         const existingReferral = await ctx.db
           .query("referrals")

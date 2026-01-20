@@ -563,6 +563,12 @@ export const createFromInvoice = mutation({
       return null;
     }
 
+    // FRAUD PREVENTION: Block self-referral commissions
+    // If the referral has a userId that matches the affiliate's userId, reject
+    if (referral.userId && affiliate.userId === referral.userId) {
+      return null; // Affiliate cannot earn commissions on their own purchases
+    }
+
     // Check for existing commission for this invoice (deduplication)
     const existingCommission = await ctx.db
       .query("commissions")
