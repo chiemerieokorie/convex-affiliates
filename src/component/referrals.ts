@@ -7,6 +7,39 @@ import { referralStatusValidator } from "./validators.js";
 // ============================================
 
 /**
+ * Check if a Stripe customer is already attributed to an affiliate.
+ * FRAUD PREVENTION: Prevents duplicate attribution attempts.
+ */
+export const isCustomerAttributed = query({
+  args: {
+    stripeCustomerId: v.string(),
+  },
+  returns: v.object({
+    attributed: v.boolean(),
+    affiliateCode: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    const referral = await ctx.db
+      .query("referrals")
+      .withIndex("by_stripeCustomer", (q) =>
+        q.eq("stripeCustomerId", args.stripeCustomerId)
+      )
+      .first();
+
+    if (!referral) {
+      return { attributed: false };
+    }
+
+    // Get the affiliate code for transparency
+    const affiliate = await ctx.db.get(referral.affiliateId);
+    return {
+      attributed: true,
+      affiliateCode: affiliate?.code,
+    };
+  },
+});
+
+/**
  * Get an active referral by referral ID.
  */
 export const getByReferralId = query({
@@ -414,7 +447,8 @@ export const linkStripeCustomer = mutation({
         .first();
 
       if (affiliate && affiliate.status === "approved") {
-        // Check if customer already has a referral
+        // FRAUD PREVENTION: Duplicate customer detection
+        // A Stripe customer can only be attributed to ONE affiliate
         const existingReferral = await ctx.db
           .query("referrals")
           .withIndex("by_stripeCustomer", (q) =>
@@ -422,37 +456,40 @@ export const linkStripeCustomer = mutation({
           )
           .first();
 
-        if (!existingReferral) {
-          // Create a referral for this customer
-          const campaign = await ctx.db.get(affiliate.campaignId);
-          if (campaign && campaign.isActive) {
-            const now = Date.now();
-            const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
+        if (existingReferral) {
+          // Customer already attributed - silently ignore new attribution attempt
+          return null;
+        }
 
-            await ctx.db.insert("referrals", {
-              affiliateId: affiliate._id,
-              referralId: crypto.randomUUID(),
-              landingPage: "/checkout",
-              stripeCustomerId: args.stripeCustomerId,
-              userId: args.userId,
-              status: args.userId ? "signed_up" : "clicked",
-              clickedAt: now,
-              signedUpAt: args.userId ? now : undefined,
-              expiresAt,
-            });
+        // No existing attribution - create a referral for this customer
+        const campaign = await ctx.db.get(affiliate.campaignId);
+        if (campaign && campaign.isActive) {
+          const now = Date.now();
+          const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
 
-            // Update affiliate stats
-            await ctx.db.patch(affiliate._id, {
-              stats: {
-                ...affiliate.stats,
-                totalClicks: affiliate.stats.totalClicks + 1,
-                totalSignups: args.userId
-                  ? affiliate.stats.totalSignups + 1
-                  : affiliate.stats.totalSignups,
-              },
-              updatedAt: now,
-            });
-          }
+          await ctx.db.insert("referrals", {
+            affiliateId: affiliate._id,
+            referralId: crypto.randomUUID(),
+            landingPage: "/checkout",
+            stripeCustomerId: args.stripeCustomerId,
+            userId: args.userId,
+            status: args.userId ? "signed_up" : "clicked",
+            clickedAt: now,
+            signedUpAt: args.userId ? now : undefined,
+            expiresAt,
+          });
+
+          // Update affiliate stats
+          await ctx.db.patch(affiliate._id, {
+            stats: {
+              ...affiliate.stats,
+              totalClicks: affiliate.stats.totalClicks + 1,
+              totalSignups: args.userId
+                ? affiliate.stats.totalSignups + 1
+                : affiliate.stats.totalSignups,
+            },
+            updatedAt: now,
+          });
         }
       }
     }

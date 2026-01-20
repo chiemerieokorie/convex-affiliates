@@ -516,7 +516,9 @@ export const createFromInvoice = mutation({
       return null;
     }
 
-    // First, try to find referral by Stripe customer ID
+    // FRAUD PREVENTION: Duplicate customer detection
+    // First check if this Stripe customer already has attribution
+    // A customer can only be attributed to ONE affiliate
     let referral = await ctx.db
       .query("referrals")
       .withIndex("by_stripeCustomer", (q) =>
@@ -524,7 +526,7 @@ export const createFromInvoice = mutation({
       )
       .first();
 
-    // If not found and we have an affiliate code, try to attribute directly
+    // Only create new attribution if customer has none AND we have an affiliate code
     if (!referral && args.affiliateCode) {
       const code = args.affiliateCode;
       const affiliate = await ctx.db
