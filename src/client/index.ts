@@ -43,6 +43,7 @@ import {
   promoContentValidator,
   socialsValidator,
   customCopyValidator,
+  type NotificationEventType,
 } from "../component/validators.js";
 
 // =============================================================================
@@ -80,6 +81,53 @@ type StripeHandler = (ctx: StripeHandlerCtx, event: StripeEvent) => Promise<void
 export type AffiliateStripeHandlers = {
   [eventType: string]: StripeHandler | undefined;
 };
+
+// =============================================================================
+// Notification Types
+// =============================================================================
+
+/**
+ * Event data passed to notification handlers.
+ * Contains relevant context for each event type.
+ */
+export interface NotificationEvent {
+  type: NotificationEventType;
+  timestamp: number;
+  data: {
+    affiliateId?: string;
+    affiliateCode?: string;
+    affiliateEmail?: string;
+    affiliateUserId?: string;
+    commissionId?: string;
+    commissionAmountCents?: number;
+    payoutId?: string;
+    payoutAmountCents?: number;
+    currency?: string;
+  };
+}
+
+/**
+ * Handler function for affiliate notification events.
+ * Called after mutations complete with relevant event data.
+ *
+ * @example
+ * ```typescript
+ * const api = createAffiliateApi(components.affiliates, {
+ *   auth: async (ctx) => { ... },
+ *   onNotification: async (event) => {
+ *     switch (event.type) {
+ *       case "affiliate.approved":
+ *         await sendEmail(event.data.affiliateEmail!, "You're approved!");
+ *         break;
+ *       case "commission.created":
+ *         await sendEmail(event.data.affiliateEmail!, `You earned $${event.data.commissionAmountCents! / 100}!`);
+ *         break;
+ *     }
+ *   },
+ * });
+ * ```
+ */
+export type NotificationEventHandler = (event: NotificationEvent) => Promise<void>;
 
 // =============================================================================
 // Types
@@ -129,6 +177,25 @@ export interface CreateAffiliateApiConfig extends AffiliateConfig {
    * If not provided, admin endpoints will use the auth function only.
    */
   isAdmin?: (ctx: { auth: Auth }) => Promise<boolean>;
+
+  /**
+   * Optional notification handler for affiliate events.
+   * Called after mutations complete with event data.
+   * Use this to send emails, webhooks, or other notifications.
+   *
+   * Supported events:
+   * - affiliate.registered: New affiliate signed up
+   * - affiliate.approved: Affiliate application approved
+   * - affiliate.rejected: Affiliate application rejected
+   * - affiliate.suspended: Affiliate account suspended
+   * - commission.created: New commission earned
+   * - commission.approved: Commission approved for payout
+   * - commission.paid: Commission paid out
+   * - commission.reversed: Commission reversed (refund)
+   * - payout.created: Payout initiated
+   * - payout.completed: Payout completed
+   */
+  onNotification?: NotificationEventHandler;
 }
 
 // Context types for internal use
@@ -212,6 +279,25 @@ export function createAffiliateApi(
     return ctx.runQuery(component.affiliates.getByUserId, { userId });
   };
 
+  // Helper to emit notification events
+  const emitNotification = async (
+    type: NotificationEventType,
+    data: NotificationEvent["data"]
+  ) => {
+    if (config.onNotification) {
+      try {
+        await config.onNotification({
+          type,
+          timestamp: Date.now(),
+          data,
+        });
+      } catch (error) {
+        // Log but don't fail the mutation if notification fails
+        console.error(`Notification handler error for ${type}:`, error);
+      }
+    }
+  };
+
   return {
     // =========================================================================
     // PUBLIC ENDPOINTS (no authentication required)
@@ -271,7 +357,7 @@ export function createAffiliateApi(
       handler: async (ctx, args) => {
         const userId = await config.auth(ctx);
         const campaign = await ensureDefaultCampaign(ctx);
-        return ctx.runMutation(component.affiliates.register, {
+        const result = await ctx.runMutation(component.affiliates.register, {
           userId,
           email: args.email,
           displayName: args.displayName,
@@ -280,6 +366,16 @@ export function createAffiliateApi(
           campaignId: campaign._id,
           customCode: args.customCode,
         });
+
+        // Emit notification for new registration
+        await emitNotification("affiliate.registered", {
+          affiliateId: result.affiliateId,
+          affiliateCode: result.code,
+          affiliateEmail: args.email,
+          affiliateUserId: userId,
+        });
+
+        return result;
       },
     }),
 
@@ -534,7 +630,30 @@ export function createAffiliateApi(
       args: { affiliateId: v.id("affiliates") },
       handler: async (ctx, args) => {
         await requireAdmin(ctx);
-        return ctx.runMutation(component.affiliates.approve, args);
+
+        // Get affiliate info before approval for notification
+        const affiliate = await ctx.runQuery(component.affiliates.getByUserId, {
+          userId: "", // We'll get it by ID instead
+        });
+        const affiliateById = await ctx.runQuery(component.affiliates.list, {
+          limit: 1000,
+        });
+        const affiliateData = affiliateById.find(
+          (a: { _id: string }) => a._id === args.affiliateId
+        );
+
+        await ctx.runMutation(component.affiliates.approve, args);
+
+        // Emit notification for approval
+        if (affiliateData) {
+          await emitNotification("affiliate.approved", {
+            affiliateId: args.affiliateId,
+            affiliateCode: affiliateData.code,
+            affiliateUserId: affiliateData.userId,
+          });
+        }
+
+        return null;
       },
     }),
 
@@ -548,7 +667,27 @@ export function createAffiliateApi(
       },
       handler: async (ctx, args) => {
         await requireAdmin(ctx);
-        return ctx.runMutation(component.affiliates.reject, args);
+
+        // Get affiliate info before rejection for notification
+        const affiliateById = await ctx.runQuery(component.affiliates.list, {
+          limit: 1000,
+        });
+        const affiliateData = affiliateById.find(
+          (a: { _id: string }) => a._id === args.affiliateId
+        );
+
+        await ctx.runMutation(component.affiliates.reject, args);
+
+        // Emit notification for rejection
+        if (affiliateData) {
+          await emitNotification("affiliate.rejected", {
+            affiliateId: args.affiliateId,
+            affiliateCode: affiliateData.code,
+            affiliateUserId: affiliateData.userId,
+          });
+        }
+
+        return null;
       },
     }),
 
@@ -559,7 +698,27 @@ export function createAffiliateApi(
       args: { affiliateId: v.id("affiliates") },
       handler: async (ctx, args) => {
         await requireAdmin(ctx);
-        return ctx.runMutation(component.affiliates.suspend, args);
+
+        // Get affiliate info before suspension for notification
+        const affiliateById = await ctx.runQuery(component.affiliates.list, {
+          limit: 1000,
+        });
+        const affiliateData = affiliateById.find(
+          (a: { _id: string }) => a._id === args.affiliateId
+        );
+
+        await ctx.runMutation(component.affiliates.suspend, args);
+
+        // Emit notification for suspension
+        if (affiliateData) {
+          await emitNotification("affiliate.suspended", {
+            affiliateId: args.affiliateId,
+            affiliateCode: affiliateData.code,
+            affiliateUserId: affiliateData.userId,
+          });
+        }
+
+        return null;
       },
     }),
 
@@ -840,6 +999,17 @@ export function createStripeWebhookHandler(
 // =============================================================================
 
 /**
+ * Options for Stripe event handlers.
+ */
+export interface AffiliateStripeHandlersOptions {
+  /**
+   * Optional notification handler for commission/payout events.
+   * Called after commission is created, reversed, or payout completed.
+   */
+  onNotification?: NotificationEventHandler;
+}
+
+/**
  * Get Stripe event handlers for affiliate tracking.
  * Optionally merge with your own handlers (affiliate runs first).
  *
@@ -849,21 +1019,50 @@ export function createStripeWebhookHandler(
  * - checkout.session.completed → links customer to affiliate
  *
  * @param component - The affiliate component API
+ * @param options - Optional configuration including notification handler
  *
  * @example
  * ```typescript
  * import { getAffiliateStripeHandlers } from "chief_emerie";
  *
- * export const affiliateHandlers = getAffiliateStripeHandlers(components.affiliates);
+ * export const affiliateHandlers = getAffiliateStripeHandlers(
+ *   components.affiliates,
+ *   {
+ *     onNotification: async (event) => {
+ *       if (event.type === "commission.created") {
+ *         // Send email notification to affiliate
+ *         await sendEmail(event.data.affiliateEmail!, "You earned a commission!");
+ *       }
+ *     },
+ *   }
+ * );
  * ```
  */
 export function getAffiliateStripeHandlers(
-  component: UseApi<ComponentApi>
+  component: UseApi<ComponentApi>,
+  options?: AffiliateStripeHandlersOptions
 ): AffiliateStripeHandlers {
+  const emitNotification = async (
+    type: NotificationEventType,
+    data: NotificationEvent["data"]
+  ) => {
+    if (options?.onNotification) {
+      try {
+        await options.onNotification({
+          type,
+          timestamp: Date.now(),
+          data,
+        });
+      } catch (error) {
+        console.error(`Notification handler error for ${type}:`, error);
+      }
+    }
+  };
+
   return {
     "invoice.paid": async (ctx, event) => {
       const invoice = event.data.object as unknown as Record<string, unknown>;
-      await ctx.runMutation(component.commissions.createFromInvoice, {
+      const result = await ctx.runMutation(component.commissions.createFromInvoice, {
         stripeInvoiceId: invoice.id as string,
         stripeCustomerId: invoice.customer as string,
         stripeChargeId: (invoice.charge as string) ?? undefined,
@@ -876,16 +1075,36 @@ export function getAffiliateStripeHandlers(
         affiliateCode: (invoice.metadata as Record<string, string>)
           ?.affiliate_code,
       });
+
+      // Emit commission.created notification if commission was created
+      if (result && result.commissionId) {
+        await emitNotification("commission.created", {
+          commissionId: result.commissionId,
+          affiliateId: result.affiliateId,
+          affiliateCode: result.affiliateCode,
+          commissionAmountCents: result.commissionAmountCents,
+          currency: invoice.currency as string,
+        });
+      }
     },
 
     "charge.refunded": async (ctx, event) => {
       const charge = event.data.object as unknown as Record<string, unknown>;
-      await ctx.runMutation(component.commissions.reverseByCharge, {
+      const result = await ctx.runMutation(component.commissions.reverseByCharge, {
         stripeChargeId: charge.id as string,
         reason:
           ((charge.refunds as { data?: Array<{ reason?: string }> })?.data?.[0]
             ?.reason as string) ?? "Charge refunded",
       });
+
+      // Emit commission.reversed notification if commission was reversed
+      if (result && result.commissionId) {
+        await emitNotification("commission.reversed", {
+          commissionId: result.commissionId,
+          affiliateId: result.affiliateId,
+          commissionAmountCents: result.commissionAmountCents,
+        });
+      }
     },
 
     "checkout.session.completed": async (ctx, event) => {
