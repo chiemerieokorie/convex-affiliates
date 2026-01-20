@@ -423,17 +423,23 @@ export const linkStripeCustomer = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     // If we have a user ID, try to find their referral and link the customer
+    // FRAUD PREVENTION: User can only be attributed to ONE affiliate (first-touch)
     if (args.userId) {
       const referral = await ctx.db
         .query("referrals")
         .withIndex("by_userId", (q) => q.eq("userId", args.userId))
         .first();
 
-      if (referral && !referral.stripeCustomerId) {
-        // Link Stripe customer to existing referral
-        await ctx.db.patch(referral._id, {
-          stripeCustomerId: args.stripeCustomerId,
-        });
+      if (referral) {
+        // User already has attribution - keep original affiliate
+        // Update stripeCustomerId if not already set (e.g., first checkout)
+        if (!referral.stripeCustomerId) {
+          await ctx.db.patch(referral._id, {
+            stripeCustomerId: args.stripeCustomerId,
+          });
+        }
+        // Always return to prevent re-attribution via affiliateCode block below
+        // This ensures users can't be attributed to a new affiliate after churning
         return null;
       }
     }
