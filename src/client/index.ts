@@ -600,6 +600,50 @@ export function createAffiliateApi(
       },
     }),
 
+    /**
+     * Get referee discount for a referral.
+     * Used during checkout to apply discount for referred customers.
+     * Returns the discount details if configured for the affiliate's campaign.
+     *
+     * @example
+     * ```typescript
+     * // Get discount by referral ID (stored in cookie)
+     * const discount = await getRefereeDiscount({ referralId: "..." });
+     *
+     * // Get discount by affiliate code (from URL param)
+     * const discount = await getRefereeDiscount({ affiliateCode: "JOHN20" });
+     *
+     * if (discount) {
+     *   // Apply discount to checkout
+     *   if (discount.stripeCouponId) {
+     *     // Use Stripe coupon directly
+     *     stripe.checkout.sessions.create({
+     *       discounts: [{ coupon: discount.stripeCouponId }],
+     *     });
+     *   } else {
+     *     // Calculate discount manually
+     *     const discountAmount = discount.discountType === "percentage"
+     *       ? (totalCents * discount.discountValue) / 100
+     *       : discount.discountValue;
+     *   }
+     * }
+     * ```
+     */
+    getRefereeDiscount: queryGeneric({
+      args: {
+        referralId: v.optional(v.string()),
+        affiliateCode: v.optional(v.string()),
+        userId: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        // Note: The type will be properly resolved after running `npx convex dev` to regenerate types
+        return ctx.runQuery(
+          (component.referrals as any).getRefereeDiscount,
+          args
+        );
+      },
+    }),
+
     // =========================================================================
     // ADMIN ENDPOINTS
     // =========================================================================
