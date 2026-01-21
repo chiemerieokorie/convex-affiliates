@@ -497,6 +497,7 @@ export const getByStripeCharge = query({
 /**
  * Create a commission from a paid invoice.
  * Called by host app's webhook handler when invoice.paid event is received.
+ * Returns commission details for notification purposes.
  */
 export const createFromInvoice = mutation({
   args: {
@@ -509,49 +510,39 @@ export const createFromInvoice = mutation({
     currency: v.string(),
     affiliateCode: v.optional(v.string()),
   },
-  returns: v.union(v.id("commissions"), v.null()),
+  returns: v.union(
+    v.object({
+      commissionId: v.id("commissions"),
+      affiliateId: v.id("affiliates"),
+      affiliateCode: v.string(),
+      affiliateUserId: v.string(),
+      commissionAmountCents: v.number(),
+    }),
+    v.null()
+  ),
   handler: async (ctx, args) => {
     // Skip zero-amount invoices
     if (args.amountPaidCents <= 0) {
       return null;
     }
 
-    // First, try to find referral by Stripe customer ID
-    let referral = await ctx.db
+    // FRAUD PREVENTION: Duplicate customer detection
+    // First check if this Stripe customer already has attribution
+    // A customer can only be attributed to ONE affiliate
+    const referral = await ctx.db
       .query("referrals")
       .withIndex("by_stripeCustomer", (q) =>
         q.eq("stripeCustomerId", args.stripeCustomerId)
       )
       .first();
 
-    // If not found and we have an affiliate code, try to attribute directly
-    if (!referral && args.affiliateCode) {
-      const code = args.affiliateCode;
-      const affiliate = await ctx.db
-        .query("affiliates")
-        .withIndex("by_code", (q) => q.eq("code", code.toUpperCase()))
-        .first();
-
-      if (affiliate && affiliate.status === "approved") {
-        // Create a referral for this customer
-        const now = Date.now();
-        const campaign = await ctx.db.get(affiliate.campaignId);
-        if (campaign && campaign.isActive) {
-          const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
-          const referralId = await ctx.db.insert("referrals", {
-            affiliateId: affiliate._id,
-            referralId: crypto.randomUUID(),
-            landingPage: "/checkout",
-            stripeCustomerId: args.stripeCustomerId,
-            status: "converted",
-            clickedAt: now,
-            convertedAt: now,
-            expiresAt,
-          });
-          referral = await ctx.db.get(referralId);
-        }
-      }
-    }
+    // FRAUD PREVENTION: Do NOT create new referrals via affiliateCode in webhook handlers
+    // This path could be exploited for self-referral since we cannot verify user identity.
+    // Proper attribution flow: trackClick -> attributeSignup -> linkStripeCustomer
+    // If no referral exists by now, the customer was not properly attributed through
+    // the frontend flow, and we should not create last-minute attribution via webhook.
+    // The affiliateCode parameter is kept for backwards compatibility but ignored
+    // for new referral creation.
 
     if (!referral) {
       return null; // No attribution found
@@ -563,6 +554,12 @@ export const createFromInvoice = mutation({
       return null;
     }
 
+    // FRAUD PREVENTION: Block self-referral commissions
+    // If the referral has a userId that matches the affiliate's userId, reject
+    if (referral.userId && affiliate.userId === referral.userId) {
+      return null; // Affiliate cannot earn commissions on their own purchases
+    }
+
     // Check for existing commission for this invoice (deduplication)
     const existingCommission = await ctx.db
       .query("commissions")
@@ -570,7 +567,14 @@ export const createFromInvoice = mutation({
       .first();
 
     if (existingCommission) {
-      return existingCommission._id; // Already processed
+      // Already processed - return existing commission details
+      return {
+        commissionId: existingCommission._id,
+        affiliateId: affiliate._id,
+        affiliateCode: affiliate.code,
+        affiliateUserId: affiliate.userId,
+        commissionAmountCents: existingCommission.commissionAmountCents,
+      };
     }
 
     // Get campaign to check commission duration rules
@@ -629,7 +633,6 @@ export const createFromInvoice = mutation({
     // Calculate commission amount (inline logic to avoid ctx.runQuery in mutation)
     let commissionType: CommissionType = campaign.commissionType;
     let commissionRate: number = campaign.commissionValue;
-    let commissionAmountCents: number;
 
     // Priority 1: Affiliate custom rate
     if (affiliate.customCommissionType && affiliate.customCommissionValue !== undefined) {
@@ -668,7 +671,7 @@ export const createFromInvoice = mutation({
     }
 
     // Calculate the actual commission amount
-    commissionAmountCents = calculateCommissionAmount(
+    const commissionAmountCents = calculateCommissionAmount(
       args.amountPaidCents,
       commissionType,
       commissionRate
@@ -731,20 +734,36 @@ export const createFromInvoice = mutation({
       timestamp: now,
     });
 
-    return commissionId;
+    // Return commission details for notification purposes
+    return {
+      commissionId,
+      affiliateId: affiliate._id,
+      affiliateCode: affiliate.code,
+      affiliateUserId: affiliate.userId,
+      commissionAmountCents,
+    };
   },
 });
 
 /**
  * Reverse a commission by Stripe charge ID.
  * Called by host app's webhook handler when charge.refunded event is received.
+ * Returns commission details for notification purposes.
  */
 export const reverseByCharge = mutation({
   args: {
     stripeChargeId: v.string(),
     reason: v.optional(v.string()),
   },
-  returns: v.null(),
+  returns: v.union(
+    v.object({
+      commissionId: v.id("commissions"),
+      affiliateId: v.id("affiliates"),
+      affiliateCode: v.optional(v.string()),
+      commissionAmountCents: v.number(),
+    }),
+    v.null()
+  ),
   handler: async (ctx, args) => {
     // Find commission by charge ID
     const commission = await ctx.db
@@ -805,6 +824,12 @@ export const reverseByCharge = mutation({
       timestamp: now,
     });
 
-    return null;
+    // Return commission details for notification purposes
+    return {
+      commissionId: commission._id,
+      affiliateId: commission.affiliateId,
+      affiliateCode: affiliate?.code,
+      commissionAmountCents: commission.commissionAmountCents,
+    };
   },
 });

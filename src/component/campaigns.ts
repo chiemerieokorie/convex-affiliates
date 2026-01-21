@@ -38,6 +38,7 @@ export const list = query({
       refereeDiscountType: v.optional(commissionTypeValidator),
       refereeDiscountValue: v.optional(v.number()),
       refereeStripeCouponId: v.optional(v.string()),
+      maxClicksPerIpPerHour: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
@@ -81,6 +82,7 @@ export const get = query({
       refereeDiscountType: v.optional(commissionTypeValidator),
       refereeDiscountValue: v.optional(v.number()),
       refereeStripeCouponId: v.optional(v.string()),
+      maxClicksPerIpPerHour: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
@@ -119,6 +121,7 @@ export const getBySlug = query({
       refereeDiscountType: v.optional(commissionTypeValidator),
       refereeDiscountValue: v.optional(v.number()),
       refereeStripeCouponId: v.optional(v.string()),
+      maxClicksPerIpPerHour: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
@@ -158,6 +161,7 @@ export const getDefault = query({
       refereeDiscountType: v.optional(commissionTypeValidator),
       refereeDiscountValue: v.optional(v.number()),
       refereeStripeCouponId: v.optional(v.string()),
+      maxClicksPerIpPerHour: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
@@ -194,10 +198,14 @@ export const create = mutation({
     payoutTerm: v.optional(payoutTermValidator),
     allowedProducts: v.optional(v.array(v.string())),
     excludedProducts: v.optional(v.array(v.string())),
+<<<<<<< HEAD
     // Two-sided rewards: Discount for referred customers
     refereeDiscountType: v.optional(commissionTypeValidator),
     refereeDiscountValue: v.optional(v.number()),
     refereeStripeCouponId: v.optional(v.string()),
+=======
+    maxClicksPerIpPerHour: v.optional(v.number()),
+>>>>>>> origin/main
   },
   returns: v.id("campaigns"),
   handler: async (ctx, args) => {
@@ -237,9 +245,13 @@ export const create = mutation({
       payoutTerm: args.payoutTerm ?? "NET-30",
       allowedProducts: args.allowedProducts,
       excludedProducts: args.excludedProducts,
+<<<<<<< HEAD
       refereeDiscountType: args.refereeDiscountType,
       refereeDiscountValue: args.refereeDiscountValue,
       refereeStripeCouponId: args.refereeStripeCouponId,
+=======
+      maxClicksPerIpPerHour: args.maxClicksPerIpPerHour,
+>>>>>>> origin/main
       createdAt: now,
       updatedAt: now,
     });
@@ -265,10 +277,14 @@ export const update = mutation({
     payoutTerm: v.optional(payoutTermValidator),
     allowedProducts: v.optional(v.array(v.string())),
     excludedProducts: v.optional(v.array(v.string())),
+<<<<<<< HEAD
     // Two-sided rewards: Discount for referred customers
     refereeDiscountType: v.optional(commissionTypeValidator),
     refereeDiscountValue: v.optional(v.number()),
     refereeStripeCouponId: v.optional(v.string()),
+=======
+    maxClicksPerIpPerHour: v.optional(v.number()),
+>>>>>>> origin/main
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -311,12 +327,17 @@ export const update = mutation({
       updates.allowedProducts = args.allowedProducts;
     if (args.excludedProducts !== undefined)
       updates.excludedProducts = args.excludedProducts;
+<<<<<<< HEAD
     if (args.refereeDiscountType !== undefined)
       updates.refereeDiscountType = args.refereeDiscountType;
     if (args.refereeDiscountValue !== undefined)
       updates.refereeDiscountValue = args.refereeDiscountValue;
     if (args.refereeStripeCouponId !== undefined)
       updates.refereeStripeCouponId = args.refereeStripeCouponId;
+=======
+    if (args.maxClicksPerIpPerHour !== undefined)
+      updates.maxClicksPerIpPerHour = args.maxClicksPerIpPerHour;
+>>>>>>> origin/main
 
     await ctx.db.patch(args.campaignId, updates);
     return null;

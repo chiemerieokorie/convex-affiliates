@@ -4,10 +4,50 @@ import {
   referralStatusValidator,
   commissionTypeValidator,
 } from "./validators.js";
+import { RateLimiter } from "@convex-dev/rate-limiter";
+import { components } from "./_generated/api.js";
+
+// Rate limiter for IP-based click velocity limiting
+// Note: Type assertion needed because component types are generated at deployment time
+// When deployed, components.rateLimiter will be properly typed
+const rateLimiter = new RateLimiter((components as any).rateLimiter);
 
 // ============================================
 // Public Queries
 // ============================================
+
+/**
+ * Check if a Stripe customer is already attributed to an affiliate.
+ * FRAUD PREVENTION: Prevents duplicate attribution attempts.
+ */
+export const isCustomerAttributed = query({
+  args: {
+    stripeCustomerId: v.string(),
+  },
+  returns: v.object({
+    attributed: v.boolean(),
+    affiliateCode: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    const referral = await ctx.db
+      .query("referrals")
+      .withIndex("by_stripeCustomer", (q) =>
+        q.eq("stripeCustomerId", args.stripeCustomerId)
+      )
+      .first();
+
+    if (!referral) {
+      return { attributed: false };
+    }
+
+    // Get the affiliate code for transparency
+    const affiliate = await ctx.db.get(referral.affiliateId);
+    return {
+      attributed: true,
+      affiliateCode: affiliate?.code,
+    };
+  },
+});
 
 /**
  * Get an active referral by referral ID.
@@ -300,10 +340,31 @@ export const trackClick = mutation({
       return null; // Campaign not found or inactive
     }
 
+    const now = Date.now();
+
+    // FRAUD PREVENTION: IP velocity limiting using @convex-dev/rate-limiter
+    // This provides atomic rate limiting without race conditions
+    if (args.ipAddress) {
+      const maxClicksPerHour = campaign.maxClicksPerIpPerHour ?? 10; // Default: 10 clicks per hour
+      if (maxClicksPerHour > 0) {
+        const { ok } = await rateLimiter.limit(ctx, "ipClickVelocity", {
+          key: args.ipAddress,
+          config: {
+            kind: "fixed window",
+            rate: maxClicksPerHour,
+            period: 60 * 60 * 1000, // 1 hour in milliseconds
+          },
+        });
+
+        if (!ok) {
+          return null; // Rate limit exceeded - silently reject
+        }
+      }
+    }
+
     // Generate a referral ID
     const referralId = crypto.randomUUID();
 
-    const now = Date.now();
     const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
 
     await ctx.db.insert("referrals", {
@@ -311,6 +372,7 @@ export const trackClick = mutation({
       referralId,
       landingPage: args.landingPage,
       subId: args.subId,
+      ipAddress: args.ipAddress, // Store for fraud analysis
       status: "clicked",
       clickedAt: now,
       expiresAt,
@@ -364,6 +426,12 @@ export const attributeSignup = mutation({
       return null; // Already signed up or converted
     }
 
+    // FRAUD PREVENTION: Block self-referrals
+    const affiliate = await ctx.db.get(referral.affiliateId);
+    if (affiliate && affiliate.userId === args.userId) {
+      return null; // Affiliate cannot refer themselves
+    }
+
     const now = Date.now();
 
     // Update referral with user ID
@@ -374,7 +442,6 @@ export const attributeSignup = mutation({
     });
 
     // Update affiliate stats
-    const affiliate = await ctx.db.get(referral.affiliateId);
     if (affiliate) {
       await ctx.db.patch(affiliate._id, {
         stats: {
@@ -411,6 +478,11 @@ export const attributeSignupByCode = mutation({
 
     if (!affiliate || affiliate.status !== "approved") {
       return { success: false };
+    }
+
+    // FRAUD PREVENTION: Block self-referrals
+    if (affiliate.userId === args.userId) {
+      return { success: false }; // Affiliate cannot refer themselves
     }
 
     // Check if user already has a referral
@@ -473,17 +545,29 @@ export const linkStripeCustomer = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     // If we have a user ID, try to find their referral and link the customer
+    // FRAUD PREVENTION: User can only be attributed to ONE affiliate (first-touch)
     if (args.userId) {
       const referral = await ctx.db
         .query("referrals")
         .withIndex("by_userId", (q) => q.eq("userId", args.userId))
         .first();
 
-      if (referral && !referral.stripeCustomerId) {
-        // Link Stripe customer to existing referral
-        await ctx.db.patch(referral._id, {
-          stripeCustomerId: args.stripeCustomerId,
-        });
+      if (referral) {
+        // FRAUD PREVENTION: Block self-referrals
+        const affiliate = await ctx.db.get(referral.affiliateId);
+        if (affiliate && affiliate.userId === args.userId) {
+          return null; // Affiliate cannot refer themselves
+        }
+
+        // Link Stripe customer if not already set
+        if (!referral.stripeCustomerId) {
+          await ctx.db.patch(referral._id, {
+            stripeCustomerId: args.stripeCustomerId,
+          });
+        }
+
+        // Always return to prevent re-attribution via affiliateCode block below
+        // This ensures users can't be attributed to a new affiliate after churning
         return null;
       }
     }
@@ -497,6 +581,18 @@ export const linkStripeCustomer = mutation({
         .first();
 
       if (affiliate && affiliate.status === "approved") {
+        // FRAUD PREVENTION: Block self-referrals
+        if (args.userId && affiliate.userId === args.userId) {
+          return null; // Affiliate cannot refer themselves
+        }
+
+        // FRAUD PREVENTION: Require userId for affiliate code attribution
+        // Guest checkout cannot use affiliate codes to prevent self-referral abuse
+        // (affiliates could use their own code while not logged in)
+        if (!args.userId) {
+          return null;
+        }
+
         // Check if customer already has a referral
         const existingReferral = await ctx.db
           .query("referrals")
@@ -505,37 +601,40 @@ export const linkStripeCustomer = mutation({
           )
           .first();
 
-        if (!existingReferral) {
-          // Create a referral for this customer
-          const campaign = await ctx.db.get(affiliate.campaignId);
-          if (campaign && campaign.isActive) {
-            const now = Date.now();
-            const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
+        if (existingReferral) {
+          // Customer already attributed - silently ignore new attribution attempt
+          return null;
+        }
 
-            await ctx.db.insert("referrals", {
-              affiliateId: affiliate._id,
-              referralId: crypto.randomUUID(),
-              landingPage: "/checkout",
-              stripeCustomerId: args.stripeCustomerId,
-              userId: args.userId,
-              status: args.userId ? "signed_up" : "clicked",
-              clickedAt: now,
-              signedUpAt: args.userId ? now : undefined,
-              expiresAt,
-            });
+        // No existing attribution - create a referral for this customer
+        const campaign = await ctx.db.get(affiliate.campaignId);
+        if (campaign && campaign.isActive) {
+          const now = Date.now();
+          const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
 
-            // Update affiliate stats
-            await ctx.db.patch(affiliate._id, {
-              stats: {
-                ...affiliate.stats,
-                totalClicks: affiliate.stats.totalClicks + 1,
-                totalSignups: args.userId
-                  ? affiliate.stats.totalSignups + 1
-                  : affiliate.stats.totalSignups,
-              },
-              updatedAt: now,
-            });
-          }
+          await ctx.db.insert("referrals", {
+            affiliateId: affiliate._id,
+            referralId: crypto.randomUUID(),
+            landingPage: "/checkout",
+            stripeCustomerId: args.stripeCustomerId,
+            userId: args.userId,
+            status: args.userId ? "signed_up" : "clicked",
+            clickedAt: now,
+            signedUpAt: args.userId ? now : undefined,
+            expiresAt,
+          });
+
+          // Update affiliate stats
+          await ctx.db.patch(affiliate._id, {
+            stats: {
+              ...affiliate.stats,
+              totalClicks: affiliate.stats.totalClicks + 1,
+              totalSignups: args.userId
+                ? affiliate.stats.totalSignups + 1
+                : affiliate.stats.totalSignups,
+            },
+            updatedAt: now,
+          });
         }
       }
     }

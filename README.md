@@ -111,6 +111,74 @@ export const {
 npx convex deploy
 ```
 
+### 4. Add Lifecycle Hooks (Optional)
+
+The affiliate API supports type-safe hooks for lifecycle events. Use these to send emails, trigger webhooks, or integrate with other systems.
+
+```typescript
+import { components } from "./_generated/api";
+import { createAffiliateApi } from "chief_emerie";
+
+const affiliates = createAffiliateApi(components.affiliates, {
+  // ... other config ...
+
+  hooks: {
+    "affiliate.registered": async (data) => {
+      // data: { affiliateId, affiliateCode, affiliateEmail, affiliateUserId }
+      await sendEmail(data.affiliateEmail, "Welcome to our affiliate program!");
+    },
+    "affiliate.approved": async (data) => {
+      // data: { affiliateId, affiliateCode, affiliateEmail, affiliateUserId }
+      await sendEmail(data.affiliateEmail, "Your application has been approved!");
+    },
+    "affiliate.rejected": async (data) => {
+      await sendEmail(data.affiliateEmail, "Unfortunately, your application was not approved.");
+    },
+    "affiliate.suspended": async (data) => {
+      await sendEmail(data.affiliateEmail, "Your affiliate account has been suspended.");
+    },
+  },
+});
+```
+
+#### Available Hooks
+
+| Hook | Typed Data | Fields |
+|------|-----------|--------|
+| `affiliate.registered` | `AffiliateRegisteredData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
+| `affiliate.approved` | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
+| `affiliate.rejected` | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
+| `affiliate.suspended` | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
+| `commission.created` | `CommissionCreatedData` | commissionId, affiliateId, affiliateCode, commissionAmountCents, currency |
+| `commission.reversed` | `CommissionReversedData` | commissionId, affiliateId, commissionAmountCents |
+
+#### Stripe Integration with Hooks
+
+For commission events via Stripe webhooks, pass hooks to the Stripe handlers:
+
+```typescript
+import { getAffiliateStripeHandlers } from "chief_emerie";
+
+export const stripeHandlers = getAffiliateStripeHandlers(
+  components.affiliates,
+  {
+    hooks: {
+      "commission.created": async (data) => {
+        // data: { commissionId, affiliateId, affiliateCode, commissionAmountCents, currency }
+        await notifyAffiliate(data.affiliateId, `You earned $${(data.commissionAmountCents / 100).toFixed(2)}!`);
+      },
+      "commission.reversed": async (data) => {
+        await notifyAffiliate(data.affiliateId, "A commission was reversed due to a refund.");
+      },
+    },
+  }
+);
+```
+
+#### Error Handling
+
+Hooks are wrapped in try/catch - if a hook throws an error, the mutation still succeeds. Errors are logged to console. This ensures hook failures don't break critical operations like registrations or approvals.
+
 ## Usage Guide
 
 ### Calling Functions from Your App
@@ -533,6 +601,37 @@ This design:
 - Gives you full control over webhook handling and verification
 - Works with any payment processor (not just Stripe)
 - Allows flexible payout methods (PayPal, bank transfer, crypto, etc.)
+
+## Fraud Prevention
+
+The component includes comprehensive fraud prevention measures to protect your affiliate program:
+
+### Self-Referral Protection
+
+Affiliates cannot earn commissions on their own purchases. This is enforced at multiple levels:
+
+- **Signup Attribution**: `attributeSignup` and `attributeSignupByCode` block attempts where the signing-up user matches the affiliate's userId
+- **Stripe Customer Linking**: `linkStripeCustomer` blocks self-referral when linking customers to affiliates
+- **Commission Creation**: `createFromInvoice` rejects commissions where the referral's userId matches the affiliate
+
+### Attribution Security
+
+- **First-Touch Attribution**: Once a user is attributed to an affiliate, they cannot be re-attributed to a different affiliate (prevents affiliate code switching)
+- **Authenticated Attribution Only**: Affiliate code attribution via `linkStripeCustomer` requires a userId - guest checkout cannot use affiliate codes to prevent anonymous self-referral
+- **Webhook Attribution Disabled**: The `createFromInvoice` webhook handler does not create new referrals via affiliate codes - all attribution must happen through the authenticated frontend flow (`trackClick` → `attributeSignup` → `linkStripeCustomer`)
+
+### Click Velocity Limiting
+
+IP-based rate limiting prevents click fraud using `@convex-dev/rate-limiter`:
+
+```typescript
+// Configurable per campaign (default: 10 clicks per IP per hour)
+maxClicksPerIpPerHour: 10
+```
+
+### Silent Rejection
+
+All fraud prevention checks silently reject suspicious activity (returning `null` or `{ success: false }`) without throwing errors. This prevents attackers from learning detection logic through error messages.
 
 ## Troubleshooting
 

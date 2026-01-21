@@ -74,9 +74,9 @@
     }
   },
   "peerDependencies": {
+    "@convex-dev/stripe": ">=0.1.0",
     "convex": "^1.29.3",
-    "react": "^18.3.1 || ^19.0.0",
-    "@convex-dev/stripe": ">=0.1.0"
+    "react": "^18.3.1 || ^19.0.0"
   },
   "peerDependenciesMeta": {
     "@convex-dev/stripe": {
@@ -118,5 +118,8 @@
     "vitest": "3.2.4"
   },
   "types": "./dist/client/index.d.ts",
-  "module": "./dist/client/index.js"
+  "module": "./dist/client/index.js",
+  "dependencies": {
+    "@convex-dev/rate-limiter": "^0.3.2"
+  }
 }

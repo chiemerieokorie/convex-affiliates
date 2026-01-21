@@ -51,6 +51,9 @@ export default defineSchema({
     refereeDiscountValue: v.optional(v.number()), // Percentage (0-100) or cents for fixed
     refereeStripeCouponId: v.optional(v.string()), // Pre-created Stripe coupon ID
 
+    // Fraud prevention settings
+    maxClicksPerIpPerHour: v.optional(v.number()), // Default: 10, 0 = disabled
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -147,9 +150,10 @@ export default defineSchema({
     utmCampaign: v.optional(v.string()),
     subId: v.optional(v.string()), // Affiliate's custom sub-tracking
 
-    // Device info (for analytics, not fingerprinting)
+    // Device info (for analytics and fraud prevention)
     deviceType: v.optional(v.string()),
     country: v.optional(v.string()),
+    ipAddress: v.optional(v.string()), // For velocity limiting
 
     // Conversion tracking
     status: referralStatusValidator,
@@ -168,7 +172,8 @@ export default defineSchema({
     .index("by_affiliate_status", ["affiliateId", "status"])
     .index("by_userId", ["userId"])
     .index("by_stripeCustomer", ["stripeCustomerId"])
-    .index("by_expiresAt", ["expiresAt"]),
+    .index("by_expiresAt", ["expiresAt"])
+    .index("by_ipAddress", ["ipAddress"]),
 
   // ============================================
   // Commissions
