@@ -646,7 +646,6 @@ export const createFromInvoice = mutation({
     // Calculate commission amount (inline logic to avoid ctx.runQuery in mutation)
     let commissionType: CommissionType = campaign.commissionType;
     let commissionRate: number = campaign.commissionValue;
-    let commissionAmountCents: number;
 
     // Priority 1: Affiliate custom rate
     if (affiliate.customCommissionType && affiliate.customCommissionValue !== undefined) {
@@ -685,7 +684,7 @@ export const createFromInvoice = mutation({
     }
 
     // Calculate the actual commission amount
-    commissionAmountCents = calculateCommissionAmount(
+    const commissionAmountCents = calculateCommissionAmount(
       args.amountPaidCents,
       commissionType,
       commissionRate

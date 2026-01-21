@@ -355,14 +355,16 @@ export function useStoredReferral() {
   const [referral, setReferral] = useState<{
     referralId: string | null;
     code: string | null;
-  }>({ referralId: null, code: null });
-
-  useEffect(() => {
-    setReferral({
+  }>(() => {
+    // Lazy initialization to avoid setState in useEffect
+    if (typeof window === "undefined") {
+      return { referralId: null, code: null };
+    }
+    return {
       referralId: localStorage.getItem("affiliate_referral_id"),
       code: localStorage.getItem("affiliate_code"),
-    });
-  }, []);
+    };
+  });
 
   const clear = useCallback(() => {
     localStorage.removeItem("affiliate_referral_id");

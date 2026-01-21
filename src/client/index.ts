@@ -125,14 +125,6 @@ export interface CommissionReversedData {
   commissionAmountCents: number;
 }
 
-/**
- * Data passed to payout hooks (created, completed).
- */
-export interface PayoutData {
-  payoutId: string;
-  affiliateId: string;
-  payoutAmountCents: number;
-}
 
 /**
  * Type-safe hooks interface for affiliate lifecycle events.
@@ -166,8 +158,6 @@ export interface AffiliateHooks {
   "affiliate.suspended"?: (data: AffiliateStatusChangeData) => Promise<void>;
   "commission.created"?: (data: CommissionCreatedData) => Promise<void>;
   "commission.reversed"?: (data: CommissionReversedData) => Promise<void>;
-  "payout.created"?: (data: PayoutData) => Promise<void>;
-  "payout.completed"?: (data: PayoutData) => Promise<void>;
 }
 
 // =============================================================================
@@ -241,7 +231,7 @@ export interface CreateAffiliateApiConfig extends AffiliateConfig {
 // Context types for internal use
 type QueryCtx = { runQuery: any; auth: Auth };
 type MutationCtx = { runQuery: any; runMutation: any; auth: Auth };
-type ActionCtx = { runQuery: any; runMutation: any; runAction: any; auth: Auth };
+type _ActionCtx = { runQuery: any; runMutation: any; runAction: any; auth: Auth };
 
 // =============================================================================
 // createAffiliateApi - Main API Factory

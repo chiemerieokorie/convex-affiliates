@@ -151,8 +151,6 @@ const affiliates = createAffiliateApi(components.affiliates, {
 | `affiliate.suspended` | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
 | `commission.created` | `CommissionCreatedData` | commissionId, affiliateId, affiliateCode, commissionAmountCents, currency |
 | `commission.reversed` | `CommissionReversedData` | commissionId, affiliateId, commissionAmountCents |
-| `payout.created` | `PayoutData` | payoutId, affiliateId, payoutAmountCents |
-| `payout.completed` | `PayoutData` | payoutId, affiliateId, payoutAmountCents |
 
 #### Stripe Integration with Hooks
 
