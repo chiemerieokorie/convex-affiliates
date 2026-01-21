@@ -664,6 +664,98 @@ auth: async (ctx) => {
 
 For Better Auth or other providers, the `identity.subject` contains the user ID from your auth provider's JWT token.
 
+## Common Recipes
+
+### Complete Referral Flow (Track → Store → Attribute)
+
+```tsx
+// 1. Track referral on landing (ReferralTracker.tsx)
+import { useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
+import { useEffect } from "react";
+
+export function ReferralTracker() {
+  const trackClick = useMutation(api.affiliates.trackClick);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("ref");
+
+    if (code && !localStorage.getItem("affiliateReferral")) {
+      trackClick({
+        affiliateCode: code,
+        landingPage: window.location.pathname,
+      }).then((result) => {
+        if (result?.referralId) {
+          localStorage.setItem("affiliateReferral", JSON.stringify({
+            referralId: result.referralId,
+            code,
+          }));
+        }
+      });
+    }
+  }, []);
+
+  return null;
+}
+
+// 2. Attribute after signup (in your auth callback)
+const stored = localStorage.getItem("affiliateReferral");
+if (stored) {
+  const { referralId, code } = JSON.parse(stored);
+  await attributeSignup({
+    userId: newUser.id,
+    referralId,
+    referralCode: code,
+  });
+  localStorage.removeItem("affiliateReferral");
+}
+```
+
+### Two-Sided Rewards (Referee Discount)
+
+Apply discounts for referred customers during checkout:
+
+```typescript
+// In your checkout handler
+import { api } from "../convex/_generated/api";
+
+// Get discount for the referred customer
+const discount = await ctx.runQuery(api.affiliates.getRefereeDiscount, {
+  userId: currentUser.id,
+  // Or use referralId from localStorage
+});
+
+if (discount) {
+  if (discount.stripeCouponId) {
+    // Use pre-configured Stripe coupon
+    const session = await stripe.checkout.sessions.create({
+      discounts: [{ coupon: discount.stripeCouponId }],
+      // ...
+    });
+  } else {
+    // Calculate discount manually
+    const discountAmount = discount.discountType === "percentage"
+      ? Math.round((subtotalCents * discount.discountValue) / 100)
+      : discount.discountValue;
+    // Apply to your checkout
+  }
+}
+```
+
+### Batch Admin Operations
+
+```typescript
+// Approve all pending affiliates
+const pending = await ctx.runQuery(api.affiliates.adminListAffiliates, {
+  status: "pending",
+});
+
+for (const affiliate of pending) {
+  await adminApproveAffiliate({ affiliateId: affiliate._id });
+}
+```
+
 ## Local Development
 
 ```bash

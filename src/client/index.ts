@@ -332,7 +332,34 @@ export function createAffiliateApi(
 
     /**
      * Track when a visitor clicks an affiliate link.
-     * Returns a referral ID that should be stored client-side.
+     * Call this when a user lands on your site with a `?ref=CODE` parameter.
+     * Returns a referral ID that should be stored client-side (localStorage/cookie).
+     *
+     * @param affiliateCode - The affiliate's unique code from the URL (e.g., "JOHN20")
+     * @param landingPage - The URL path where the user landed (e.g., "/pricing")
+     * @param referrer - Optional HTTP referrer header
+     * @param userAgent - Optional user agent for device detection
+     * @param ipAddress - Optional IP for fraud prevention (rate limiting)
+     * @param subId - Optional sub-tracking ID set by the affiliate
+     * @returns The referral ID to store, or null if rate-limited/invalid code
+     *
+     * @example
+     * ```typescript
+     * // In your landing page component
+     * const searchParams = new URLSearchParams(window.location.search);
+     * const refCode = searchParams.get("ref");
+     *
+     * if (refCode) {
+     *   const referralId = await trackClick({
+     *     affiliateCode: refCode,
+     *     landingPage: window.location.pathname,
+     *     referrer: document.referrer,
+     *   });
+     *   if (referralId) {
+     *     localStorage.setItem("referralId", referralId);
+     *   }
+     * }
+     * ```
      */
     trackClick: mutationGeneric({
       args: {
@@ -349,7 +376,19 @@ export function createAffiliateApi(
     }),
 
     /**
-     * Validate an affiliate code and get basic info.
+     * Validate an affiliate code and get basic info about the affiliate.
+     * Use this to check if a referral code is valid before tracking or displaying.
+     *
+     * @param code - The affiliate code to validate (case-insensitive)
+     * @returns Object with validity and affiliate info, or null if code doesn't exist
+     *
+     * @example
+     * ```typescript
+     * const result = await validateCode({ code: "JOHN20" });
+     * if (result?.valid) {
+     *   console.log(`Referred by: ${result.displayName}`);
+     * }
+     * ```
      */
     validateCode: queryGeneric({
       args: { code: v.string() },
@@ -371,7 +410,27 @@ export function createAffiliateApi(
     // =========================================================================
 
     /**
-     * Register as a new affiliate.
+     * Register as a new affiliate. Requires authentication.
+     * Creates a pending affiliate that needs admin approval before earning commissions.
+     *
+     * @param email - Contact email for payouts and notifications
+     * @param displayName - Optional public display name
+     * @param website - Optional website URL
+     * @param socialMedia - Optional social media profile URL
+     * @param customCode - Optional custom affiliate code (auto-generated if not provided)
+     * @returns Object with affiliateId and assigned code
+     * @throws Error if user is not authenticated or already an affiliate
+     *
+     * @example
+     * ```typescript
+     * const result = await register({
+     *   email: "affiliate@example.com",
+     *   displayName: "John's Tech Reviews",
+     *   website: "https://johnstech.com",
+     *   customCode: "JOHN20", // Optional - will be generated if not provided
+     * });
+     * console.log(`Your affiliate code is: ${result.code}`);
+     * ```
      */
     register: mutationGeneric({
       args: {
@@ -407,7 +466,22 @@ export function createAffiliateApi(
     }),
 
     /**
-     * Get the current user's affiliate profile.
+     * Get the current authenticated user's affiliate profile.
+     * Returns null if the user hasn't registered as an affiliate.
+     *
+     * @returns The affiliate profile with stats, or null if not an affiliate
+     *
+     * @example
+     * ```typescript
+     * const affiliate = await getAffiliate();
+     * if (affiliate) {
+     *   console.log(`Your code: ${affiliate.code}`);
+     *   console.log(`Status: ${affiliate.status}`);
+     *   console.log(`Total earnings: $${affiliate.stats.totalCommissionsCents / 100}`);
+     * } else {
+     *   // Show registration form
+     * }
+     * ```
      */
     getAffiliate: queryGeneric({
       args: {},
@@ -419,6 +493,25 @@ export function createAffiliateApi(
 
     /**
      * Update the current user's affiliate profile.
+     * Only provided fields will be updated; omitted fields remain unchanged.
+     *
+     * @param displayName - Public display name shown to referred users
+     * @param bio - Short biography or description
+     * @param promoContent - Featured promotional content (video, blog post, etc.)
+     * @param website - Personal/business website URL
+     * @param socials - Social media profile URLs
+     * @param customCopy - Custom marketing copy for promotions
+     * @param payoutEmail - Email address for payout notifications
+     * @throws Error if user is not an affiliate
+     *
+     * @example
+     * ```typescript
+     * await updateProfile({
+     *   displayName: "Tech Reviews by John",
+     *   website: "https://johnstech.com",
+     *   socials: { twitter: "johnstech", youtube: "@johnstech" },
+     * });
+     * ```
      */
     updateProfile: mutationGeneric({
       args: {
@@ -447,6 +540,20 @@ export function createAffiliateApi(
 
     /**
      * Get complete portal data for the affiliate dashboard.
+     * Returns all data needed to render the affiliate's dashboard in one query.
+     *
+     * @returns Object containing affiliate profile, stats, recent activity, and earnings
+     *
+     * @example
+     * ```typescript
+     * const portal = await getPortalData();
+     *
+     * // Display stats
+     * console.log(`Clicks: ${portal.affiliate.stats.totalClicks}`);
+     * console.log(`Conversions: ${portal.affiliate.stats.totalConversions}`);
+     * console.log(`Pending: $${portal.affiliate.stats.pendingCommissionsCents / 100}`);
+     * console.log(`Paid: $${portal.affiliate.stats.paidCommissionsCents / 100}`);
+     * ```
      */
     getPortalData: queryGeneric({
       args: {},
@@ -457,7 +564,26 @@ export function createAffiliateApi(
     }),
 
     /**
-     * List commissions with pagination.
+     * List the current affiliate's commissions with pagination.
+     * Supports filtering by status and cursor-based pagination.
+     *
+     * @param status - Optional filter: "pending" | "approved" | "processing" | "paid" | "reversed"
+     * @param paginationOpts - Pagination options with cursor and numItems
+     * @returns Paginated list of commissions with page, isDone, and continueCursor
+     *
+     * @example
+     * ```typescript
+     * // Get first page of pending commissions
+     * const { page, continueCursor, isDone } = await listCommissions({
+     *   status: "pending",
+     *   paginationOpts: { numItems: 10 },
+     * });
+     *
+     * // Get next page
+     * const nextPage = await listCommissions({
+     *   paginationOpts: { numItems: 10, cursor: continueCursor },
+     * });
+     * ```
      */
     listCommissions: queryGeneric({
       args: {
@@ -479,7 +605,25 @@ export function createAffiliateApi(
     }),
 
     /**
-     * List payouts with pagination.
+     * List the current affiliate's payouts with pagination.
+     * Supports filtering by status and cursor-based pagination.
+     *
+     * @param status - Optional filter: "pending" | "completed" | "cancelled"
+     * @param paginationOpts - Pagination options with cursor and numItems
+     * @returns Paginated list of payouts with page, isDone, and continueCursor
+     *
+     * @example
+     * ```typescript
+     * // Get completed payouts
+     * const { page } = await listPayouts({
+     *   status: "completed",
+     *   paginationOpts: { numItems: 20 },
+     * });
+     *
+     * page.forEach(payout => {
+     *   console.log(`$${payout.amountCents / 100} via ${payout.method}`);
+     * });
+     * ```
      */
     listPayouts: queryGeneric({
       args: {
@@ -501,7 +645,23 @@ export function createAffiliateApi(
     }),
 
     /**
-     * List referrals/clicks.
+     * List the current affiliate's referrals (clicks and signups).
+     * Shows the funnel of visitors who clicked affiliate links.
+     *
+     * @param status - Optional filter: "clicked" | "signed_up" | "converted" | "expired"
+     * @param limit - Maximum number of referrals to return (default: 100)
+     * @returns Array of referrals with status, timestamps, and tracking info
+     *
+     * @example
+     * ```typescript
+     * // Get recent conversions
+     * const conversions = await listReferrals({
+     *   status: "converted",
+     *   limit: 50,
+     * });
+     *
+     * console.log(`${conversions.length} customers converted`);
+     * ```
      */
     listReferrals: queryGeneric({
       args: {
@@ -535,6 +695,26 @@ export function createAffiliateApi(
 
     /**
      * Generate an affiliate link for the current user.
+     * Creates a URL with the affiliate's code that can be shared.
+     *
+     * @param path - Optional URL path (default: "/")
+     * @param subId - Optional sub-tracking ID for campaign attribution
+     * @returns Full URL with affiliate code as query parameter
+     * @throws Error if user is not an affiliate
+     *
+     * @example
+     * ```typescript
+     * // Generate link to homepage
+     * const link = await generateLink();
+     * // Returns: "https://yoursite.com?ref=JOHN20"
+     *
+     * // Generate link to specific page with sub-tracking
+     * const pricingLink = await generateLink({
+     *   path: "/pricing",
+     *   subId: "youtube-video-1",
+     * });
+     * // Returns: "https://yoursite.com/pricing?ref=JOHN20&sub=youtube-video-1"
+     * ```
      */
     generateLink: queryGeneric({
       args: {
@@ -560,7 +740,30 @@ export function createAffiliateApi(
     }),
 
     /**
-     * Attribute a signup to an affiliate (call after user registration).
+     * Attribute a new user signup to an affiliate.
+     * Call this immediately after a user creates an account to link them
+     * to the referring affiliate for commission tracking.
+     *
+     * @param userId - The newly registered user's ID
+     * @param referralCode - The affiliate code from URL params (if available)
+     * @param referralId - The referral ID from localStorage/cookie (preferred)
+     * @returns Object with `attributed: boolean` indicating success
+     *
+     * @example
+     * ```typescript
+     * // After user registration completes
+     * const referralId = localStorage.getItem("referralId");
+     * const refCode = new URLSearchParams(window.location.search).get("ref");
+     *
+     * await attributeSignup({
+     *   userId: newUser.id,
+     *   referralId: referralId ?? undefined,
+     *   referralCode: refCode ?? undefined,
+     * });
+     *
+     * // Clean up stored referral
+     * localStorage.removeItem("referralId");
+     * ```
      */
     attributeSignup: mutationGeneric({
       args: {
@@ -649,7 +852,18 @@ export function createAffiliateApi(
     // =========================================================================
 
     /**
-     * Get admin dashboard overview.
+     * Get admin dashboard overview with aggregate statistics.
+     * Requires admin authorization via the `isAdmin` callback.
+     *
+     * @returns Dashboard data with total affiliates, conversions, revenue, and pending payouts
+     *
+     * @example
+     * ```typescript
+     * const dashboard = await adminDashboard();
+     * console.log(`Total affiliates: ${dashboard.totalAffiliates}`);
+     * console.log(`Total revenue: $${dashboard.totalRevenueCents / 100}`);
+     * console.log(`Pending payouts: $${dashboard.pendingPayoutsCents / 100}`);
+     * ```
      */
     adminDashboard: queryGeneric({
       args: {},
@@ -661,6 +875,25 @@ export function createAffiliateApi(
 
     /**
      * List all affiliates with optional filters.
+     * Requires admin authorization.
+     *
+     * @param status - Optional filter: "pending" | "approved" | "suspended" | "rejected"
+     * @param campaignId - Optional filter by campaign
+     * @param limit - Maximum number of results (default: 100)
+     * @returns Array of affiliate profiles with stats
+     *
+     * @example
+     * ```typescript
+     * // Get pending applications
+     * const pending = await adminListAffiliates({ status: "pending" });
+     * console.log(`${pending.length} affiliates awaiting approval`);
+     *
+     * // Get all affiliates for a campaign
+     * const campaignAffiliates = await adminListAffiliates({
+     *   campaignId: "abc123",
+     *   limit: 50,
+     * });
+     * ```
      */
     adminListAffiliates: queryGeneric({
       args: {
@@ -675,7 +908,25 @@ export function createAffiliateApi(
     }),
 
     /**
-     * Get top performing affiliates.
+     * Get top performing affiliates ranked by performance metrics.
+     * Requires admin authorization.
+     *
+     * @param sortBy - Ranking metric: "conversions" | "revenue" | "commissions"
+     * @param limit - Maximum number of results (default: 10)
+     * @returns Array of top affiliates with their stats
+     *
+     * @example
+     * ```typescript
+     * // Get top 5 by revenue
+     * const topEarners = await adminTopAffiliates({
+     *   sortBy: "revenue",
+     *   limit: 5,
+     * });
+     *
+     * topEarners.forEach((aff, i) => {
+     *   console.log(`#${i + 1}: ${aff.displayName} - $${aff.stats.totalRevenueCents / 100}`);
+     * });
+     * ```
      */
     adminTopAffiliates: queryGeneric({
       args: {
@@ -695,7 +946,24 @@ export function createAffiliateApi(
     }),
 
     /**
-     * Approve an affiliate application.
+     * Approve a pending affiliate application.
+     * Changes status from "pending" to "approved", allowing them to earn commissions.
+     * Triggers the `affiliate.approved` lifecycle hook if configured.
+     *
+     * @param affiliateId - The ID of the affiliate to approve
+     * @throws Error if affiliate is not in "pending" status
+     *
+     * @example
+     * ```typescript
+     * // Approve a single affiliate
+     * await adminApproveAffiliate({ affiliateId: "abc123" });
+     *
+     * // Batch approve all pending
+     * const pending = await adminListAffiliates({ status: "pending" });
+     * for (const aff of pending) {
+     *   await adminApproveAffiliate({ affiliateId: aff._id });
+     * }
+     * ```
      */
     adminApproveAffiliate: mutationGeneric({
       args: { affiliateId: v.id("affiliates") },
@@ -724,7 +992,21 @@ export function createAffiliateApi(
     }),
 
     /**
-     * Reject an affiliate application.
+     * Reject a pending affiliate application.
+     * Changes status from "pending" to "rejected".
+     * Triggers the `affiliate.rejected` lifecycle hook if configured.
+     *
+     * @param affiliateId - The ID of the affiliate to reject
+     * @param reason - Optional rejection reason (for internal tracking)
+     * @throws Error if affiliate is not in "pending" status
+     *
+     * @example
+     * ```typescript
+     * await adminRejectAffiliate({
+     *   affiliateId: "abc123",
+     *   reason: "Insufficient social media presence",
+     * });
+     * ```
      */
     adminRejectAffiliate: mutationGeneric({
       args: {
@@ -757,6 +1039,16 @@ export function createAffiliateApi(
 
     /**
      * Suspend an active affiliate.
+     * Prevents them from earning new commissions until reactivated.
+     * Triggers the `affiliate.suspended` lifecycle hook if configured.
+     *
+     * @param affiliateId - The ID of the affiliate to suspend
+     *
+     * @example
+     * ```typescript
+     * // Suspend for policy violation
+     * await adminSuspendAffiliate({ affiliateId: "abc123" });
+     * ```
      */
     adminSuspendAffiliate: mutationGeneric({
       args: { affiliateId: v.id("affiliates") },
@@ -785,7 +1077,20 @@ export function createAffiliateApi(
     }),
 
     /**
-     * List all campaigns.
+     * List all affiliate campaigns.
+     * Requires admin authorization.
+     *
+     * @param activeOnly - If true, only return active campaigns
+     * @returns Array of campaigns with commission settings and terms
+     *
+     * @example
+     * ```typescript
+     * // Get all campaigns
+     * const campaigns = await adminListCampaigns({});
+     *
+     * // Get only active campaigns
+     * const activeCampaigns = await adminListCampaigns({ activeOnly: true });
+     * ```
      */
     adminListCampaigns: queryGeneric({
       args: {
@@ -798,7 +1103,33 @@ export function createAffiliateApi(
     }),
 
     /**
-     * Create a new campaign.
+     * Create a new affiliate campaign with custom commission settings.
+     * Requires admin authorization.
+     *
+     * @param name - Display name for the campaign
+     * @param slug - URL-friendly identifier (must be unique)
+     * @param description - Optional campaign description
+     * @param commissionType - "percentage" or "fixed"
+     * @param commissionValue - Percentage (0-100) or fixed amount in cents
+     * @param payoutTerm - Payment schedule: "NET-0" | "NET-15" | "NET-30" | "NET-60" | "NET-90"
+     * @param cookieDurationDays - How long referrals are tracked
+     * @param minPayoutCents - Minimum balance required for payout
+     * @param allowedProducts - Optional array of Stripe product IDs to include
+     * @param excludedProducts - Optional array of Stripe product IDs to exclude
+     * @returns The created campaign's ID
+     *
+     * @example
+     * ```typescript
+     * const campaignId = await adminCreateCampaign({
+     *   name: "Premium Partners",
+     *   slug: "premium",
+     *   commissionType: "percentage",
+     *   commissionValue: 30, // 30%
+     *   payoutTerm: "NET-15",
+     *   cookieDurationDays: 60,
+     *   minPayoutCents: 10000, // $100 minimum
+     * });
+     * ```
      */
     adminCreateCampaign: mutationGeneric({
       args: {
@@ -1217,6 +1548,29 @@ export function parseReferralParams(searchParams: URLSearchParams): {
     subId: searchParams.get("sub") ?? undefined,
   };
 }
+
+// =============================================================================
+// Re-exported Types (for consumer convenience)
+// =============================================================================
+
+export type {
+  CommissionType,
+  CommissionDuration,
+  PayoutTerm,
+  AffiliateStatus,
+  ReferralStatus,
+  CommissionStatus,
+  PayoutStatus,
+  PayoutMethod,
+  EventType,
+  PromoContentType,
+} from "../component/validators.js";
+
+export {
+  generateAffiliateCode,
+  calculateCommissionAmount,
+  getPayoutTermDelayMs,
+} from "../component/validators.js";
 
 // =============================================================================
 // Exports
