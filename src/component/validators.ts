@@ -122,35 +122,6 @@ export const eventTypeValidator = v.union(
 export type EventType = "click" | "signup" | "conversion" | "refund" | "payout";
 
 // ============================================
-// Notification Event Types (for callbacks)
-// ============================================
-
-export const notificationEventTypeValidator = v.union(
-  v.literal("affiliate.registered"),
-  v.literal("affiliate.approved"),
-  v.literal("affiliate.rejected"),
-  v.literal("affiliate.suspended"),
-  v.literal("commission.created"),
-  v.literal("commission.approved"),
-  v.literal("commission.paid"),
-  v.literal("commission.reversed"),
-  v.literal("payout.created"),
-  v.literal("payout.completed")
-);
-
-export type NotificationEventType =
-  | "affiliate.registered"
-  | "affiliate.approved"
-  | "affiliate.rejected"
-  | "affiliate.suspended"
-  | "commission.created"
-  | "commission.approved"
-  | "commission.paid"
-  | "commission.reversed"
-  | "payout.created"
-  | "payout.completed";
-
-// ============================================
 // Socials Object Validator
 // ============================================
 

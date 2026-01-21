@@ -111,6 +111,76 @@ export const {
 npx convex deploy
 ```
 
+### 4. Add Lifecycle Hooks (Optional)
+
+The affiliate API supports type-safe hooks for lifecycle events. Use these to send emails, trigger webhooks, or integrate with other systems.
+
+```typescript
+import { components } from "./_generated/api";
+import { createAffiliateApi } from "chief_emerie";
+
+const affiliates = createAffiliateApi(components.affiliates, {
+  // ... other config ...
+
+  hooks: {
+    "affiliate.registered": async (data) => {
+      // data: { affiliateId, affiliateCode, affiliateEmail, affiliateUserId }
+      await sendEmail(data.affiliateEmail, "Welcome to our affiliate program!");
+    },
+    "affiliate.approved": async (data) => {
+      // data: { affiliateId, affiliateCode, affiliateEmail, affiliateUserId }
+      await sendEmail(data.affiliateEmail, "Your application has been approved!");
+    },
+    "affiliate.rejected": async (data) => {
+      await sendEmail(data.affiliateEmail, "Unfortunately, your application was not approved.");
+    },
+    "affiliate.suspended": async (data) => {
+      await sendEmail(data.affiliateEmail, "Your affiliate account has been suspended.");
+    },
+  },
+});
+```
+
+#### Available Hooks
+
+| Hook | Typed Data | Fields |
+|------|-----------|--------|
+| `affiliate.registered` | `AffiliateRegisteredData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
+| `affiliate.approved` | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
+| `affiliate.rejected` | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
+| `affiliate.suspended` | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
+| `commission.created` | `CommissionCreatedData` | commissionId, affiliateId, affiliateCode, commissionAmountCents, currency |
+| `commission.reversed` | `CommissionReversedData` | commissionId, affiliateId, commissionAmountCents |
+| `payout.created` | `PayoutData` | payoutId, affiliateId, payoutAmountCents |
+| `payout.completed` | `PayoutData` | payoutId, affiliateId, payoutAmountCents |
+
+#### Stripe Integration with Hooks
+
+For commission events via Stripe webhooks, pass hooks to the Stripe handlers:
+
+```typescript
+import { getAffiliateStripeHandlers } from "chief_emerie";
+
+export const stripeHandlers = getAffiliateStripeHandlers(
+  components.affiliates,
+  {
+    hooks: {
+      "commission.created": async (data) => {
+        // data: { commissionId, affiliateId, affiliateCode, commissionAmountCents, currency }
+        await notifyAffiliate(data.affiliateId, `You earned $${(data.commissionAmountCents / 100).toFixed(2)}!`);
+      },
+      "commission.reversed": async (data) => {
+        await notifyAffiliate(data.affiliateId, "A commission was reversed due to a refund.");
+      },
+    },
+  }
+);
+```
+
+#### Error Handling
+
+Hooks are wrapped in try/catch - if a hook throws an error, the mutation still succeeds. Errors are logged to console. This ensures hook failures don't break critical operations like registrations or approvals.
+
 ## Usage Guide
 
 ### Calling Functions from Your App
