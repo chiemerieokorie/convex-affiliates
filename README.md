@@ -602,6 +602,37 @@ This design:
 - Works with any payment processor (not just Stripe)
 - Allows flexible payout methods (PayPal, bank transfer, crypto, etc.)
 
+## Fraud Prevention
+
+The component includes comprehensive fraud prevention measures to protect your affiliate program:
+
+### Self-Referral Protection
+
+Affiliates cannot earn commissions on their own purchases. This is enforced at multiple levels:
+
+- **Signup Attribution**: `attributeSignup` and `attributeSignupByCode` block attempts where the signing-up user matches the affiliate's userId
+- **Stripe Customer Linking**: `linkStripeCustomer` blocks self-referral when linking customers to affiliates
+- **Commission Creation**: `createFromInvoice` rejects commissions where the referral's userId matches the affiliate
+
+### Attribution Security
+
+- **First-Touch Attribution**: Once a user is attributed to an affiliate, they cannot be re-attributed to a different affiliate (prevents affiliate code switching)
+- **Authenticated Attribution Only**: Affiliate code attribution via `linkStripeCustomer` requires a userId - guest checkout cannot use affiliate codes to prevent anonymous self-referral
+- **Webhook Attribution Disabled**: The `createFromInvoice` webhook handler does not create new referrals via affiliate codes - all attribution must happen through the authenticated frontend flow (`trackClick` → `attributeSignup` → `linkStripeCustomer`)
+
+### Click Velocity Limiting
+
+IP-based rate limiting prevents click fraud using `@convex-dev/rate-limiter`:
+
+```typescript
+// Configurable per campaign (default: 10 clicks per IP per hour)
+maxClicksPerIpPerHour: 10
+```
+
+### Silent Rejection
+
+All fraud prevention checks silently reject suspicious activity (returning `null` or `{ success: false }`) without throwing errors. This prevents attackers from learning detection logic through error messages.
+
 ## Troubleshooting
 
 ### TypeScript type errors with components.affiliates

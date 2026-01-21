@@ -469,17 +469,22 @@ export const linkStripeCustomer = mutation({
         .withIndex("by_userId", (q) => q.eq("userId", args.userId))
         .first();
 
-      if (referral && !referral.stripeCustomerId) {
+      if (referral) {
         // FRAUD PREVENTION: Block self-referrals
         const affiliate = await ctx.db.get(referral.affiliateId);
         if (affiliate && affiliate.userId === args.userId) {
           return null; // Affiliate cannot refer themselves
         }
 
-        // Link Stripe customer to existing referral
-        await ctx.db.patch(referral._id, {
-          stripeCustomerId: args.stripeCustomerId,
-        });
+        // Link Stripe customer if not already set
+        if (!referral.stripeCustomerId) {
+          await ctx.db.patch(referral._id, {
+            stripeCustomerId: args.stripeCustomerId,
+          });
+        }
+
+        // Always return to prevent re-attribution via affiliateCode block below
+        // This ensures users can't be attributed to a new affiliate after churning
         return null;
       }
     }
@@ -496,6 +501,13 @@ export const linkStripeCustomer = mutation({
         // FRAUD PREVENTION: Block self-referrals
         if (args.userId && affiliate.userId === args.userId) {
           return null; // Affiliate cannot refer themselves
+        }
+
+        // FRAUD PREVENTION: Require userId for affiliate code attribution
+        // Guest checkout cannot use affiliate codes to prevent self-referral abuse
+        // (affiliates could use their own code while not logged in)
+        if (!args.userId) {
+          return null;
         }
 
         // Check if customer already has a referral
