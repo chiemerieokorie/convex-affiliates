@@ -529,41 +529,20 @@ export const createFromInvoice = mutation({
     // FRAUD PREVENTION: Duplicate customer detection
     // First check if this Stripe customer already has attribution
     // A customer can only be attributed to ONE affiliate
-    let referral = await ctx.db
+    const referral = await ctx.db
       .query("referrals")
       .withIndex("by_stripeCustomer", (q) =>
         q.eq("stripeCustomerId", args.stripeCustomerId)
       )
       .first();
 
-    // Only create new attribution if customer has none AND we have an affiliate code
-    if (!referral && args.affiliateCode) {
-      const code = args.affiliateCode;
-      const affiliate = await ctx.db
-        .query("affiliates")
-        .withIndex("by_code", (q) => q.eq("code", code.toUpperCase()))
-        .first();
-
-      if (affiliate && affiliate.status === "approved") {
-        // Create a referral for this customer
-        const now = Date.now();
-        const campaign = await ctx.db.get(affiliate.campaignId);
-        if (campaign && campaign.isActive) {
-          const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
-          const referralId = await ctx.db.insert("referrals", {
-            affiliateId: affiliate._id,
-            referralId: crypto.randomUUID(),
-            landingPage: "/checkout",
-            stripeCustomerId: args.stripeCustomerId,
-            status: "converted",
-            clickedAt: now,
-            convertedAt: now,
-            expiresAt,
-          });
-          referral = await ctx.db.get(referralId);
-        }
-      }
-    }
+    // FRAUD PREVENTION: Do NOT create new referrals via affiliateCode in webhook handlers
+    // This path could be exploited for self-referral since we cannot verify user identity.
+    // Proper attribution flow: trackClick -> attributeSignup -> linkStripeCustomer
+    // If no referral exists by now, the customer was not properly attributed through
+    // the frontend flow, and we should not create last-minute attribution via webhook.
+    // The affiliateCode parameter is kept for backwards compatibility but ignored
+    // for new referral creation.
 
     if (!referral) {
       return null; // No attribution found
@@ -573,6 +552,12 @@ export const createFromInvoice = mutation({
     const affiliate = await ctx.db.get(referral.affiliateId);
     if (!affiliate || affiliate.status !== "approved") {
       return null;
+    }
+
+    // FRAUD PREVENTION: Block self-referral commissions
+    // If the referral has a userId that matches the affiliate's userId, reject
+    if (referral.userId && affiliate.userId === referral.userId) {
+      return null; // Affiliate cannot earn commissions on their own purchases
     }
 
     // Check for existing commission for this invoice (deduplication)
