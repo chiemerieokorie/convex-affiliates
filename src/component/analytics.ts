@@ -4,7 +4,6 @@ import {
   eventTypeValidator,
   affiliateStatsValidator,
   affiliateStatusValidator,
-  payoutStatusValidator,
 } from "./validators.js";
 
 // ============================================

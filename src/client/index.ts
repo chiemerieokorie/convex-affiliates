@@ -82,6 +82,85 @@ export type AffiliateStripeHandlers = {
 };
 
 // =============================================================================
+// Lifecycle Hook Types (Type-Safe Event Handlers)
+// =============================================================================
+
+/**
+ * Data passed to affiliate.registered hook.
+ */
+export interface AffiliateRegisteredData {
+  affiliateId: string;
+  affiliateCode: string;
+  affiliateEmail: string;
+  affiliateUserId: string;
+}
+
+/**
+ * Data passed to affiliate status change hooks (approved, rejected, suspended).
+ */
+export interface AffiliateStatusChangeData {
+  affiliateId: string;
+  affiliateCode: string;
+  affiliateEmail: string;
+  affiliateUserId: string;
+}
+
+/**
+ * Data passed to commission.created hook.
+ */
+export interface CommissionCreatedData {
+  commissionId: string;
+  affiliateId: string;
+  affiliateCode: string;
+  commissionAmountCents: number;
+  currency: string;
+}
+
+/**
+ * Data passed to commission.reversed hook.
+ */
+export interface CommissionReversedData {
+  commissionId: string;
+  affiliateId: string;
+  commissionAmountCents: number;
+}
+
+
+/**
+ * Type-safe hooks interface for affiliate lifecycle events.
+ * Each event has its own typed handler function.
+ *
+ * @example
+ * ```typescript
+ * const api = createAffiliateApi(components.affiliates, {
+ *   auth: async (ctx) => { ... },
+ *   hooks: {
+ *     "affiliate.registered": async (data) => {
+ *       // data is typed as AffiliateRegisteredData
+ *       await sendEmail(data.affiliateEmail, "Welcome!");
+ *     },
+ *     "affiliate.approved": async (data) => {
+ *       // data is typed as AffiliateStatusChangeData
+ *       await sendEmail(data.affiliateEmail, "You're approved!");
+ *     },
+ *     "commission.created": async (data) => {
+ *       // data is typed as CommissionCreatedData
+ *       await sendEmail(data.affiliateEmail, `You earned $${data.commissionAmountCents / 100}!`);
+ *     },
+ *   },
+ * });
+ * ```
+ */
+export interface AffiliateHooks {
+  "affiliate.registered"?: (data: AffiliateRegisteredData) => Promise<void>;
+  "affiliate.approved"?: (data: AffiliateStatusChangeData) => Promise<void>;
+  "affiliate.rejected"?: (data: AffiliateStatusChangeData) => Promise<void>;
+  "affiliate.suspended"?: (data: AffiliateStatusChangeData) => Promise<void>;
+  "commission.created"?: (data: CommissionCreatedData) => Promise<void>;
+  "commission.reversed"?: (data: CommissionReversedData) => Promise<void>;
+}
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -129,12 +208,30 @@ export interface CreateAffiliateApiConfig extends AffiliateConfig {
    * If not provided, admin endpoints will use the auth function only.
    */
   isAdmin?: (ctx: { auth: Auth }) => Promise<boolean>;
+
+  /**
+   * Optional type-safe hooks for affiliate lifecycle events.
+   * Each hook receives typed data specific to that event.
+   *
+   * @example
+   * ```typescript
+   * hooks: {
+   *   "affiliate.registered": async (data) => {
+   *     await sendEmail(data.affiliateEmail, "Welcome!");
+   *   },
+   *   "affiliate.approved": async (data) => {
+   *     await sendEmail(data.affiliateEmail, "You're approved!");
+   *   },
+   * }
+   * ```
+   */
+  hooks?: AffiliateHooks;
 }
 
 // Context types for internal use
 type QueryCtx = { runQuery: any; auth: Auth };
 type MutationCtx = { runQuery: any; runMutation: any; auth: Auth };
-type ActionCtx = { runQuery: any; runMutation: any; runAction: any; auth: Auth };
+type _ActionCtx = { runQuery: any; runMutation: any; runAction: any; auth: Auth };
 
 // =============================================================================
 // createAffiliateApi - Main API Factory
@@ -212,6 +309,22 @@ export function createAffiliateApi(
     return ctx.runQuery(component.affiliates.getByUserId, { userId });
   };
 
+  // Helper to call lifecycle hooks safely (errors are logged, not thrown)
+  async function callHook<K extends keyof AffiliateHooks>(
+    hookName: K,
+    data: Parameters<NonNullable<AffiliateHooks[K]>>[0]
+  ): Promise<void> {
+    const hook = config.hooks?.[hookName];
+    if (hook) {
+      try {
+        await hook(data as never);
+      } catch (error) {
+        // Log but don't fail the mutation if hook fails
+        console.error(`Hook error for ${hookName}:`, error);
+      }
+    }
+  }
+
   return {
     // =========================================================================
     // PUBLIC ENDPOINTS (no authentication required)
@@ -271,7 +384,7 @@ export function createAffiliateApi(
       handler: async (ctx, args) => {
         const userId = await config.auth(ctx);
         const campaign = await ensureDefaultCampaign(ctx);
-        return ctx.runMutation(component.affiliates.register, {
+        const result = await ctx.runMutation(component.affiliates.register, {
           userId,
           email: args.email,
           displayName: args.displayName,
@@ -280,6 +393,16 @@ export function createAffiliateApi(
           campaignId: campaign._id,
           customCode: args.customCode,
         });
+
+        // Call hook for new registration
+        await callHook("affiliate.registered", {
+          affiliateId: result.affiliateId,
+          affiliateCode: result.code,
+          affiliateEmail: args.email,
+          affiliateUserId: userId,
+        });
+
+        return result;
       },
     }),
 
@@ -534,7 +657,25 @@ export function createAffiliateApi(
       args: { affiliateId: v.id("affiliates") },
       handler: async (ctx, args) => {
         await requireAdmin(ctx);
-        return ctx.runMutation(component.affiliates.approve, args);
+
+        // Get affiliate info before approval for hook
+        const affiliateData = await ctx.runQuery(component.affiliates.getById, {
+          affiliateId: args.affiliateId,
+        });
+
+        await ctx.runMutation(component.affiliates.approve, args);
+
+        // Call hook for approval
+        if (affiliateData) {
+          await callHook("affiliate.approved", {
+            affiliateId: args.affiliateId,
+            affiliateCode: affiliateData.code,
+            affiliateUserId: affiliateData.userId,
+            affiliateEmail: affiliateData.payoutEmail ?? "",
+          });
+        }
+
+        return null;
       },
     }),
 
@@ -548,7 +689,25 @@ export function createAffiliateApi(
       },
       handler: async (ctx, args) => {
         await requireAdmin(ctx);
-        return ctx.runMutation(component.affiliates.reject, args);
+
+        // Get affiliate info before rejection for hook
+        const affiliateData = await ctx.runQuery(component.affiliates.getById, {
+          affiliateId: args.affiliateId,
+        });
+
+        await ctx.runMutation(component.affiliates.reject, args);
+
+        // Call hook for rejection
+        if (affiliateData) {
+          await callHook("affiliate.rejected", {
+            affiliateId: args.affiliateId,
+            affiliateCode: affiliateData.code,
+            affiliateUserId: affiliateData.userId,
+            affiliateEmail: affiliateData.payoutEmail ?? "",
+          });
+        }
+
+        return null;
       },
     }),
 
@@ -559,7 +718,25 @@ export function createAffiliateApi(
       args: { affiliateId: v.id("affiliates") },
       handler: async (ctx, args) => {
         await requireAdmin(ctx);
-        return ctx.runMutation(component.affiliates.suspend, args);
+
+        // Get affiliate info before suspension for hook
+        const affiliateData = await ctx.runQuery(component.affiliates.getById, {
+          affiliateId: args.affiliateId,
+        });
+
+        await ctx.runMutation(component.affiliates.suspend, args);
+
+        // Call hook for suspension
+        if (affiliateData) {
+          await callHook("affiliate.suspended", {
+            affiliateId: args.affiliateId,
+            affiliateCode: affiliateData.code,
+            affiliateUserId: affiliateData.userId,
+            affiliateEmail: affiliateData.payoutEmail ?? "",
+          });
+        }
+
+        return null;
       },
     }),
 
@@ -840,6 +1017,17 @@ export function createStripeWebhookHandler(
 // =============================================================================
 
 /**
+ * Options for Stripe event handlers.
+ */
+export interface AffiliateStripeHandlersOptions {
+  /**
+   * Optional type-safe hooks for commission events.
+   * Called after commission is created or reversed.
+   */
+  hooks?: Pick<AffiliateHooks, "commission.created" | "commission.reversed">;
+}
+
+/**
  * Get Stripe event handlers for affiliate tracking.
  * Optionally merge with your own handlers (affiliate runs first).
  *
@@ -849,21 +1037,53 @@ export function createStripeWebhookHandler(
  * - checkout.session.completed → links customer to affiliate
  *
  * @param component - The affiliate component API
+ * @param options - Optional configuration including hooks
  *
  * @example
  * ```typescript
  * import { getAffiliateStripeHandlers } from "chief_emerie";
  *
- * export const affiliateHandlers = getAffiliateStripeHandlers(components.affiliates);
+ * export const affiliateHandlers = getAffiliateStripeHandlers(
+ *   components.affiliates,
+ *   {
+ *     hooks: {
+ *       "commission.created": async (data) => {
+ *         // data is typed as CommissionCreatedData
+ *         await sendEmail(affiliateEmail, `You earned $${data.commissionAmountCents / 100}!`);
+ *       },
+ *       "commission.reversed": async (data) => {
+ *         // data is typed as CommissionReversedData
+ *         await sendEmail(affiliateEmail, "A commission was reversed.");
+ *       },
+ *     },
+ *   }
+ * );
  * ```
  */
 export function getAffiliateStripeHandlers(
-  component: UseApi<ComponentApi>
+  component: UseApi<ComponentApi>,
+  options?: AffiliateStripeHandlersOptions
 ): AffiliateStripeHandlers {
+  // Helper to call hooks safely
+  type StripeHooks = Pick<AffiliateHooks, "commission.created" | "commission.reversed">;
+  async function callHook<K extends keyof StripeHooks>(
+    hookName: K,
+    data: Parameters<NonNullable<StripeHooks[K]>>[0]
+  ): Promise<void> {
+    const hook = options?.hooks?.[hookName];
+    if (hook) {
+      try {
+        await hook(data as never);
+      } catch (error) {
+        console.error(`Hook error for ${hookName}:`, error);
+      }
+    }
+  }
+
   return {
     "invoice.paid": async (ctx, event) => {
       const invoice = event.data.object as unknown as Record<string, unknown>;
-      await ctx.runMutation(component.commissions.createFromInvoice, {
+      const result = await ctx.runMutation(component.commissions.createFromInvoice, {
         stripeInvoiceId: invoice.id as string,
         stripeCustomerId: invoice.customer as string,
         stripeChargeId: (invoice.charge as string) ?? undefined,
@@ -876,16 +1096,36 @@ export function getAffiliateStripeHandlers(
         affiliateCode: (invoice.metadata as Record<string, string>)
           ?.affiliate_code,
       });
+
+      // Call hook if commission was created
+      if (result && result.commissionId) {
+        await callHook("commission.created", {
+          commissionId: result.commissionId,
+          affiliateId: result.affiliateId,
+          affiliateCode: result.affiliateCode,
+          commissionAmountCents: result.commissionAmountCents,
+          currency: invoice.currency as string,
+        });
+      }
     },
 
     "charge.refunded": async (ctx, event) => {
       const charge = event.data.object as unknown as Record<string, unknown>;
-      await ctx.runMutation(component.commissions.reverseByCharge, {
+      const result = await ctx.runMutation(component.commissions.reverseByCharge, {
         stripeChargeId: charge.id as string,
         reason:
           ((charge.refunds as { data?: Array<{ reason?: string }> })?.data?.[0]
             ?.reason as string) ?? "Charge refunded",
       });
+
+      // Call hook if commission was reversed
+      if (result && result.commissionId) {
+        await callHook("commission.reversed", {
+          commissionId: result.commissionId,
+          affiliateId: result.affiliateId,
+          commissionAmountCents: result.commissionAmountCents,
+        });
+      }
     },
 
     "checkout.session.completed": async (ctx, event) => {

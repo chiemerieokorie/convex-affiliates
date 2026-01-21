@@ -35,6 +35,7 @@ export const list = query({
       payoutTerm: payoutTermValidator,
       allowedProducts: v.optional(v.array(v.string())),
       excludedProducts: v.optional(v.array(v.string())),
+      maxClicksPerIpPerHour: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
@@ -75,6 +76,7 @@ export const get = query({
       payoutTerm: payoutTermValidator,
       allowedProducts: v.optional(v.array(v.string())),
       excludedProducts: v.optional(v.array(v.string())),
+      maxClicksPerIpPerHour: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
@@ -110,6 +112,7 @@ export const getBySlug = query({
       payoutTerm: payoutTermValidator,
       allowedProducts: v.optional(v.array(v.string())),
       excludedProducts: v.optional(v.array(v.string())),
+      maxClicksPerIpPerHour: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
@@ -146,6 +149,7 @@ export const getDefault = query({
       payoutTerm: payoutTermValidator,
       allowedProducts: v.optional(v.array(v.string())),
       excludedProducts: v.optional(v.array(v.string())),
+      maxClicksPerIpPerHour: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
@@ -182,6 +186,7 @@ export const create = mutation({
     payoutTerm: v.optional(payoutTermValidator),
     allowedProducts: v.optional(v.array(v.string())),
     excludedProducts: v.optional(v.array(v.string())),
+    maxClicksPerIpPerHour: v.optional(v.number()),
   },
   returns: v.id("campaigns"),
   handler: async (ctx, args) => {
@@ -221,6 +226,7 @@ export const create = mutation({
       payoutTerm: args.payoutTerm ?? "NET-30",
       allowedProducts: args.allowedProducts,
       excludedProducts: args.excludedProducts,
+      maxClicksPerIpPerHour: args.maxClicksPerIpPerHour,
       createdAt: now,
       updatedAt: now,
     });
@@ -246,6 +252,7 @@ export const update = mutation({
     payoutTerm: v.optional(payoutTermValidator),
     allowedProducts: v.optional(v.array(v.string())),
     excludedProducts: v.optional(v.array(v.string())),
+    maxClicksPerIpPerHour: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -288,6 +295,8 @@ export const update = mutation({
       updates.allowedProducts = args.allowedProducts;
     if (args.excludedProducts !== undefined)
       updates.excludedProducts = args.excludedProducts;
+    if (args.maxClicksPerIpPerHour !== undefined)
+      updates.maxClicksPerIpPerHour = args.maxClicksPerIpPerHour;
 
     await ctx.db.patch(args.campaignId, updates);
     return null;
