@@ -231,6 +231,33 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
 
   // Affiliates module
   affiliates: {
+    getById: FunctionReference<
+      "query",
+      "public",
+      { affiliateId: Id<"affiliates"> },
+      {
+        _id: Id<"affiliates">;
+        _creationTime: number;
+        userId: string;
+        campaignId: Id<"campaigns">;
+        code: string;
+        displayName?: string;
+        bio?: string;
+        avatarUrl?: string;
+        website?: string;
+        socials?: Socials;
+        customCopy?: CustomCopy;
+        customCommissionType?: CommissionType;
+        customCommissionValue?: number;
+        payoutMethod?: PayoutMethod;
+        payoutEmail?: string;
+        status: AffiliateStatus;
+        stats: AffiliateStats;
+        createdAt: number;
+        updatedAt: number;
+      } | null,
+      Name
+    >;
     getByCode: FunctionReference<
       "query",
       "public",
@@ -644,14 +671,25 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         currency: string;
         affiliateCode?: string;
       },
-      Id<"commissions"> | null,
+      {
+        commissionId: Id<"commissions">;
+        affiliateId: Id<"affiliates">;
+        affiliateCode: string;
+        affiliateUserId: string;
+        commissionAmountCents: number;
+      } | null,
       Name
     >;
     reverseByCharge: FunctionReference<
       "mutation",
       "public",
       { stripeChargeId: string; reason?: string },
-      null,
+      {
+        commissionId: Id<"commissions">;
+        affiliateId: Id<"affiliates">;
+        affiliateCode?: string;
+        commissionAmountCents: number;
+      } | null,
       Name
     >;
   };

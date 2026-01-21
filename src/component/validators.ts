@@ -108,7 +108,7 @@ export const payoutMethodValidator = v.union(
 export type PayoutMethod = "manual" | "bank_transfer" | "paypal" | "other";
 
 // ============================================
-// Event Types
+// Event Types (for analytics)
 // ============================================
 
 export const eventTypeValidator = v.union(

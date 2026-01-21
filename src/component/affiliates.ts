@@ -55,6 +55,42 @@ export const getByCode = query({
 });
 
 /**
+ * Get an affiliate by their document ID.
+ */
+export const getById = query({
+  args: {
+    affiliateId: v.id("affiliates"),
+  },
+  returns: v.union(
+    v.object({
+      _id: v.id("affiliates"),
+      _creationTime: v.number(),
+      userId: v.string(),
+      campaignId: v.id("campaigns"),
+      code: v.string(),
+      displayName: v.optional(v.string()),
+      bio: v.optional(v.string()),
+      promoContent: v.optional(promoContentValidator),
+      website: v.optional(v.string()),
+      socials: v.optional(socialsValidator),
+      customCopy: v.optional(customCopyValidator),
+      customCommissionType: v.optional(commissionTypeValidator),
+      customCommissionValue: v.optional(v.number()),
+      payoutMethod: v.optional(payoutMethodValidator),
+      payoutEmail: v.optional(v.string()),
+      status: affiliateStatusValidator,
+      stats: affiliateStatsValidator,
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.affiliateId);
+  },
+});
+
+/**
  * Get an affiliate by their Better Auth user ID.
  */
 export const getByUserId = query({

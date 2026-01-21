@@ -497,6 +497,7 @@ export const getByStripeCharge = query({
 /**
  * Create a commission from a paid invoice.
  * Called by host app's webhook handler when invoice.paid event is received.
+ * Returns commission details for notification purposes.
  */
 export const createFromInvoice = mutation({
   args: {
@@ -509,7 +510,16 @@ export const createFromInvoice = mutation({
     currency: v.string(),
     affiliateCode: v.optional(v.string()),
   },
-  returns: v.union(v.id("commissions"), v.null()),
+  returns: v.union(
+    v.object({
+      commissionId: v.id("commissions"),
+      affiliateId: v.id("affiliates"),
+      affiliateCode: v.string(),
+      affiliateUserId: v.string(),
+      commissionAmountCents: v.number(),
+    }),
+    v.null()
+  ),
   handler: async (ctx, args) => {
     // Skip zero-amount invoices
     if (args.amountPaidCents <= 0) {
@@ -572,7 +582,14 @@ export const createFromInvoice = mutation({
       .first();
 
     if (existingCommission) {
-      return existingCommission._id; // Already processed
+      // Already processed - return existing commission details
+      return {
+        commissionId: existingCommission._id,
+        affiliateId: affiliate._id,
+        affiliateCode: affiliate.code,
+        affiliateUserId: affiliate.userId,
+        commissionAmountCents: existingCommission.commissionAmountCents,
+      };
     }
 
     // Get campaign to check commission duration rules
@@ -631,7 +648,6 @@ export const createFromInvoice = mutation({
     // Calculate commission amount (inline logic to avoid ctx.runQuery in mutation)
     let commissionType: CommissionType = campaign.commissionType;
     let commissionRate: number = campaign.commissionValue;
-    let commissionAmountCents: number;
 
     // Priority 1: Affiliate custom rate
     if (affiliate.customCommissionType && affiliate.customCommissionValue !== undefined) {
@@ -670,7 +686,7 @@ export const createFromInvoice = mutation({
     }
 
     // Calculate the actual commission amount
-    commissionAmountCents = calculateCommissionAmount(
+    const commissionAmountCents = calculateCommissionAmount(
       args.amountPaidCents,
       commissionType,
       commissionRate
@@ -733,20 +749,36 @@ export const createFromInvoice = mutation({
       timestamp: now,
     });
 
-    return commissionId;
+    // Return commission details for notification purposes
+    return {
+      commissionId,
+      affiliateId: affiliate._id,
+      affiliateCode: affiliate.code,
+      affiliateUserId: affiliate.userId,
+      commissionAmountCents,
+    };
   },
 });
 
 /**
  * Reverse a commission by Stripe charge ID.
  * Called by host app's webhook handler when charge.refunded event is received.
+ * Returns commission details for notification purposes.
  */
 export const reverseByCharge = mutation({
   args: {
     stripeChargeId: v.string(),
     reason: v.optional(v.string()),
   },
-  returns: v.null(),
+  returns: v.union(
+    v.object({
+      commissionId: v.id("commissions"),
+      affiliateId: v.id("affiliates"),
+      affiliateCode: v.optional(v.string()),
+      commissionAmountCents: v.number(),
+    }),
+    v.null()
+  ),
   handler: async (ctx, args) => {
     // Find commission by charge ID
     const commission = await ctx.db
@@ -807,6 +839,12 @@ export const reverseByCharge = mutation({
       timestamp: now,
     });
 
-    return null;
+    // Return commission details for notification purposes
+    return {
+      commissionId: commission._id,
+      affiliateId: commission.affiliateId,
+      affiliateCode: affiliate?.code,
+      commissionAmountCents: commission.commissionAmountCents,
+    };
   },
 });
