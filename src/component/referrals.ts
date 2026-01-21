@@ -240,6 +240,7 @@ export const getRefereeDiscount = query({
   handler: async (ctx, args) => {
     // Find the referral by any of the provided identifiers
     let affiliate = null;
+    const now = Date.now();
 
     // Try by referral ID first
     if (args.referralId) {
@@ -248,6 +249,10 @@ export const getRefereeDiscount = query({
         .withIndex("by_referralId", (q) => q.eq("referralId", args.referralId!))
         .first();
       if (referral) {
+        // Check if referral has expired
+        if (referral.expiresAt < now) {
+          return null; // Referral expired, no discount available
+        }
         affiliate = await ctx.db.get(referral.affiliateId);
       }
     }
@@ -259,11 +264,15 @@ export const getRefereeDiscount = query({
         .withIndex("by_userId", (q) => q.eq("userId", args.userId!))
         .first();
       if (referral) {
+        // Check if referral has expired
+        if (referral.expiresAt < now) {
+          return null; // Referral expired, no discount available
+        }
         affiliate = await ctx.db.get(referral.affiliateId);
       }
     }
 
-    // Try by affiliate code directly
+    // Try by affiliate code directly (no expiry check - affiliate code is always valid)
     if (!affiliate && args.affiliateCode) {
       affiliate = await ctx.db
         .query("affiliates")
@@ -612,15 +621,16 @@ export const linkStripeCustomer = mutation({
           const now = Date.now();
           const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
 
+          // Note: args.userId is guaranteed to be defined here (checked above)
           await ctx.db.insert("referrals", {
             affiliateId: affiliate._id,
             referralId: crypto.randomUUID(),
             landingPage: "/checkout",
             stripeCustomerId: args.stripeCustomerId,
             userId: args.userId,
-            status: args.userId ? "signed_up" : "clicked",
+            status: "signed_up",
             clickedAt: now,
-            signedUpAt: args.userId ? now : undefined,
+            signedUpAt: now,
             expiresAt,
           });
 
@@ -629,9 +639,7 @@ export const linkStripeCustomer = mutation({
             stats: {
               ...affiliate.stats,
               totalClicks: affiliate.stats.totalClicks + 1,
-              totalSignups: args.userId
-                ? affiliate.stats.totalSignups + 1
-                : affiliate.stats.totalSignups,
+              totalSignups: affiliate.stats.totalSignups + 1,
             },
             updatedAt: now,
           });
