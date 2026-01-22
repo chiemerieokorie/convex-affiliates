@@ -776,4 +776,537 @@ describe("affiliate component", () => {
       expect(discount?.discountValue).toBe(15);
     });
   });
+
+  describe("affiliate recruitment", () => {
+    test("trackRecruitmentClick creates recruitment referral", async () => {
+      const t = initConvexTest();
+
+      // Create campaign with recruitment enabled
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Recruitment Campaign",
+        slug: "recruitment",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+        affiliateRecruitmentEnabled: true,
+        subAffiliateCommissionPercent: 10,
+      });
+
+      // Register and approve affiliate
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "recruiter-user",
+        email: "recruiter@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      // Verify affiliate has a recruitment code
+      const affiliate = await t.query(api.affiliates.getByCode, {
+        code: affiliateResult.code,
+      });
+      expect(affiliate?.recruitmentCode).toBeDefined();
+
+      // Track recruitment click
+      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: affiliate!.recruitmentCode!,
+      });
+
+      expect(clickResult.success).toBe(true);
+      if (clickResult.success) {
+        expect(clickResult.referralId).toBeDefined();
+      }
+    });
+
+    test("trackRecruitmentClick fails when recruitment not enabled", async () => {
+      const t = initConvexTest();
+
+      // Create campaign WITHOUT recruitment enabled
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "No Recruitment Campaign",
+        slug: "no-recruitment",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      // Register and approve affiliate
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "recruiter-user",
+        email: "recruiter@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      const affiliate = await t.query(api.affiliates.getByCode, {
+        code: affiliateResult.code,
+      });
+
+      // Track recruitment click - should fail
+      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: affiliate!.recruitmentCode!,
+      });
+
+      expect(clickResult.success).toBe(false);
+      if (!clickResult.success) {
+        expect(clickResult.error).toBe("recruitment_not_enabled");
+      }
+    });
+
+    test("affiliate registration links to recruiter via recruitmentReferralId", async () => {
+      const t = initConvexTest();
+
+      // Create campaign with recruitment enabled
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Recruitment Campaign",
+        slug: "recruitment",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+        affiliateRecruitmentEnabled: true,
+        subAffiliateCommissionPercent: 10,
+      });
+
+      // Register and approve recruiter
+      const recruiterResult = await t.mutation(api.affiliates.register, {
+        userId: "recruiter-user",
+        email: "recruiter@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+
+      const recruiter = await t.query(api.affiliates.getByCode, {
+        code: recruiterResult.code,
+      });
+
+      // Track recruitment click
+      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: recruiter!.recruitmentCode!,
+      });
+      expect(clickResult.success).toBe(true);
+
+      // Register new affiliate with recruitment referral
+      const recruitedResult = await t.mutation(api.affiliates.register, {
+        userId: "recruited-user",
+        email: "recruited@example.com",
+        campaignId,
+        recruitmentReferralId: clickResult.success ? clickResult.referralId : undefined,
+      });
+
+      // Check the recruited affiliate is linked to recruiter
+      const recruited = await t.query(api.affiliates.getById, {
+        affiliateId: recruitedResult.affiliateId,
+      });
+      expect(recruited?.referredByAffiliateId).toBe(recruiterResult.affiliateId);
+
+      // Check recruiter's stats updated
+      const updatedRecruiter = await t.query(api.affiliates.getById, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+      expect(updatedRecruiter?.subAffiliateStats?.totalRecruits).toBe(1);
+    });
+
+    test("approve updates parent subAffiliateStats.activeRecruits", async () => {
+      const t = initConvexTest();
+
+      // Create campaign with recruitment enabled
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Recruitment Campaign",
+        slug: "recruitment",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+        affiliateRecruitmentEnabled: true,
+        subAffiliateCommissionPercent: 10,
+      });
+
+      // Register and approve recruiter
+      const recruiterResult = await t.mutation(api.affiliates.register, {
+        userId: "recruiter-user",
+        email: "recruiter@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+
+      const recruiter = await t.query(api.affiliates.getByCode, {
+        code: recruiterResult.code,
+      });
+
+      // Track recruitment click
+      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: recruiter!.recruitmentCode!,
+      });
+
+      // Register new affiliate with recruitment referral
+      const recruitedResult = await t.mutation(api.affiliates.register, {
+        userId: "recruited-user",
+        email: "recruited@example.com",
+        campaignId,
+        recruitmentReferralId: clickResult.success ? clickResult.referralId : undefined,
+      });
+
+      // Before approval, activeRecruits should be 0
+      let updatedRecruiter = await t.query(api.affiliates.getById, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+      expect(updatedRecruiter?.subAffiliateStats?.activeRecruits).toBe(0);
+
+      // Approve the recruited affiliate
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: recruitedResult.affiliateId,
+      });
+
+      // After approval, activeRecruits should be 1
+      updatedRecruiter = await t.query(api.affiliates.getById, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+      expect(updatedRecruiter?.subAffiliateStats?.activeRecruits).toBe(1);
+    });
+
+    test("sub-affiliate commission created when recruit earns commission", async () => {
+      const t = initConvexTest();
+
+      // Create campaign with recruitment enabled
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Recruitment Campaign",
+        slug: "recruitment",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+        affiliateRecruitmentEnabled: true,
+        subAffiliateCommissionPercent: 10, // Parent gets 10% of sub-affiliate's commissions
+      });
+
+      // Register and approve recruiter
+      const recruiterResult = await t.mutation(api.affiliates.register, {
+        userId: "recruiter-user",
+        email: "recruiter@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+
+      const recruiter = await t.query(api.affiliates.getByCode, {
+        code: recruiterResult.code,
+      });
+
+      // Track recruitment click and register sub-affiliate
+      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: recruiter!.recruitmentCode!,
+      });
+
+      const recruitedResult = await t.mutation(api.affiliates.register, {
+        userId: "recruited-user",
+        email: "recruited@example.com",
+        campaignId,
+        recruitmentReferralId: clickResult.success ? clickResult.referralId : undefined,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: recruitedResult.affiliateId,
+      });
+
+      // Sub-affiliate creates a referral and gets a conversion
+      const signupResult = await t.mutation(api.referrals.attributeSignupByCode, {
+        userId: "customer-user",
+        affiliateCode: recruitedResult.code,
+      });
+      expect(signupResult.success).toBe(true);
+
+      await t.mutation(api.referrals.linkStripeCustomer, {
+        stripeCustomerId: "cus_sub_customer",
+        userId: "customer-user",
+      });
+
+      const commission = await t.mutation(api.commissions.createFromInvoice, {
+        stripeCustomerId: "cus_sub_customer",
+        stripeInvoiceId: "inv_sub_test",
+        amountPaidCents: 10000, // $100
+        currency: "usd",
+      });
+
+      // Sub-affiliate should earn 20% = $20 (2000 cents)
+      expect(commission).toBeDefined();
+      expect(commission?.commissionAmountCents).toBe(2000);
+
+      // Parent (recruiter) should earn 10% of $20 = $2 (200 cents) as sub-affiliate commission
+      const updatedRecruiter = await t.query(api.affiliates.getById, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+      expect(updatedRecruiter?.subAffiliateStats?.pendingSubCommissionsCents).toBe(200);
+      expect(updatedRecruiter?.subAffiliateStats?.totalSubCommissionsCents).toBe(200);
+    });
+
+    test("sub-affiliate commission reversed when source commission reversed", async () => {
+      const t = initConvexTest();
+
+      // Create campaign with recruitment enabled
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Recruitment Campaign",
+        slug: "recruitment",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+        affiliateRecruitmentEnabled: true,
+        subAffiliateCommissionPercent: 10,
+      });
+
+      // Set up recruiter and recruited affiliate
+      const recruiterResult = await t.mutation(api.affiliates.register, {
+        userId: "recruiter-user",
+        email: "recruiter@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+
+      const recruiter = await t.query(api.affiliates.getByCode, {
+        code: recruiterResult.code,
+      });
+
+      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: recruiter!.recruitmentCode!,
+      });
+
+      const recruitedResult = await t.mutation(api.affiliates.register, {
+        userId: "recruited-user",
+        email: "recruited@example.com",
+        campaignId,
+        recruitmentReferralId: clickResult.success ? clickResult.referralId : undefined,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: recruitedResult.affiliateId,
+      });
+
+      // Create conversion for sub-affiliate
+      await t.mutation(api.referrals.attributeSignupByCode, {
+        userId: "customer-user",
+        affiliateCode: recruitedResult.code,
+      });
+
+      await t.mutation(api.referrals.linkStripeCustomer, {
+        stripeCustomerId: "cus_sub_customer",
+        userId: "customer-user",
+      });
+
+      await t.mutation(api.commissions.createFromInvoice, {
+        stripeCustomerId: "cus_sub_customer",
+        stripeInvoiceId: "inv_sub_test",
+        stripeChargeId: "ch_sub_test",
+        amountPaidCents: 10000,
+        currency: "usd",
+      });
+
+      // Verify sub-commission was created
+      let updatedRecruiter = await t.query(api.affiliates.getById, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+      expect(updatedRecruiter?.subAffiliateStats?.pendingSubCommissionsCents).toBe(200);
+
+      // Now reverse the commission (refund)
+      await t.mutation(api.commissions.reverseByCharge, {
+        stripeChargeId: "ch_sub_test",
+        reason: "Customer refund",
+      });
+
+      // Sub-affiliate commission should also be reversed
+      updatedRecruiter = await t.query(api.affiliates.getById, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+      expect(updatedRecruiter?.subAffiliateStats?.pendingSubCommissionsCents).toBe(0);
+    });
+
+    test("self-recruitment is blocked", async () => {
+      const t = initConvexTest();
+
+      // Create campaign with recruitment enabled
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Recruitment Campaign",
+        slug: "recruitment",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+        affiliateRecruitmentEnabled: true,
+        subAffiliateCommissionPercent: 10,
+      });
+
+      // Register and approve affiliate
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "recruiter-user",
+        email: "recruiter@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      const affiliate = await t.query(api.affiliates.getByCode, {
+        code: affiliateResult.code,
+      });
+
+      // Track recruitment click
+      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: affiliate!.recruitmentCode!,
+      });
+
+      // Try to register with own recruitment referral (self-recruitment)
+      await expect(
+        t.mutation(api.affiliates.register, {
+          userId: "recruiter-user", // Same user trying to recruit themselves
+          email: "recruiter@example.com",
+          campaignId,
+          recruitmentReferralId: clickResult.success ? clickResult.referralId : undefined,
+        })
+      ).rejects.toThrow(); // Should throw "User is already an affiliate" or "Cannot recruit yourself"
+    });
+
+    test("listSubAffiliates returns recruited affiliates", async () => {
+      const t = initConvexTest();
+
+      // Create campaign with recruitment enabled
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Recruitment Campaign",
+        slug: "recruitment",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+        affiliateRecruitmentEnabled: true,
+        subAffiliateCommissionPercent: 10,
+      });
+
+      // Register and approve recruiter
+      const recruiterResult = await t.mutation(api.affiliates.register, {
+        userId: "recruiter-user",
+        email: "recruiter@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+
+      const recruiter = await t.query(api.affiliates.getByCode, {
+        code: recruiterResult.code,
+      });
+
+      // Track recruitment and register two sub-affiliates
+      const click1 = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: recruiter!.recruitmentCode!,
+      });
+
+      await t.mutation(api.affiliates.register, {
+        userId: "sub-user-1",
+        email: "sub1@example.com",
+        campaignId,
+        recruitmentReferralId: click1.success ? click1.referralId : undefined,
+      });
+
+      const click2 = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: recruiter!.recruitmentCode!,
+      });
+
+      await t.mutation(api.affiliates.register, {
+        userId: "sub-user-2",
+        email: "sub2@example.com",
+        campaignId,
+        recruitmentReferralId: click2.success ? click2.referralId : undefined,
+      });
+
+      // List sub-affiliates
+      const subAffiliates = await t.query(api.affiliateRecruitment.listSubAffiliates, {
+        parentAffiliateId: recruiterResult.affiliateId,
+      });
+
+      expect(subAffiliates).toHaveLength(2);
+    });
+
+    test("max sub-affiliates limit is enforced", async () => {
+      const t = initConvexTest();
+
+      // Create campaign with max 1 sub-affiliate
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Limited Recruitment Campaign",
+        slug: "limited-recruitment",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+        affiliateRecruitmentEnabled: true,
+        subAffiliateCommissionPercent: 10,
+        maxSubAffiliatesPerAffiliate: 1,
+      });
+
+      // Register and approve recruiter
+      const recruiterResult = await t.mutation(api.affiliates.register, {
+        userId: "recruiter-user",
+        email: "recruiter@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: recruiterResult.affiliateId,
+      });
+
+      const recruiter = await t.query(api.affiliates.getByCode, {
+        code: recruiterResult.code,
+      });
+
+      // First recruitment should work
+      const click1 = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: recruiter!.recruitmentCode!,
+      });
+      expect(click1.success).toBe(true);
+
+      // Register first sub-affiliate (updates totalRecruits to 1)
+      await t.mutation(api.affiliates.register, {
+        userId: "sub-user-1",
+        email: "sub1@example.com",
+        campaignId,
+        recruitmentReferralId: click1.success ? click1.referralId : undefined,
+      });
+
+      // Second recruitment click should be blocked (max reached)
+      const click2 = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
+        recruitmentCode: recruiter!.recruitmentCode!,
+      });
+      expect(click2.success).toBe(false);
+      if (!click2.success) {
+        expect(click2.error).toBe("max_sub_affiliates_reached");
+      }
+    });
+  });
 });

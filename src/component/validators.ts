@@ -189,6 +189,35 @@ export const affiliateStatsValidator = v.object({
 });
 
 // ============================================
+// Sub-Affiliate Stats Object Validator
+// ============================================
+
+export const subAffiliateStatsValidator = v.object({
+  totalRecruits: v.number(),
+  activeRecruits: v.number(),
+  totalSubCommissionsCents: v.number(),
+  pendingSubCommissionsCents: v.number(),
+  paidSubCommissionsCents: v.number(),
+});
+
+// ============================================
+// Recruitment Referral Status
+// ============================================
+
+export const recruitmentReferralStatusValidator = v.union(
+  v.literal("clicked"),
+  v.literal("signed_up"),
+  v.literal("approved"),
+  v.literal("expired")
+);
+
+export type RecruitmentReferralStatus =
+  | "clicked"
+  | "signed_up"
+  | "approved"
+  | "expired";
+
+// ============================================
 // Pagination Validators
 // ============================================
 
@@ -241,4 +270,24 @@ export function calculateCommissionAmount(
     return Math.round((saleAmountCents * commissionValue) / 100);
   }
   return commissionValue; // Fixed amount in cents
+}
+
+/**
+ * Generate a recruitment code for an affiliate
+ */
+export function generateRecruitmentCode(affiliateCode: string): string {
+  return `RECRUIT-${affiliateCode}`;
+}
+
+/**
+ * Initialize empty sub-affiliate stats
+ */
+export function initializeSubAffiliateStats() {
+  return {
+    totalRecruits: 0,
+    activeRecruits: 0,
+    totalSubCommissionsCents: 0,
+    pendingSubCommissionsCents: 0,
+    paidSubCommissionsCents: 0,
+  };
 }
