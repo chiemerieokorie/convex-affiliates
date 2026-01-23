@@ -1155,6 +1155,269 @@ export function createAffiliateApi(
         });
       },
     }),
+
+    // =========================================================================
+    // LANDING PAGE ENDPOINTS
+    // =========================================================================
+
+    /**
+     * Get landing page content by campaign slug and optional media preset.
+     * Public endpoint - no authentication required.
+     *
+     * @param slug - Campaign slug from URL path (e.g., "premium-partners")
+     * @param mediaPreset - Optional media preset for A/B testing (from ?media= param)
+     * @returns Landing page content + campaign commission info, or null
+     *
+     * @example
+     * ```typescript
+     * // Fetch landing page for /join/premium-partners?media=video-a
+     * const data = await getLandingPageData({
+     *   slug: "premium-partners",
+     *   mediaPreset: "video-a",
+     * });
+     * if (data) {
+     *   console.log(data.landingPage.hero.headline);
+     *   console.log(`Earn ${data.campaign.commissionValue}%`);
+     * }
+     * ```
+     */
+    getLandingPageData: queryGeneric({
+      args: {
+        slug: v.string(),
+        mediaPreset: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        const page = await ctx.runQuery(
+          component.landingPages.getBySlugAndPreset,
+          { slug: args.slug, mediaPreset: args.mediaPreset }
+        );
+
+        if (!page) return null;
+
+        const campaign = await ctx.runQuery(component.campaigns.getBySlug, {
+          slug: args.slug,
+        });
+
+        return {
+          landingPage: page,
+          campaign: campaign
+            ? {
+                name: campaign.name,
+                slug: campaign.slug,
+                commissionType: campaign.commissionType,
+                commissionValue: campaign.commissionValue,
+              }
+            : null,
+        };
+      },
+    }),
+
+    /**
+     * Track a landing page view. Call this when a prospect loads the page.
+     *
+     * @param slug - Campaign slug
+     * @param mediaPreset - Optional media preset
+     *
+     * @example
+     * ```typescript
+     * // Track view on page load
+     * await trackLandingPageView({
+     *   slug: "premium-partners",
+     *   mediaPreset: "video-a",
+     * });
+     * ```
+     */
+    trackLandingPageView: mutationGeneric({
+      args: {
+        slug: v.string(),
+        mediaPreset: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        const page = await ctx.runQuery(
+          component.landingPages.getBySlugAndPreset,
+          { slug: args.slug, mediaPreset: args.mediaPreset }
+        );
+        if (page) {
+          await ctx.runMutation(component.landingPages.incrementViews, {
+            landingPageId: page._id,
+          });
+        }
+        return null;
+      },
+    }),
+
+    /**
+     * List all landing pages for a campaign. Admin only.
+     *
+     * @param campaignId - Campaign to list pages for
+     * @returns Array of landing pages with all content
+     *
+     * @example
+     * ```typescript
+     * const pages = await adminListLandingPages({ campaignId: "abc123" });
+     * pages.forEach(p => console.log(`${p.mediaPreset}: ${p.totalViews} views`));
+     * ```
+     */
+    adminListLandingPages: queryGeneric({
+      args: {
+        campaignId: v.id("campaigns"),
+      },
+      handler: async (ctx, args) => {
+        await requireAdmin(ctx);
+        return ctx.runQuery(component.landingPages.listByCampaign, {
+          campaignId: args.campaignId,
+        });
+      },
+    }),
+
+    /**
+     * Create a new landing page for a campaign. Admin only.
+     *
+     * @param campaignId - Campaign this page belongs to
+     * @param mediaPreset - Unique preset identifier for A/B testing
+     * @param hero - Hero section content (headline, subheadline, video/image)
+     * @param benefits - List of benefit strings
+     * @param testimonials - Array of testimonial objects
+     * @param socialProofText - Social proof text (e.g., "Join 500+ affiliates")
+     * @param commissionPreviewText - Commission preview (e.g., "Earn 25% recurring")
+     * @param cta - CTA configuration
+     * @param status - "draft" or "published"
+     * @returns Created landing page ID
+     *
+     * @example
+     * ```typescript
+     * const pageId = await adminCreateLandingPage({
+     *   campaignId: "abc123",
+     *   mediaPreset: "video-testimonial",
+     *   hero: {
+     *     headline: "Earn 25% recurring commissions",
+     *     subheadline: "Join our partner program",
+     *     videoUrl: "https://youtube.com/watch?v=...",
+     *   },
+     *   benefits: ["Passive income", "Weekly payouts", "Dedicated support"],
+     *   testimonials: [{
+     *     name: "Jane Smith",
+     *     quote: "I earn $3,000/mo with this program",
+     *     earnings: "$3,000/mo",
+     *   }],
+     *   status: "published",
+     * });
+     * ```
+     */
+    adminCreateLandingPage: mutationGeneric({
+      args: {
+        campaignId: v.id("campaigns"),
+        mediaPreset: v.string(),
+        hero: v.object({
+          headline: v.string(),
+          subheadline: v.optional(v.string()),
+          videoUrl: v.optional(v.string()),
+          imageUrl: v.optional(v.string()),
+        }),
+        benefits: v.optional(v.array(v.string())),
+        testimonials: v.optional(
+          v.array(
+            v.object({
+              name: v.string(),
+              quote: v.string(),
+              avatar: v.optional(v.string()),
+              earnings: v.optional(v.string()),
+            })
+          )
+        ),
+        socialProofText: v.optional(v.string()),
+        commissionPreviewText: v.optional(v.string()),
+        cta: v.optional(
+          v.object({
+            text: v.string(),
+            subtext: v.optional(v.string()),
+            buttonLabel: v.optional(v.string()),
+            url: v.optional(v.string()),
+          })
+        ),
+        status: v.optional(v.union(v.literal("draft"), v.literal("published"))),
+      },
+      handler: async (ctx, args) => {
+        await requireAdmin(ctx);
+        return ctx.runMutation(component.landingPages.create, args);
+      },
+    }),
+
+    /**
+     * Update an existing landing page. Admin only.
+     *
+     * @param landingPageId - ID of the landing page to update
+     * @returns null
+     *
+     * @example
+     * ```typescript
+     * await adminUpdateLandingPage({
+     *   landingPageId: "xyz789",
+     *   hero: { headline: "Updated headline" },
+     *   status: "published",
+     * });
+     * ```
+     */
+    adminUpdateLandingPage: mutationGeneric({
+      args: {
+        landingPageId: v.id("campaignLandingPages"),
+        hero: v.optional(
+          v.object({
+            headline: v.string(),
+            subheadline: v.optional(v.string()),
+            videoUrl: v.optional(v.string()),
+            imageUrl: v.optional(v.string()),
+          })
+        ),
+        benefits: v.optional(v.array(v.string())),
+        testimonials: v.optional(
+          v.array(
+            v.object({
+              name: v.string(),
+              quote: v.string(),
+              avatar: v.optional(v.string()),
+              earnings: v.optional(v.string()),
+            })
+          )
+        ),
+        socialProofText: v.optional(v.string()),
+        commissionPreviewText: v.optional(v.string()),
+        cta: v.optional(
+          v.object({
+            text: v.string(),
+            subtext: v.optional(v.string()),
+            buttonLabel: v.optional(v.string()),
+            url: v.optional(v.string()),
+          })
+        ),
+        status: v.optional(v.union(v.literal("draft"), v.literal("published"))),
+        mediaPreset: v.optional(v.string()),
+      },
+      handler: async (ctx, args) => {
+        await requireAdmin(ctx);
+        return ctx.runMutation(component.landingPages.update, args);
+      },
+    }),
+
+    /**
+     * Delete a landing page. Admin only.
+     *
+     * @param landingPageId - ID of the landing page to delete
+     *
+     * @example
+     * ```typescript
+     * await adminDeleteLandingPage({ landingPageId: "xyz789" });
+     * ```
+     */
+    adminDeleteLandingPage: mutationGeneric({
+      args: {
+        landingPageId: v.id("campaignLandingPages"),
+      },
+      handler: async (ctx, args) => {
+        await requireAdmin(ctx);
+        return ctx.runMutation(component.landingPages.remove, args);
+      },
+    }),
   };
 }
 
@@ -1211,6 +1474,62 @@ export function registerRoutes(
           status: 200,
           headers: { "Content-Type": "application/json" },
         }
+      );
+    }),
+  });
+
+  // Get landing page data (public endpoint for recruitment pages)
+  http.route({
+    path: `${prefix}/landing/:slug`,
+    method: "GET",
+    handler: httpActionGeneric(async (ctx, request) => {
+      const url = new URL(request.url);
+      const pathParts = url.pathname.split("/");
+      const slug = pathParts[pathParts.length - 1];
+      const preset = url.searchParams.get("preset") ?? undefined;
+
+      if (!slug) {
+        return new Response(JSON.stringify({ error: "Slug required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const page = await ctx.runQuery(
+        component.landingPages.getBySlugAndPreset,
+        { slug, mediaPreset: preset }
+      );
+
+      if (!page) {
+        return new Response(
+          JSON.stringify({ error: "Landing page not found" }),
+          { status: 404, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Increment views
+      await ctx.runMutation(component.landingPages.incrementViews, {
+        landingPageId: page._id,
+      });
+
+      // Get campaign info
+      const campaign = await ctx.runQuery(component.campaigns.getBySlug, {
+        slug,
+      });
+
+      return new Response(
+        JSON.stringify({
+          landingPage: page,
+          campaign: campaign
+            ? {
+                name: campaign.name,
+                slug: campaign.slug,
+                commissionType: campaign.commissionType,
+                commissionValue: campaign.commissionValue,
+              }
+            : null,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }),
   });
@@ -1549,6 +1868,49 @@ export function parseReferralParams(searchParams: URLSearchParams): {
   };
 }
 
+/**
+ * Parse a Smartlead landing page URL into structured params.
+ * Works with the URL pattern:
+ * https://yoursite.com/join/{{campaign_slug}}?name=&email=&company=&ref=&sub=&media=
+ */
+export function parseLandingPageUrl(url: string): {
+  campaignSlug: string | null;
+  name: string | null;
+  email: string | null;
+  company: string | null;
+  ref: string | null;
+  sub: string | null;
+  media: string | null;
+} {
+  try {
+    const parsed = new URL(url);
+    const pathParts = parsed.pathname.split("/").filter(Boolean);
+    const joinIndex = pathParts.indexOf("join");
+    const campaignSlug =
+      joinIndex >= 0 ? pathParts[joinIndex + 1] ?? null : null;
+
+    return {
+      campaignSlug,
+      name: parsed.searchParams.get("name"),
+      email: parsed.searchParams.get("email"),
+      company: parsed.searchParams.get("company"),
+      ref: parsed.searchParams.get("ref"),
+      sub: parsed.searchParams.get("sub"),
+      media: parsed.searchParams.get("media"),
+    };
+  } catch {
+    return {
+      campaignSlug: null,
+      name: null,
+      email: null,
+      company: null,
+      ref: null,
+      sub: null,
+      media: null,
+    };
+  }
+}
+
 // =============================================================================
 // Re-exported Types (for consumer convenience)
 // =============================================================================
@@ -1564,6 +1926,7 @@ export type {
   PayoutMethod,
   EventType,
   PromoContentType,
+  LandingPageStatus,
 } from "../component/validators.js";
 
 export {

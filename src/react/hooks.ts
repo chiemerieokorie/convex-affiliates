@@ -123,6 +123,43 @@ export interface Payout {
   failureReason?: string;
 }
 
+export interface LandingPageData {
+  landingPage: {
+    _id: string;
+    campaignId: string;
+    mediaPreset: string;
+    hero: {
+      headline: string;
+      subheadline?: string;
+      videoUrl?: string;
+      imageUrl?: string;
+    };
+    benefits?: string[];
+    testimonials?: Array<{
+      name: string;
+      quote: string;
+      avatar?: string;
+      earnings?: string;
+    }>;
+    socialProofText?: string;
+    commissionPreviewText?: string;
+    cta?: {
+      text: string;
+      subtext?: string;
+      buttonLabel?: string;
+      url?: string;
+    };
+    status: string;
+    totalViews: number;
+  };
+  campaign: {
+    name: string;
+    slug: string;
+    commissionType: string;
+    commissionValue: number;
+  } | null;
+}
+
 // Generic API type
 type AffiliateApi = {
   getPortalData: FunctionReference<"query">;
@@ -136,6 +173,9 @@ type AffiliateApi = {
   adminApproveAffiliate: FunctionReference<"mutation">;
   adminRejectAffiliate: FunctionReference<"mutation">;
   adminTopAffiliates: FunctionReference<"query">;
+  getLandingPageData: FunctionReference<"query">;
+  trackLandingPageView: FunctionReference<"mutation">;
+  adminListLandingPages: FunctionReference<"query">;
 };
 
 // =============================================================================
@@ -287,6 +327,38 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
         [reject]
       );
     },
+
+    /**
+     * Fetch landing page data by campaign slug and optional media preset.
+     * Automatically tracks the view on first load.
+     */
+    useLandingPage: (campaignSlug: string, mediaPreset?: string) => {
+      const data = useQuery(affiliateApi.getLandingPageData, {
+        slug: campaignSlug,
+        mediaPreset,
+      }) as LandingPageData | null | undefined;
+      const trackView = useMutation(affiliateApi.trackLandingPageView);
+      const [viewTracked, setViewTracked] = useState(false);
+
+      useEffect(() => {
+        if (data?.landingPage && !viewTracked) {
+          trackView({ slug: campaignSlug, mediaPreset }).catch(() => {});
+          setViewTracked(true);
+        }
+      }, [data?.landingPage, viewTracked, trackView, campaignSlug, mediaPreset]);
+
+      return data;
+    },
+
+    /**
+     * Admin: list all landing pages for a campaign.
+     */
+    useAdminLandingPages: (campaignId?: string) => {
+      return useQuery(
+        affiliateApi.adminListLandingPages,
+        campaignId ? { campaignId: campaignId as any } : "skip"
+      );
+    },
   };
 }
 
@@ -412,6 +484,108 @@ export function useCopyToClipboard() {
   }, []);
 
   return { copy, copied };
+}
+
+/**
+ * Parse Smartlead URL parameters for landing page context.
+ * Extracts: name, email, company, ref, sub, media from the URL.
+ * SSR-safe.
+ *
+ * @example
+ * ```tsx
+ * const { name, email, company, ref, sub, media } = useLandingPageParams();
+ * // Pre-fill registration form with name/email
+ * // Use media to select landing page preset
+ * ```
+ */
+export function useLandingPageParams() {
+  const [params] = useState<{
+    name: string | null;
+    email: string | null;
+    company: string | null;
+    ref: string | null;
+    sub: string | null;
+    media: string | null;
+  }>(() => {
+    if (typeof window === "undefined") {
+      return { name: null, email: null, company: null, ref: null, sub: null, media: null };
+    }
+    const sp = new URLSearchParams(window.location.search);
+    return {
+      name: sp.get("name"),
+      email: sp.get("email"),
+      company: sp.get("company"),
+      ref: sp.get("ref"),
+      sub: sp.get("sub"),
+      media: sp.get("media"),
+    };
+  });
+
+  return params;
+}
+
+/**
+ * Handle auto-registration of an affiliate from landing page URL params.
+ * Call this after the user authenticates on the landing page.
+ *
+ * @param registerFn - The register mutation function
+ * @param options.autoRegister - If true, registers automatically when params exist
+ *
+ * @example
+ * ```tsx
+ * const { register, registered, error, loading, params } =
+ *   useAutoRegisterAffiliate(registerMutation, { autoRegister: true });
+ *
+ * if (registered) {
+ *   return <div>Welcome aboard!</div>;
+ * }
+ * ```
+ */
+export function useAutoRegisterAffiliate(
+  registerFn: (params: {
+    email: string;
+    displayName?: string;
+    customCode?: string;
+  }) => Promise<{ affiliateId: string; code: string }>,
+  options?: { autoRegister?: boolean }
+) {
+  const params = useLandingPageParams();
+  const [registered, setRegistered] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const doRegister = useCallback(async () => {
+    if (!params.email) {
+      setError("Email is required for registration");
+      return null;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await registerFn({
+        email: params.email,
+        displayName: params.name ?? undefined,
+        customCode: params.ref ?? undefined,
+      });
+      setRegistered(true);
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [params.email, params.name, params.ref, registerFn]);
+
+  useEffect(() => {
+    if (options?.autoRegister && params.email && !registered && !loading) {
+      doRegister();
+    }
+  }, [options?.autoRegister, params.email, registered, loading, doRegister]);
+
+  return { register: doRegister, registered, error, loading, params };
 }
 
 // =============================================================================

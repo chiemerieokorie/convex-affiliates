@@ -12,6 +12,9 @@ export {
   useStoredReferral,
   useAffiliateLinkGenerator,
   useCopyToClipboard,
+  // Landing page hooks
+  useLandingPageParams,
+  useAutoRegisterAffiliate,
   // Formatting utilities
   formatCents,
   formatPercentage,
@@ -23,6 +26,7 @@ export {
   type AdminDashboardData,
   type Commission,
   type Payout,
+  type LandingPageData,
 } from "./hooks.js";
 
 // =============================================================================
