@@ -218,6 +218,50 @@ export type RecruitmentReferralStatus =
   | "expired";
 
 // ============================================
+// Landing Page Status
+// ============================================
+
+export const landingPageStatusValidator = v.union(
+  v.literal("draft"),
+  v.literal("published")
+);
+
+export type LandingPageStatus = "draft" | "published";
+
+// ============================================
+// Landing Page Testimonial
+// ============================================
+
+export const testimonialValidator = v.object({
+  name: v.string(),
+  quote: v.string(),
+  avatar: v.optional(v.string()),
+  earnings: v.optional(v.string()),
+});
+
+// ============================================
+// Landing Page CTA Config
+// ============================================
+
+export const ctaConfigValidator = v.object({
+  text: v.string(),
+  subtext: v.optional(v.string()),
+  buttonLabel: v.optional(v.string()),
+  url: v.optional(v.string()),
+});
+
+// ============================================
+// Landing Page Hero Content
+// ============================================
+
+export const heroContentValidator = v.object({
+  headline: v.string(),
+  subheadline: v.optional(v.string()),
+  videoUrl: v.optional(v.string()),
+  imageUrl: v.optional(v.string()),
+});
+
+// ============================================
 // Pagination Validators
 // ============================================
 

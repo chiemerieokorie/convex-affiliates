@@ -21,6 +21,29 @@ type CommissionDuration = "lifetime" | "max_payments" | "max_months";
 type ReferralStatus = "clicked" | "signed_up" | "converted" | "expired";
 type PayoutMethod = "manual" | "bank_transfer" | "paypal" | "other";
 type EventType = "click" | "signup" | "conversion" | "refund" | "payout";
+type LandingPageStatus = "draft" | "published";
+
+// Landing page content types
+type HeroContent = {
+  headline: string;
+  subheadline?: string;
+  videoUrl?: string;
+  imageUrl?: string;
+};
+
+type Testimonial = {
+  name: string;
+  quote: string;
+  avatar?: string;
+  earnings?: string;
+};
+
+type CtaConfig = {
+  text: string;
+  subtext?: string;
+  buttonLabel?: string;
+  url?: string;
+};
 
 // Affiliate stats type
 type AffiliateStats = {
@@ -893,6 +916,102 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         metadata?: string;
         timestamp: number;
       }>,
+      Name
+    >;
+  };
+
+  // Landing Pages module
+  landingPages: {
+    getBySlugAndPreset: FunctionReference<
+      "query",
+      "public",
+      { slug: string; mediaPreset?: string },
+      {
+        _id: Id<"campaignLandingPages">;
+        _creationTime: number;
+        campaignId: Id<"campaigns">;
+        mediaPreset: string;
+        hero: HeroContent;
+        benefits?: string[];
+        testimonials?: Array<Testimonial>;
+        socialProofText?: string;
+        commissionPreviewText?: string;
+        cta?: CtaConfig;
+        status: LandingPageStatus;
+        totalViews: number;
+        createdAt: number;
+        updatedAt: number;
+      } | null,
+      Name
+    >;
+    listByCampaign: FunctionReference<
+      "query",
+      "public",
+      { campaignId: Id<"campaigns"> },
+      Array<{
+        _id: Id<"campaignLandingPages">;
+        _creationTime: number;
+        campaignId: Id<"campaigns">;
+        mediaPreset: string;
+        hero: HeroContent;
+        benefits?: string[];
+        testimonials?: Array<Testimonial>;
+        socialProofText?: string;
+        commissionPreviewText?: string;
+        cta?: CtaConfig;
+        status: LandingPageStatus;
+        totalViews: number;
+        createdAt: number;
+        updatedAt: number;
+      }>,
+      Name
+    >;
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        campaignId: Id<"campaigns">;
+        mediaPreset: string;
+        hero: HeroContent;
+        benefits?: string[];
+        testimonials?: Array<Testimonial>;
+        socialProofText?: string;
+        commissionPreviewText?: string;
+        cta?: CtaConfig;
+        status?: LandingPageStatus;
+      },
+      Id<"campaignLandingPages">,
+      Name
+    >;
+    update: FunctionReference<
+      "mutation",
+      "public",
+      {
+        landingPageId: Id<"campaignLandingPages">;
+        hero?: HeroContent;
+        benefits?: string[];
+        testimonials?: Array<Testimonial>;
+        socialProofText?: string;
+        commissionPreviewText?: string;
+        cta?: CtaConfig;
+        status?: LandingPageStatus;
+        mediaPreset?: string;
+      },
+      null,
+      Name
+    >;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { landingPageId: Id<"campaignLandingPages"> },
+      null,
+      Name
+    >;
+    incrementViews: FunctionReference<
+      "mutation",
+      "public",
+      { landingPageId: Id<"campaignLandingPages"> },
+      null,
       Name
     >;
   };

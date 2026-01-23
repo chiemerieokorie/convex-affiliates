@@ -16,6 +16,10 @@ import {
   affiliateStatsValidator,
   subAffiliateStatsValidator,
   recruitmentReferralStatusValidator,
+  landingPageStatusValidator,
+  testimonialValidator,
+  ctaConfigValidator,
+  heroContentValidator,
 } from "./validators.js";
 
 export default defineSchema({
@@ -310,6 +314,44 @@ export default defineSchema({
     .index("by_recruitingAffiliateId_status", ["recruitingAffiliateId", "status"])
     .index("by_recruitedAffiliateId", ["recruitedAffiliateId"])
     .index("by_expiresAt", ["expiresAt"]),
+
+  // ============================================
+  // Campaign Landing Pages (for A/B testing recruitment pages)
+  // ============================================
+  campaignLandingPages: defineTable({
+    campaignId: v.id("campaigns"),
+    mediaPreset: v.string(), // Matches ?media= URL param for A/B testing
+
+    // Hero content
+    hero: heroContentValidator,
+
+    // Benefits list
+    benefits: v.optional(v.array(v.string())),
+
+    // Testimonials
+    testimonials: v.optional(v.array(testimonialValidator)),
+
+    // Social proof
+    socialProofText: v.optional(v.string()),
+
+    // Commission preview
+    commissionPreviewText: v.optional(v.string()),
+
+    // CTA configuration
+    cta: v.optional(ctaConfigValidator),
+
+    // Status
+    status: landingPageStatusValidator,
+
+    // View tracking
+    totalViews: v.number(),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_campaignId", ["campaignId"])
+    .index("by_campaignId_mediaPreset", ["campaignId", "mediaPreset"])
+    .index("by_status", ["status"]),
 
   // ============================================
   // Sub-Affiliate Commissions

@@ -8,11 +8,13 @@
  * @module
  */
 
+import type * as affiliateRecruitment from "../affiliateRecruitment.js";
 import type * as affiliates from "../affiliates.js";
 import type * as analytics from "../analytics.js";
 import type * as campaigns from "../campaigns.js";
 import type * as commissions from "../commissions.js";
 import type * as crons from "../crons.js";
+import type * as landingPages from "../landingPages.js";
 import type * as payouts from "../payouts.js";
 import type * as referrals from "../referrals.js";
 
@@ -25,11 +27,13 @@ import { anyApi, componentsGeneric } from "convex/server";
 
 // Use a simplified type to avoid circular references
 type InternalModules = {
+  affiliateRecruitment: typeof affiliateRecruitment;
   affiliates: typeof affiliates;
   analytics: typeof analytics;
   campaigns: typeof campaigns;
   commissions: typeof commissions;
   crons: typeof crons;
+  landingPages: typeof landingPages;
   payouts: typeof payouts;
   referrals: typeof referrals;
 };
