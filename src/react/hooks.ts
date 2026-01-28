@@ -123,6 +123,100 @@ export interface Payout {
   failureReason?: string;
 }
 
+// =============================================================================
+// Storage Adapter
+// =============================================================================
+
+export type StorageMode = "localStorage" | "cookie" | "both";
+
+export interface CookieOptions {
+  domain?: string;
+  path?: string;
+  maxAge?: number;
+  secure?: boolean;
+  sameSite?: "lax" | "strict" | "none";
+}
+
+export interface AffiliateHooksConfig {
+  storage?: StorageMode;
+  cookieOptions?: CookieOptions;
+}
+
+interface StorageAdapter {
+  get(key: string): string | null;
+  set(key: string, value: string): void;
+  remove(key: string): void;
+}
+
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(
+    new RegExp("(?:^|; )" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)")
+  );
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setCookie(name: string, value: string, opts: CookieOptions = {}): void {
+  if (typeof document === "undefined") return;
+  const {
+    path = "/",
+    maxAge = 30 * 24 * 60 * 60,
+    secure = true,
+    sameSite = "lax",
+    domain,
+  } = opts;
+  let cookie = `${name}=${encodeURIComponent(value)}; path=${path}; max-age=${maxAge}; samesite=${sameSite}`;
+  if (secure) cookie += "; secure";
+  if (domain) cookie += `; domain=${domain}`;
+  document.cookie = cookie;
+}
+
+function removeCookie(name: string, opts: CookieOptions = {}): void {
+  if (typeof document === "undefined") return;
+  const { path = "/", domain } = opts;
+  let cookie = `${name}=; path=${path}; max-age=0`;
+  if (domain) cookie += `; domain=${domain}`;
+  document.cookie = cookie;
+}
+
+function createStorageAdapter(
+  mode: StorageMode = "localStorage",
+  cookieOpts: CookieOptions = {}
+): StorageAdapter {
+  const ls: StorageAdapter = {
+    get: (key) =>
+      typeof window !== "undefined" ? localStorage.getItem(key) : null,
+    set: (key, value) => {
+      if (typeof window !== "undefined") localStorage.setItem(key, value);
+    },
+    remove: (key) => {
+      if (typeof window !== "undefined") localStorage.removeItem(key);
+    },
+  };
+
+  const ck: StorageAdapter = {
+    get: (key) => getCookie(key),
+    set: (key, value) => setCookie(key, value, cookieOpts),
+    remove: (key) => removeCookie(key, cookieOpts),
+  };
+
+  if (mode === "localStorage") return ls;
+  if (mode === "cookie") return ck;
+
+  // "both" — dual-write, read cookie-first
+  return {
+    get: (key) => ck.get(key) ?? ls.get(key),
+    set: (key, value) => {
+      ck.set(key, value);
+      ls.set(key, value);
+    },
+    remove: (key) => {
+      ck.remove(key);
+      ls.remove(key);
+    },
+  };
+}
+
 // Generic API type
 type AffiliateApi = {
   getPortalData: FunctionReference<"query">;
@@ -150,7 +244,11 @@ type AffiliateApi = {
  * const hooks = createAffiliateHooks(api.affiliates);
  * ```
  */
-export function createAffiliateHooks(affiliateApi: AffiliateApi) {
+export function createAffiliateHooks(
+  affiliateApi: AffiliateApi,
+  config?: AffiliateHooksConfig
+) {
+  const storage = createStorageAdapter(config?.storage, config?.cookieOptions);
   return {
     /**
      * Get the current user's affiliate profile.
@@ -305,8 +403,10 @@ export function useTrackReferralOnLoad(
     referrer?: string;
     userAgent?: string;
     subId?: string;
-  }) => Promise<{ referralId: string } | null>
+  }) => Promise<{ referralId: string } | null>,
+  config?: AffiliateHooksConfig
 ) {
+  const adapter = createStorageAdapter(config?.storage, config?.cookieOptions);
   const [tracked, setTracked] = useState(false);
   const [referralId, setReferralId] = useState<string | null>(null);
 
@@ -331,9 +431,8 @@ export function useTrackReferralOnLoad(
 
         if (result?.referralId) {
           setReferralId(result.referralId);
-          // Store in localStorage for attribution
-          localStorage.setItem("affiliate_referral_id", result.referralId);
-          localStorage.setItem("affiliate_code", code);
+          adapter.set("affiliate_referral_id", result.referralId);
+          adapter.set("affiliate_code", code);
         }
 
         setTracked(true);
@@ -349,26 +448,23 @@ export function useTrackReferralOnLoad(
 }
 
 /**
- * Get stored referral info from localStorage.
+ * Get stored referral info.
+ * Reads from the configured storage (localStorage, cookie, or both).
  */
-export function useStoredReferral() {
+export function useStoredReferral(config?: AffiliateHooksConfig) {
+  const adapter = createStorageAdapter(config?.storage, config?.cookieOptions);
+
   const [referral, setReferral] = useState<{
     referralId: string | null;
     code: string | null;
-  }>(() => {
-    // Lazy initialization to avoid setState in useEffect
-    if (typeof window === "undefined") {
-      return { referralId: null, code: null };
-    }
-    return {
-      referralId: localStorage.getItem("affiliate_referral_id"),
-      code: localStorage.getItem("affiliate_code"),
-    };
-  });
+  }>(() => ({
+    referralId: adapter.get("affiliate_referral_id"),
+    code: adapter.get("affiliate_code"),
+  }));
 
   const clear = useCallback(() => {
-    localStorage.removeItem("affiliate_referral_id");
-    localStorage.removeItem("affiliate_code");
+    adapter.remove("affiliate_referral_id");
+    adapter.remove("affiliate_code");
     setReferral({ referralId: null, code: null });
   }, []);
 
