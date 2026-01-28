@@ -76,7 +76,7 @@ export function useAdminDashboardContext() {
   const context = React.useContext(AdminDashboardContext);
   if (!context) {
     throw new Error(
-      "useAdminDashboardContext must be used within an AdminDashboardProvider"
+      "useAdminDashboardContext must be used within an AdminDashboardProvider",
     );
   }
   return context;
@@ -109,7 +109,7 @@ export function AdminDashboardProvider({
 }: AdminDashboardProviderProps) {
   const pendingApprovals = React.useMemo(
     () => affiliates.filter((a) => a.status === "pending"),
-    [affiliates]
+    [affiliates],
   );
 
   const value = React.useMemo(
@@ -132,7 +132,7 @@ export function AdminDashboardProvider({
       onApprove,
       onReject,
       onSuspend,
-    ]
+    ],
   );
 
   return (
@@ -453,7 +453,7 @@ export function TopAffiliatesLeaderboard({
     conversionRate:
       a.stats.totalClicks > 0
         ? `${((a.stats.totalConversions / a.stats.totalClicks) * 100).toFixed(
-            1
+            1,
           )}%`
         : "0%",
   }));
@@ -543,7 +543,7 @@ export function CampaignStats({ children }: CampaignStatsProps) {
 // =============================================================================
 
 function getAffiliateStatusColor(
-  status: string
+  status: string,
 ): "yellow" | "green" | "red" | "gray" {
   switch (status) {
     case "pending":

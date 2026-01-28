@@ -95,15 +95,25 @@ describe("landing pages", () => {
     });
 
     // Initial views should be 0
-    const pages = await t.query(api.landingPages.listByCampaign, { campaignId });
+    const pages = await t.query(api.landingPages.listByCampaign, {
+      campaignId,
+    });
     expect(pages[0].totalViews).toBe(0);
 
     // Increment views
-    await t.mutation(api.landingPages.incrementViews, { landingPageId: pageId });
-    await t.mutation(api.landingPages.incrementViews, { landingPageId: pageId });
-    await t.mutation(api.landingPages.incrementViews, { landingPageId: pageId });
+    await t.mutation(api.landingPages.incrementViews, {
+      landingPageId: pageId,
+    });
+    await t.mutation(api.landingPages.incrementViews, {
+      landingPageId: pageId,
+    });
+    await t.mutation(api.landingPages.incrementViews, {
+      landingPageId: pageId,
+    });
 
-    const pagesAfter = await t.query(api.landingPages.listByCampaign, { campaignId });
+    const pagesAfter = await t.query(api.landingPages.listByCampaign, {
+      campaignId,
+    });
     expect(pagesAfter[0].totalViews).toBe(3);
   });
 
@@ -122,7 +132,7 @@ describe("landing pages", () => {
         campaignId,
         mediaPreset: "youtube",
         hero: { headline: "Duplicate" },
-      })
+      }),
     ).rejects.toThrow("already exists");
   });
 
@@ -171,14 +181,18 @@ describe("landing pages", () => {
     });
 
     // Verify exists
-    const pages = await t.query(api.landingPages.listByCampaign, { campaignId });
+    const pages = await t.query(api.landingPages.listByCampaign, {
+      campaignId,
+    });
     expect(pages).toHaveLength(1);
 
     // Delete
     await t.mutation(api.landingPages.remove, { landingPageId: pageId });
 
     // Verify gone
-    const pagesAfter = await t.query(api.landingPages.listByCampaign, { campaignId });
+    const pagesAfter = await t.query(api.landingPages.listByCampaign, {
+      campaignId,
+    });
     expect(pagesAfter).toHaveLength(0);
   });
 
@@ -235,7 +249,9 @@ describe("landing pages", () => {
     });
 
     // listByCampaign returns all pages regardless of status
-    const pages = await t.query(api.landingPages.listByCampaign, { campaignId });
+    const pages = await t.query(api.landingPages.listByCampaign, {
+      campaignId,
+    });
     expect(pages).toHaveLength(3);
   });
 });

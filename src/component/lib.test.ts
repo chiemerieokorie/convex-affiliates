@@ -321,10 +321,13 @@ describe("affiliate component", () => {
 
       // Create a referral that points to the affiliate themselves (simulate bad state)
       // First attribute a signup with a different user, then try to link stripe customer
-      const signupResult = await t.mutation(api.referrals.attributeSignupByCode, {
-        userId: "different-user",
-        affiliateCode: affiliateResult.code,
-      });
+      const signupResult = await t.mutation(
+        api.referrals.attributeSignupByCode,
+        {
+          userId: "different-user",
+          affiliateCode: affiliateResult.code,
+        },
+      );
       expect(signupResult.success).toBe(true);
 
       // Now try to link stripe customer with affiliate's own userId via affiliateCode path
@@ -451,10 +454,13 @@ describe("affiliate component", () => {
       });
 
       // Create a referral for a DIFFERENT user (legitimate referral)
-      const signupResult = await t.mutation(api.referrals.attributeSignupByCode, {
-        userId: "referred-customer",
-        affiliateCode: affiliateResult.code,
-      });
+      const signupResult = await t.mutation(
+        api.referrals.attributeSignupByCode,
+        {
+          userId: "referred-customer",
+          affiliateCode: affiliateResult.code,
+        },
+      );
       expect(signupResult.success).toBe(true);
 
       // Link stripe customer
@@ -712,9 +718,12 @@ describe("affiliate component", () => {
       expect(clickResult).toBeDefined();
 
       // Verify discount IS available before expiry
-      const discountBeforeExpiry = await t.query(api.referrals.getRefereeDiscount, {
-        referralId: clickResult!.referralId,
-      });
+      const discountBeforeExpiry = await t.query(
+        api.referrals.getRefereeDiscount,
+        {
+          referralId: clickResult!.referralId,
+        },
+      );
       expect(discountBeforeExpiry).toBeDefined();
       expect(discountBeforeExpiry?.discountValue).toBe(10);
 
@@ -722,9 +731,12 @@ describe("affiliate component", () => {
       vi.setSystemTime(startTime + 8 * 24 * 60 * 60 * 1000);
 
       // Now the discount should NOT be available (referral expired)
-      const discountAfterExpiry = await t.query(api.referrals.getRefereeDiscount, {
-        referralId: clickResult!.referralId,
-      });
+      const discountAfterExpiry = await t.query(
+        api.referrals.getRefereeDiscount,
+        {
+          referralId: clickResult!.referralId,
+        },
+      );
       expect(discountAfterExpiry).toBeNull();
     });
 
@@ -812,9 +824,12 @@ describe("affiliate component", () => {
       expect(affiliate?.recruitmentCode).toBeDefined();
 
       // Track recruitment click
-      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: affiliate!.recruitmentCode!,
-      });
+      const clickResult = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: affiliate!.recruitmentCode!,
+        },
+      );
 
       expect(clickResult.success).toBe(true);
       if (clickResult.success) {
@@ -852,9 +867,12 @@ describe("affiliate component", () => {
       });
 
       // Track recruitment click - should fail
-      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: affiliate!.recruitmentCode!,
-      });
+      const clickResult = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: affiliate!.recruitmentCode!,
+        },
+      );
 
       expect(clickResult.success).toBe(false);
       if (!clickResult.success) {
@@ -894,9 +912,12 @@ describe("affiliate component", () => {
       });
 
       // Track recruitment click
-      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: recruiter!.recruitmentCode!,
-      });
+      const clickResult = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: recruiter!.recruitmentCode!,
+        },
+      );
       expect(clickResult.success).toBe(true);
 
       // Register new affiliate with recruitment referral
@@ -904,14 +925,18 @@ describe("affiliate component", () => {
         userId: "recruited-user",
         email: "recruited@example.com",
         campaignId,
-        recruitmentReferralId: clickResult.success ? clickResult.referralId : undefined,
+        recruitmentReferralId: clickResult.success
+          ? clickResult.referralId
+          : undefined,
       });
 
       // Check the recruited affiliate is linked to recruiter
       const recruited = await t.query(api.affiliates.getById, {
         affiliateId: recruitedResult.affiliateId,
       });
-      expect(recruited?.referredByAffiliateId).toBe(recruiterResult.affiliateId);
+      expect(recruited?.referredByAffiliateId).toBe(
+        recruiterResult.affiliateId,
+      );
 
       // Check recruiter's stats updated
       const updatedRecruiter = await t.query(api.affiliates.getById, {
@@ -952,16 +977,21 @@ describe("affiliate component", () => {
       });
 
       // Track recruitment click
-      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: recruiter!.recruitmentCode!,
-      });
+      const clickResult = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: recruiter!.recruitmentCode!,
+        },
+      );
 
       // Register new affiliate with recruitment referral
       const recruitedResult = await t.mutation(api.affiliates.register, {
         userId: "recruited-user",
         email: "recruited@example.com",
         campaignId,
-        recruitmentReferralId: clickResult.success ? clickResult.referralId : undefined,
+        recruitmentReferralId: clickResult.success
+          ? clickResult.referralId
+          : undefined,
       });
 
       // Before approval, activeRecruits should be 0
@@ -1014,15 +1044,20 @@ describe("affiliate component", () => {
       });
 
       // Track recruitment click and register sub-affiliate
-      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: recruiter!.recruitmentCode!,
-      });
+      const clickResult = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: recruiter!.recruitmentCode!,
+        },
+      );
 
       const recruitedResult = await t.mutation(api.affiliates.register, {
         userId: "recruited-user",
         email: "recruited@example.com",
         campaignId,
-        recruitmentReferralId: clickResult.success ? clickResult.referralId : undefined,
+        recruitmentReferralId: clickResult.success
+          ? clickResult.referralId
+          : undefined,
       });
 
       await t.mutation(api.affiliates.approve, {
@@ -1030,10 +1065,13 @@ describe("affiliate component", () => {
       });
 
       // Sub-affiliate creates a referral and gets a conversion
-      const signupResult = await t.mutation(api.referrals.attributeSignupByCode, {
-        userId: "customer-user",
-        affiliateCode: recruitedResult.code,
-      });
+      const signupResult = await t.mutation(
+        api.referrals.attributeSignupByCode,
+        {
+          userId: "customer-user",
+          affiliateCode: recruitedResult.code,
+        },
+      );
       expect(signupResult.success).toBe(true);
 
       await t.mutation(api.referrals.linkStripeCustomer, {
@@ -1056,8 +1094,12 @@ describe("affiliate component", () => {
       const updatedRecruiter = await t.query(api.affiliates.getById, {
         affiliateId: recruiterResult.affiliateId,
       });
-      expect(updatedRecruiter?.subAffiliateStats?.pendingSubCommissionsCents).toBe(200);
-      expect(updatedRecruiter?.subAffiliateStats?.totalSubCommissionsCents).toBe(200);
+      expect(
+        updatedRecruiter?.subAffiliateStats?.pendingSubCommissionsCents,
+      ).toBe(200);
+      expect(
+        updatedRecruiter?.subAffiliateStats?.totalSubCommissionsCents,
+      ).toBe(200);
     });
 
     test("sub-affiliate commission reversed when source commission reversed", async () => {
@@ -1091,15 +1133,20 @@ describe("affiliate component", () => {
         code: recruiterResult.code,
       });
 
-      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: recruiter!.recruitmentCode!,
-      });
+      const clickResult = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: recruiter!.recruitmentCode!,
+        },
+      );
 
       const recruitedResult = await t.mutation(api.affiliates.register, {
         userId: "recruited-user",
         email: "recruited@example.com",
         campaignId,
-        recruitmentReferralId: clickResult.success ? clickResult.referralId : undefined,
+        recruitmentReferralId: clickResult.success
+          ? clickResult.referralId
+          : undefined,
       });
 
       await t.mutation(api.affiliates.approve, {
@@ -1129,7 +1176,9 @@ describe("affiliate component", () => {
       let updatedRecruiter = await t.query(api.affiliates.getById, {
         affiliateId: recruiterResult.affiliateId,
       });
-      expect(updatedRecruiter?.subAffiliateStats?.pendingSubCommissionsCents).toBe(200);
+      expect(
+        updatedRecruiter?.subAffiliateStats?.pendingSubCommissionsCents,
+      ).toBe(200);
 
       // Now reverse the commission (refund)
       await t.mutation(api.commissions.reverseByCharge, {
@@ -1141,7 +1190,9 @@ describe("affiliate component", () => {
       updatedRecruiter = await t.query(api.affiliates.getById, {
         affiliateId: recruiterResult.affiliateId,
       });
-      expect(updatedRecruiter?.subAffiliateStats?.pendingSubCommissionsCents).toBe(0);
+      expect(
+        updatedRecruiter?.subAffiliateStats?.pendingSubCommissionsCents,
+      ).toBe(0);
     });
 
     test("self-recruitment is blocked", async () => {
@@ -1176,9 +1227,12 @@ describe("affiliate component", () => {
       });
 
       // Track recruitment click
-      const clickResult = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: affiliate!.recruitmentCode!,
-      });
+      const clickResult = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: affiliate!.recruitmentCode!,
+        },
+      );
 
       // Try to register with own recruitment referral (self-recruitment)
       await expect(
@@ -1186,8 +1240,10 @@ describe("affiliate component", () => {
           userId: "recruiter-user", // Same user trying to recruit themselves
           email: "recruiter@example.com",
           campaignId,
-          recruitmentReferralId: clickResult.success ? clickResult.referralId : undefined,
-        })
+          recruitmentReferralId: clickResult.success
+            ? clickResult.referralId
+            : undefined,
+        }),
       ).rejects.toThrow(); // Should throw "User is already an affiliate" or "Cannot recruit yourself"
     });
 
@@ -1223,9 +1279,12 @@ describe("affiliate component", () => {
       });
 
       // Track recruitment and register two sub-affiliates
-      const click1 = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: recruiter!.recruitmentCode!,
-      });
+      const click1 = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: recruiter!.recruitmentCode!,
+        },
+      );
 
       await t.mutation(api.affiliates.register, {
         userId: "sub-user-1",
@@ -1234,9 +1293,12 @@ describe("affiliate component", () => {
         recruitmentReferralId: click1.success ? click1.referralId : undefined,
       });
 
-      const click2 = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: recruiter!.recruitmentCode!,
-      });
+      const click2 = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: recruiter!.recruitmentCode!,
+        },
+      );
 
       await t.mutation(api.affiliates.register, {
         userId: "sub-user-2",
@@ -1246,9 +1308,12 @@ describe("affiliate component", () => {
       });
 
       // List sub-affiliates
-      const subAffiliates = await t.query(api.affiliateRecruitment.listSubAffiliates, {
-        parentAffiliateId: recruiterResult.affiliateId,
-      });
+      const subAffiliates = await t.query(
+        api.affiliateRecruitment.listSubAffiliates,
+        {
+          parentAffiliateId: recruiterResult.affiliateId,
+        },
+      );
 
       expect(subAffiliates).toHaveLength(2);
     });
@@ -1286,9 +1351,12 @@ describe("affiliate component", () => {
       });
 
       // First recruitment should work
-      const click1 = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: recruiter!.recruitmentCode!,
-      });
+      const click1 = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: recruiter!.recruitmentCode!,
+        },
+      );
       expect(click1.success).toBe(true);
 
       // Register first sub-affiliate (updates totalRecruits to 1)
@@ -1300,9 +1368,12 @@ describe("affiliate component", () => {
       });
 
       // Second recruitment click should be blocked (max reached)
-      const click2 = await t.mutation(api.affiliateRecruitment.trackRecruitmentClick, {
-        recruitmentCode: recruiter!.recruitmentCode!,
-      });
+      const click2 = await t.mutation(
+        api.affiliateRecruitment.trackRecruitmentClick,
+        {
+          recruitmentCode: recruiter!.recruitmentCode!,
+        },
+      );
       expect(click2.success).toBe(false);
       if (!click2.success) {
         expect(click2.error).toBe("max_sub_affiliates_reached");

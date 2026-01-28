@@ -203,19 +203,21 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
      * Get all data needed for the affiliate portal.
      */
     useAffiliatePortal: () => {
-      return useQuery(affiliateApi.getPortalData) as AffiliatePortalData | undefined;
+      return useQuery(affiliateApi.getPortalData) as
+        | AffiliatePortalData
+        | undefined;
     },
 
     /**
      * Get paginated commission history.
      */
     useAffiliateCommissions: (
-      status?: "pending" | "approved" | "paid" | "reversed" | "processing"
+      status?: "pending" | "approved" | "paid" | "reversed" | "processing",
     ) => {
       return usePaginatedQuery(
         affiliateApi.listCommissions,
         { status },
-        { initialNumItems: 10 }
+        { initialNumItems: 10 },
       );
     },
 
@@ -223,12 +225,12 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
      * Get paginated payout history.
      */
     useAffiliatePayouts: (
-      status?: "pending" | "processing" | "completed" | "failed" | "cancelled"
+      status?: "pending" | "processing" | "completed" | "failed" | "cancelled",
     ) => {
       return usePaginatedQuery(
         affiliateApi.listPayouts,
         { status },
-        { initialNumItems: 10 }
+        { initialNumItems: 10 },
       );
     },
 
@@ -248,7 +250,7 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
         }) => {
           return await register(params);
         },
-        [register]
+        [register],
       );
     },
 
@@ -268,7 +270,7 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
         }) => {
           return await trackClick(params);
         },
-        [trackClick]
+        [trackClick],
       );
     },
 
@@ -276,7 +278,9 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
      * Get admin dashboard data.
      */
     useAdminDashboard: () => {
-      return useQuery(affiliateApi.adminDashboard) as AdminDashboardData | undefined;
+      return useQuery(affiliateApi.adminDashboard) as
+        | AdminDashboardData
+        | undefined;
     },
 
     /**
@@ -310,7 +314,7 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
         async (affiliateId: string) => {
           return await approve({ affiliateId: affiliateId as any });
         },
-        [approve]
+        [approve],
       );
     },
 
@@ -324,7 +328,7 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
         async (affiliateId: string, reason?: string) => {
           return await reject({ affiliateId: affiliateId as any, reason });
         },
-        [reject]
+        [reject],
       );
     },
 
@@ -345,7 +349,13 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
           trackView({ slug: campaignSlug, mediaPreset }).catch(() => {});
           setViewTracked(true);
         }
-      }, [data?.landingPage, viewTracked, trackView, campaignSlug, mediaPreset]);
+      }, [
+        data?.landingPage,
+        viewTracked,
+        trackView,
+        campaignSlug,
+        mediaPreset,
+      ]);
 
       return data;
     },
@@ -356,7 +366,7 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
     useAdminLandingPages: (campaignId?: string) => {
       return useQuery(
         affiliateApi.adminListLandingPages,
-        campaignId ? { campaignId: campaignId as any } : "skip"
+        campaignId ? { campaignId: campaignId as any } : "skip",
       );
     },
   };
@@ -377,7 +387,7 @@ export function useTrackReferralOnLoad(
     referrer?: string;
     userAgent?: string;
     subId?: string;
-  }) => Promise<{ referralId: string } | null>
+  }) => Promise<{ referralId: string } | null>,
 ) {
   const [tracked, setTracked] = useState(false);
   const [referralId, setReferralId] = useState<string | null>(null);
@@ -460,7 +470,7 @@ export function useAffiliateLinkGenerator(baseUrl: string, code: string) {
       }
       return url.toString();
     },
-    [baseUrl, code]
+    [baseUrl, code],
   );
 
   return { generate };
@@ -508,7 +518,14 @@ export function useLandingPageParams() {
     media: string | null;
   }>(() => {
     if (typeof window === "undefined") {
-      return { name: null, email: null, company: null, ref: null, sub: null, media: null };
+      return {
+        name: null,
+        email: null,
+        company: null,
+        ref: null,
+        sub: null,
+        media: null,
+      };
     }
     const sp = new URLSearchParams(window.location.search);
     return {
@@ -547,7 +564,7 @@ export function useAutoRegisterAffiliate(
     displayName?: string;
     customCode?: string;
   }) => Promise<{ affiliateId: string; code: string }>,
-  options?: { autoRegister?: boolean }
+  options?: { autoRegister?: boolean },
 ) {
   const params = useLandingPageParams();
   const [registered, setRegistered] = useState(false);
@@ -598,7 +615,7 @@ export function useAutoRegisterAffiliate(
 export function formatCents(
   cents: number,
   currency = "USD",
-  locale = "en-US"
+  locale = "en-US",
 ): string {
   return new Intl.NumberFormat(locale, {
     style: "currency",
@@ -618,7 +635,7 @@ export function formatPercentage(value: number, decimals = 1): string {
  */
 export function formatDate(
   timestamp: number,
-  options?: Intl.DateTimeFormatOptions
+  options?: Intl.DateTimeFormatOptions,
 ): string {
   return new Date(timestamp).toLocaleDateString(undefined, {
     year: "numeric",

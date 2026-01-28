@@ -52,7 +52,7 @@ export const getBySlugAndPreset = query({
       const page = await ctx.db
         .query("campaignLandingPages")
         .withIndex("by_campaignId_mediaPreset", (q) =>
-          q.eq("campaignId", campaign._id).eq("mediaPreset", args.mediaPreset!)
+          q.eq("campaignId", campaign._id).eq("mediaPreset", args.mediaPreset!),
         )
         .first();
 
@@ -115,12 +115,12 @@ export const create = mutation({
     const existing = await ctx.db
       .query("campaignLandingPages")
       .withIndex("by_campaignId_mediaPreset", (q) =>
-        q.eq("campaignId", args.campaignId).eq("mediaPreset", args.mediaPreset)
+        q.eq("campaignId", args.campaignId).eq("mediaPreset", args.mediaPreset),
       )
       .first();
     if (existing) {
       throw new Error(
-        `Landing page with preset "${args.mediaPreset}" already exists for this campaign`
+        `Landing page with preset "${args.mediaPreset}" already exists for this campaign`,
       );
     }
 
@@ -169,12 +169,14 @@ export const update = mutation({
       const existing = await ctx.db
         .query("campaignLandingPages")
         .withIndex("by_campaignId_mediaPreset", (q) =>
-          q.eq("campaignId", page.campaignId).eq("mediaPreset", args.mediaPreset!)
+          q
+            .eq("campaignId", page.campaignId)
+            .eq("mediaPreset", args.mediaPreset!),
         )
         .first();
       if (existing) {
         throw new Error(
-          `Landing page with preset "${args.mediaPreset}" already exists for this campaign`
+          `Landing page with preset "${args.mediaPreset}" already exists for this campaign`,
         );
       }
     }
@@ -182,7 +184,8 @@ export const update = mutation({
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
     if (args.hero !== undefined) updates.hero = args.hero;
     if (args.benefits !== undefined) updates.benefits = args.benefits;
-    if (args.testimonials !== undefined) updates.testimonials = args.testimonials;
+    if (args.testimonials !== undefined)
+      updates.testimonials = args.testimonials;
     if (args.socialProofText !== undefined)
       updates.socialProofText = args.socialProofText;
     if (args.commissionPreviewText !== undefined)
