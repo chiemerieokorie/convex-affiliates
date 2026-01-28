@@ -106,8 +106,8 @@ export default defineSchema({
       v.union(
         v.literal("pending"),
         v.literal("enabled"),
-        v.literal("disabled")
-      )
+        v.literal("disabled"),
+      ),
     ),
     payoutEmail: v.optional(v.string()),
 
@@ -311,7 +311,10 @@ export default defineSchema({
   })
     .index("by_referralId", ["referralId"])
     .index("by_recruitingAffiliateId", ["recruitingAffiliateId"])
-    .index("by_recruitingAffiliateId_status", ["recruitingAffiliateId", "status"])
+    .index("by_recruitingAffiliateId_status", [
+      "recruitingAffiliateId",
+      "status",
+    ])
     .index("by_recruitedAffiliateId", ["recruitedAffiliateId"])
     .index("by_expiresAt", ["expiresAt"]),
 

@@ -29,7 +29,7 @@ export const listByAffiliate = query({
       return await ctx.db
         .query("commissions")
         .withIndex("by_affiliate_status", (q) =>
-          q.eq("affiliateId", args.affiliateId).eq("status", status)
+          q.eq("affiliateId", args.affiliateId).eq("status", status),
         )
         .order("desc")
         .paginate(args.paginationOpts);
@@ -58,21 +58,24 @@ export const getPendingTotal = query({
     const pendingCommissions = await ctx.db
       .query("commissions")
       .withIndex("by_affiliate_status", (q) =>
-        q.eq("affiliateId", args.affiliateId).eq("status", "pending")
+        q.eq("affiliateId", args.affiliateId).eq("status", "pending"),
       )
       .collect();
 
     const approvedCommissions = await ctx.db
       .query("commissions")
       .withIndex("by_affiliate_status", (q) =>
-        q.eq("affiliateId", args.affiliateId).eq("status", "approved")
+        q.eq("affiliateId", args.affiliateId).eq("status", "approved"),
       )
       .collect();
 
     const allPending = [...pendingCommissions, ...approvedCommissions];
 
     return {
-      totalCents: allPending.reduce((sum, c) => sum + c.commissionAmountCents, 0),
+      totalCents: allPending.reduce(
+        (sum, c) => sum + c.commissionAmountCents,
+        0,
+      ),
       count: allPending.length,
     };
   },
@@ -116,7 +119,7 @@ export const calculateCommission = query({
       const amount = calculateCommissionAmount(
         args.saleAmountCents,
         affiliate.customCommissionType,
-        affiliate.customCommissionValue
+        affiliate.customCommissionValue,
       );
       return {
         commissionAmountCents: amount,
@@ -133,7 +136,7 @@ export const calculateCommission = query({
         .withIndex("by_campaign_product", (q) =>
           q
             .eq("campaignId", affiliate.campaignId)
-            .eq("stripeProductId", stripeProductId)
+            .eq("stripeProductId", stripeProductId),
         )
         .first();
 
@@ -141,7 +144,7 @@ export const calculateCommission = query({
         const amount = calculateCommissionAmount(
           args.saleAmountCents,
           productCommission.commissionType,
-          productCommission.commissionValue
+          productCommission.commissionValue,
         );
         return {
           commissionAmountCents: amount,
@@ -161,14 +164,14 @@ export const calculateCommission = query({
       // Sort by minReferrals descending to find the highest applicable tier
       const sortedTiers = tiers.sort((a, b) => b.minReferrals - a.minReferrals);
       const applicableTier = sortedTiers.find(
-        (t) => affiliate.stats.totalConversions >= t.minReferrals
+        (t) => affiliate.stats.totalConversions >= t.minReferrals,
       );
 
       if (applicableTier) {
         const amount = calculateCommissionAmount(
           args.saleAmountCents,
           applicableTier.commissionType,
-          applicableTier.commissionValue
+          applicableTier.commissionValue,
         );
         return {
           commissionAmountCents: amount,
@@ -182,7 +185,7 @@ export const calculateCommission = query({
     const amount = calculateCommissionAmount(
       args.saleAmountCents,
       campaign.commissionType,
-      campaign.commissionValue
+      campaign.commissionValue,
     );
     return {
       commissionAmountCents: amount,
@@ -204,7 +207,7 @@ export const getDueForPayout = query({
       _id: v.id("commissions"),
       commissionAmountCents: v.number(),
       currency: v.string(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -213,7 +216,7 @@ export const getDueForPayout = query({
     const approvedCommissions = await ctx.db
       .query("commissions")
       .withIndex("by_affiliate_status", (q) =>
-        q.eq("affiliateId", args.affiliateId).eq("status", "approved")
+        q.eq("affiliateId", args.affiliateId).eq("status", "approved"),
       )
       .filter((q) => q.lte(q.field("dueAt"), now))
       .collect();
@@ -319,7 +322,9 @@ export const approve = mutation({
     }
 
     if (commission.status !== "pending") {
-      throw new Error(`Cannot approve commission with status: ${commission.status}`);
+      throw new Error(
+        `Cannot approve commission with status: ${commission.status}`,
+      );
     }
 
     await ctx.db.patch(args.commissionId, {
@@ -391,7 +396,8 @@ export const reverse = mutation({
     }
 
     const now = Date.now();
-    const wasPending = commission.status === "pending" || commission.status === "approved";
+    const wasPending =
+      commission.status === "pending" || commission.status === "approved";
 
     await ctx.db.patch(args.commissionId, {
       status: "reversed",
@@ -442,13 +448,13 @@ export const getByStripeInvoice = query({
       affiliateId: v.id("affiliates"),
       status: commissionStatusValidator,
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     const commission = await ctx.db
       .query("commissions")
       .withIndex("by_stripeInvoice", (q) =>
-        q.eq("stripeInvoiceId", args.stripeInvoiceId)
+        q.eq("stripeInvoiceId", args.stripeInvoiceId),
       )
       .first();
 
@@ -475,13 +481,13 @@ export const getByStripeCharge = query({
       affiliateId: v.id("affiliates"),
       status: commissionStatusValidator,
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     const commission = await ctx.db
       .query("commissions")
       .withIndex("by_stripeCharge", (q) =>
-        q.eq("stripeChargeId", args.stripeChargeId)
+        q.eq("stripeChargeId", args.stripeChargeId),
       )
       .first();
 
@@ -519,7 +525,7 @@ export const createFromInvoice = mutation({
       affiliateUserId: v.string(),
       commissionAmountCents: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     // Skip zero-amount invoices
@@ -533,7 +539,7 @@ export const createFromInvoice = mutation({
     const referral = await ctx.db
       .query("referrals")
       .withIndex("by_stripeCustomer", (q) =>
-        q.eq("stripeCustomerId", args.stripeCustomerId)
+        q.eq("stripeCustomerId", args.stripeCustomerId),
       )
       .first();
 
@@ -564,7 +570,9 @@ export const createFromInvoice = mutation({
     // Check for existing commission for this invoice (deduplication)
     const existingCommission = await ctx.db
       .query("commissions")
-      .withIndex("by_stripeInvoice", (q) => q.eq("stripeInvoiceId", args.stripeInvoiceId))
+      .withIndex("by_stripeInvoice", (q) =>
+        q.eq("stripeInvoiceId", args.stripeInvoiceId),
+      )
       .first();
 
     if (existingCommission) {
@@ -591,7 +599,7 @@ export const createFromInvoice = mutation({
       const existingForSub = await ctx.db
         .query("commissions")
         .filter((q) =>
-          q.eq(q.field("stripeSubscriptionId"), args.stripeSubscriptionId)
+          q.eq(q.field("stripeSubscriptionId"), args.stripeSubscriptionId),
         )
         .collect();
       paymentNumber = existingForSub.length + 1;
@@ -607,7 +615,8 @@ export const createFromInvoice = mutation({
         if (firstCommission) {
           const maxMonths = campaign.commissionDurationValue ?? 12;
           const monthsElapsed = Math.floor(
-            (Date.now() - firstCommission.createdAt) / (30 * 24 * 60 * 60 * 1000)
+            (Date.now() - firstCommission.createdAt) /
+              (30 * 24 * 60 * 60 * 1000),
           );
           if (monthsElapsed >= maxMonths) {
             return null; // Exceeded max months
@@ -636,7 +645,10 @@ export const createFromInvoice = mutation({
     let commissionRate: number = campaign.commissionValue;
 
     // Priority 1: Affiliate custom rate
-    if (affiliate.customCommissionType && affiliate.customCommissionValue !== undefined) {
+    if (
+      affiliate.customCommissionType &&
+      affiliate.customCommissionValue !== undefined
+    ) {
       commissionType = affiliate.customCommissionType;
       commissionRate = affiliate.customCommissionValue;
     } else if (args.stripeProductId) {
@@ -644,7 +656,9 @@ export const createFromInvoice = mutation({
       const productCommission = await ctx.db
         .query("productCommissions")
         .withIndex("by_campaign_product", (q) =>
-          q.eq("campaignId", affiliate.campaignId).eq("stripeProductId", args.stripeProductId!)
+          q
+            .eq("campaignId", affiliate.campaignId)
+            .eq("stripeProductId", args.stripeProductId!),
         )
         .first();
 
@@ -655,13 +669,17 @@ export const createFromInvoice = mutation({
         // Priority 3: Check for tiered commission based on affiliate performance
         const tiers = await ctx.db
           .query("commissionTiers")
-          .withIndex("by_campaign", (q) => q.eq("campaignId", affiliate.campaignId))
+          .withIndex("by_campaign", (q) =>
+            q.eq("campaignId", affiliate.campaignId),
+          )
           .collect();
 
         if (tiers.length > 0) {
-          const sortedTiers = tiers.sort((a, b) => b.minReferrals - a.minReferrals);
+          const sortedTiers = tiers.sort(
+            (a, b) => b.minReferrals - a.minReferrals,
+          );
           const applicableTier = sortedTiers.find(
-            (t) => affiliate.stats.totalConversions >= t.minReferrals
+            (t) => affiliate.stats.totalConversions >= t.minReferrals,
           );
           if (applicableTier) {
             commissionType = applicableTier.commissionType;
@@ -675,7 +693,7 @@ export const createFromInvoice = mutation({
     const commissionAmountCents = calculateCommissionAmount(
       args.amountPaidCents,
       commissionType,
-      commissionRate
+      commissionRate,
     );
 
     const now = Date.now();
@@ -705,12 +723,16 @@ export const createFromInvoice = mutation({
     await ctx.db.patch(affiliate._id, {
       stats: {
         ...affiliate.stats,
-        totalRevenueCents: affiliate.stats.totalRevenueCents + args.amountPaidCents,
-        totalCommissionsCents: affiliate.stats.totalCommissionsCents + commissionAmountCents,
-        pendingCommissionsCents: affiliate.stats.pendingCommissionsCents + commissionAmountCents,
-        totalConversions: referral.status !== "converted"
-          ? affiliate.stats.totalConversions + 1
-          : affiliate.stats.totalConversions,
+        totalRevenueCents:
+          affiliate.stats.totalRevenueCents + args.amountPaidCents,
+        totalCommissionsCents:
+          affiliate.stats.totalCommissionsCents + commissionAmountCents,
+        pendingCommissionsCents:
+          affiliate.stats.pendingCommissionsCents + commissionAmountCents,
+        totalConversions:
+          referral.status !== "converted"
+            ? affiliate.stats.totalConversions + 1
+            : affiliate.stats.totalConversions,
       },
       updatedAt: now,
     });
@@ -736,12 +758,16 @@ export const createFromInvoice = mutation({
     });
 
     // Create sub-affiliate commission if this affiliate was recruited
-    if (affiliate.referredByAffiliateId && campaign.affiliateRecruitmentEnabled && campaign.subAffiliateCommissionPercent) {
+    if (
+      affiliate.referredByAffiliateId &&
+      campaign.affiliateRecruitmentEnabled &&
+      campaign.subAffiliateCommissionPercent
+    ) {
       const parentAffiliate = await ctx.db.get(affiliate.referredByAffiliateId);
       if (parentAffiliate && parentAffiliate.status === "approved") {
         const subCommissionPercent = campaign.subAffiliateCommissionPercent;
         const subCommissionAmountCents = Math.round(
-          (commissionAmountCents * subCommissionPercent) / 100
+          (commissionAmountCents * subCommissionPercent) / 100,
         );
 
         if (subCommissionAmountCents > 0) {
@@ -760,12 +786,15 @@ export const createFromInvoice = mutation({
           });
 
           // Update parent's sub-affiliate stats
-          const subStats = parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
+          const subStats =
+            parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
           await ctx.db.patch(parentAffiliate._id, {
             subAffiliateStats: {
               ...subStats,
-              totalSubCommissionsCents: subStats.totalSubCommissionsCents + subCommissionAmountCents,
-              pendingSubCommissionsCents: subStats.pendingSubCommissionsCents + subCommissionAmountCents,
+              totalSubCommissionsCents:
+                subStats.totalSubCommissionsCents + subCommissionAmountCents,
+              pendingSubCommissionsCents:
+                subStats.pendingSubCommissionsCents + subCommissionAmountCents,
             },
             updatedAt: now,
           });
@@ -801,13 +830,15 @@ export const reverseByCharge = mutation({
       affiliateCode: v.optional(v.string()),
       commissionAmountCents: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     // Find commission by charge ID
     const commission = await ctx.db
       .query("commissions")
-      .withIndex("by_stripeCharge", (q) => q.eq("stripeChargeId", args.stripeChargeId))
+      .withIndex("by_stripeCharge", (q) =>
+        q.eq("stripeChargeId", args.stripeChargeId),
+      )
       .first();
 
     if (!commission) {
@@ -819,7 +850,8 @@ export const reverseByCharge = mutation({
     }
 
     const now = Date.now();
-    const wasPending = commission.status === "pending" || commission.status === "approved";
+    const wasPending =
+      commission.status === "pending" || commission.status === "approved";
     const reason = args.reason ?? "Charge refunded";
 
     // Reverse the commission directly
@@ -835,15 +867,18 @@ export const reverseByCharge = mutation({
       const updates = {
         ...affiliate.stats,
         totalCommissionsCents:
-          affiliate.stats.totalCommissionsCents - commission.commissionAmountCents,
+          affiliate.stats.totalCommissionsCents -
+          commission.commissionAmountCents,
       };
 
       if (wasPending) {
         updates.pendingCommissionsCents =
-          affiliate.stats.pendingCommissionsCents - commission.commissionAmountCents;
+          affiliate.stats.pendingCommissionsCents -
+          commission.commissionAmountCents;
       } else if (commission.status === "paid") {
         updates.paidCommissionsCents =
-          affiliate.stats.paidCommissionsCents - commission.commissionAmountCents;
+          affiliate.stats.paidCommissionsCents -
+          commission.commissionAmountCents;
       }
 
       await ctx.db.patch(affiliate._id, {
@@ -867,7 +902,7 @@ export const reverseByCharge = mutation({
     const subCommission = await ctx.db
       .query("subAffiliateCommissions")
       .withIndex("by_sourceCommission", (q) =>
-        q.eq("sourceCommissionId", commission._id)
+        q.eq("sourceCommissionId", commission._id),
       )
       .first();
 
@@ -882,14 +917,19 @@ export const reverseByCharge = mutation({
       // Update parent's sub-affiliate stats
       const parentAffiliate = await ctx.db.get(subCommission.parentAffiliateId);
       if (parentAffiliate) {
-        const subStats = parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
-        const subWasPending = subCommission.status === "pending" || subCommission.status === "approved";
+        const subStats =
+          parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
+        const subWasPending =
+          subCommission.status === "pending" ||
+          subCommission.status === "approved";
 
         const updates = { ...subStats };
         if (subWasPending) {
-          updates.pendingSubCommissionsCents -= subCommission.subCommissionAmountCents;
+          updates.pendingSubCommissionsCents -=
+            subCommission.subCommissionAmountCents;
         } else if (subCommission.status === "paid") {
-          updates.paidSubCommissionsCents -= subCommission.subCommissionAmountCents;
+          updates.paidSubCommissionsCents -=
+            subCommission.subCommissionAmountCents;
         }
 
         await ctx.db.patch(parentAffiliate._id, {

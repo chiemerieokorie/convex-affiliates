@@ -45,7 +45,7 @@ export const list = query({
       maxSubAffiliatesPerAffiliate: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     if (args.activeOnly) {
@@ -94,7 +94,7 @@ export const get = query({
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.campaignId);
@@ -137,7 +137,7 @@ export const getBySlug = query({
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db
@@ -181,7 +181,7 @@ export const getDefault = query({
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx) => {
     return await ctx.db
@@ -359,9 +359,11 @@ export const update = mutation({
     if (args.affiliateRecruitmentEnabled !== undefined)
       updates.affiliateRecruitmentEnabled = args.affiliateRecruitmentEnabled;
     if (args.subAffiliateCommissionPercent !== undefined)
-      updates.subAffiliateCommissionPercent = args.subAffiliateCommissionPercent;
+      updates.subAffiliateCommissionPercent =
+        args.subAffiliateCommissionPercent;
     if (args.recruitmentCookieDurationDays !== undefined)
-      updates.recruitmentCookieDurationDays = args.recruitmentCookieDurationDays;
+      updates.recruitmentCookieDurationDays =
+        args.recruitmentCookieDurationDays;
     if (args.maxSubAffiliatesPerAffiliate !== undefined)
       updates.maxSubAffiliatesPerAffiliate = args.maxSubAffiliatesPerAffiliate;
 

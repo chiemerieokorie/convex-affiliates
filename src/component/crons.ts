@@ -10,7 +10,7 @@ const crons = cronJobs();
 crons.daily(
   "expire referrals",
   { hourUTC: 2, minuteUTC: 0 },
-  api.referrals.expireReferrals
+  api.referrals.expireReferrals,
 );
 
 export default crons;

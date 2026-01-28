@@ -35,7 +35,7 @@ export const getRecruitmentReferralById = query({
       approvedAt: v.optional(v.number()),
       expiresAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db
@@ -60,13 +60,13 @@ export const getByRecruitmentCode = query({
       displayName: v.optional(v.string()),
       status: affiliateStatusValidator,
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     const affiliate = await ctx.db
       .query("affiliates")
       .withIndex("by_recruitmentCode", (q) =>
-        q.eq("recruitmentCode", args.recruitmentCode.toUpperCase())
+        q.eq("recruitmentCode", args.recruitmentCode.toUpperCase()),
       )
       .first();
 
@@ -99,7 +99,7 @@ export const listSubAffiliates = query({
       status: affiliateStatusValidator,
       stats: affiliateStatsValidator,
       createdAt: v.number(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 50;
@@ -107,7 +107,7 @@ export const listSubAffiliates = query({
     const subAffiliates = await ctx.db
       .query("affiliates")
       .withIndex("by_referredByAffiliateId", (q) =>
-        q.eq("referredByAffiliateId", args.parentAffiliateId)
+        q.eq("referredByAffiliateId", args.parentAffiliateId),
       )
       .take(limit);
 
@@ -161,15 +161,15 @@ export const listSubAffiliateCommissions = query({
       currency: v.string(),
       status: commissionStatusValidator,
       createdAt: v.number(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 50;
 
-    let commissionsQuery = ctx.db
+    const commissionsQuery = ctx.db
       .query("subAffiliateCommissions")
       .withIndex("by_parentAffiliate", (q) =>
-        q.eq("parentAffiliateId", args.parentAffiliateId)
+        q.eq("parentAffiliateId", args.parentAffiliateId),
       );
 
     const commissions = await commissionsQuery.take(limit);
@@ -213,14 +213,14 @@ export const trackRecruitmentClick = mutation({
     v.object({
       success: v.literal(false),
       error: v.string(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     // Find the recruiting affiliate
     const affiliate = await ctx.db
       .query("affiliates")
       .withIndex("by_recruitmentCode", (q) =>
-        q.eq("recruitmentCode", args.recruitmentCode.toUpperCase())
+        q.eq("recruitmentCode", args.recruitmentCode.toUpperCase()),
       )
       .first();
 
@@ -246,7 +246,8 @@ export const trackRecruitmentClick = mutation({
 
     // Check max sub-affiliates limit
     if (campaign.maxSubAffiliatesPerAffiliate) {
-      const subStats = affiliate.subAffiliateStats ?? initializeSubAffiliateStats();
+      const subStats =
+        affiliate.subAffiliateStats ?? initializeSubAffiliateStats();
       if (subStats.totalRecruits >= campaign.maxSubAffiliatesPerAffiliate) {
         return { success: false as const, error: "max_sub_affiliates_reached" };
       }
@@ -256,7 +257,10 @@ export const trackRecruitmentClick = mutation({
     const referralId = crypto.randomUUID();
 
     // Calculate expiration
-    const cookieDays = campaign.recruitmentCookieDurationDays ?? campaign.cookieDurationDays ?? 30;
+    const cookieDays =
+      campaign.recruitmentCookieDurationDays ??
+      campaign.cookieDurationDays ??
+      30;
     const expiresAt = Date.now() + cookieDays * 24 * 60 * 60 * 1000;
 
     // Create recruitment referral
@@ -290,7 +294,7 @@ export const createSubAffiliateCommission = mutation({
     v.object({
       success: v.literal(false),
       error: v.string(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     // Get the source commission
@@ -311,7 +315,9 @@ export const createSubAffiliateCommission = mutation({
     }
 
     // Get the parent affiliate
-    const parentAffiliate = await ctx.db.get(subAffiliate.referredByAffiliateId);
+    const parentAffiliate = await ctx.db.get(
+      subAffiliate.referredByAffiliateId,
+    );
     if (!parentAffiliate) {
       return { success: false as const, error: "parent_affiliate_not_found" };
     }
@@ -323,14 +329,20 @@ export const createSubAffiliateCommission = mutation({
     }
 
     // Check if sub-affiliate commission is enabled
-    if (!campaign.affiliateRecruitmentEnabled || !campaign.subAffiliateCommissionPercent) {
-      return { success: false as const, error: "sub_affiliate_commission_not_enabled" };
+    if (
+      !campaign.affiliateRecruitmentEnabled ||
+      !campaign.subAffiliateCommissionPercent
+    ) {
+      return {
+        success: false as const,
+        error: "sub_affiliate_commission_not_enabled",
+      };
     }
 
     // Calculate sub-affiliate commission
     const subCommissionPercent = campaign.subAffiliateCommissionPercent;
     const subCommissionAmountCents = Math.round(
-      (sourceCommission.commissionAmountCents * subCommissionPercent) / 100
+      (sourceCommission.commissionAmountCents * subCommissionPercent) / 100,
     );
 
     if (subCommissionAmountCents <= 0) {
@@ -354,12 +366,15 @@ export const createSubAffiliateCommission = mutation({
     });
 
     // Update parent's sub-affiliate stats
-    const subStats = parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
+    const subStats =
+      parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
     await ctx.db.patch(parentAffiliate._id, {
       subAffiliateStats: {
         ...subStats,
-        totalSubCommissionsCents: subStats.totalSubCommissionsCents + subCommissionAmountCents,
-        pendingSubCommissionsCents: subStats.pendingSubCommissionsCents + subCommissionAmountCents,
+        totalSubCommissionsCents:
+          subStats.totalSubCommissionsCents + subCommissionAmountCents,
+        pendingSubCommissionsCents:
+          subStats.pendingSubCommissionsCents + subCommissionAmountCents,
       },
       updatedAt: now,
     });
@@ -383,14 +398,14 @@ export const reverseSubAffiliateCommission = mutation({
     v.object({
       success: v.literal(false),
       error: v.string(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     // Find the sub-affiliate commission linked to this source commission
     const subCommission = await ctx.db
       .query("subAffiliateCommissions")
       .withIndex("by_sourceCommission", (q) =>
-        q.eq("sourceCommissionId", args.sourceCommissionId)
+        q.eq("sourceCommissionId", args.sourceCommissionId),
       )
       .first();
 
@@ -416,14 +431,20 @@ export const reverseSubAffiliateCommission = mutation({
     // Update parent's sub-affiliate stats
     const parentAffiliate = await ctx.db.get(subCommission.parentAffiliateId);
     if (parentAffiliate) {
-      const subStats = parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
+      const subStats =
+        parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
 
       // Decrement pending if it was pending, or paid if it was paid
       const updates: typeof subStats = { ...subStats };
-      if (subCommission.status === "pending" || subCommission.status === "approved") {
-        updates.pendingSubCommissionsCents -= subCommission.subCommissionAmountCents;
+      if (
+        subCommission.status === "pending" ||
+        subCommission.status === "approved"
+      ) {
+        updates.pendingSubCommissionsCents -=
+          subCommission.subCommissionAmountCents;
       } else if (subCommission.status === "paid") {
-        updates.paidSubCommissionsCents -= subCommission.subCommissionAmountCents;
+        updates.paidSubCommissionsCents -=
+          subCommission.subCommissionAmountCents;
       }
 
       await ctx.db.patch(parentAffiliate._id, {

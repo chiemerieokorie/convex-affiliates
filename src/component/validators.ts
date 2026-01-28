@@ -6,7 +6,7 @@ import { v } from "convex/values";
 
 export const commissionTypeValidator = v.union(
   v.literal("percentage"),
-  v.literal("fixed")
+  v.literal("fixed"),
 );
 
 export type CommissionType = "percentage" | "fixed";
@@ -18,7 +18,7 @@ export type CommissionType = "percentage" | "fixed";
 export const commissionDurationValidator = v.union(
   v.literal("lifetime"),
   v.literal("max_payments"),
-  v.literal("max_months")
+  v.literal("max_months"),
 );
 
 export type CommissionDuration = "lifetime" | "max_payments" | "max_months";
@@ -32,7 +32,7 @@ export const payoutTermValidator = v.union(
   v.literal("NET-15"),
   v.literal("NET-30"),
   v.literal("NET-60"),
-  v.literal("NET-90")
+  v.literal("NET-90"),
 );
 
 export type PayoutTerm = "NET-0" | "NET-15" | "NET-30" | "NET-60" | "NET-90";
@@ -45,7 +45,7 @@ export const affiliateStatusValidator = v.union(
   v.literal("pending"),
   v.literal("approved"),
   v.literal("suspended"),
-  v.literal("rejected")
+  v.literal("rejected"),
 );
 
 export type AffiliateStatus = "pending" | "approved" | "suspended" | "rejected";
@@ -58,7 +58,7 @@ export const referralStatusValidator = v.union(
   v.literal("clicked"),
   v.literal("signed_up"),
   v.literal("converted"),
-  v.literal("expired")
+  v.literal("expired"),
 );
 
 export type ReferralStatus = "clicked" | "signed_up" | "converted" | "expired";
@@ -72,7 +72,7 @@ export const commissionStatusValidator = v.union(
   v.literal("approved"),
   v.literal("processing"),
   v.literal("paid"),
-  v.literal("reversed")
+  v.literal("reversed"),
 );
 
 export type CommissionStatus =
@@ -89,7 +89,7 @@ export type CommissionStatus =
 export const payoutStatusValidator = v.union(
   v.literal("pending"),
   v.literal("completed"),
-  v.literal("cancelled")
+  v.literal("cancelled"),
 );
 
 export type PayoutStatus = "pending" | "completed" | "cancelled";
@@ -102,7 +102,7 @@ export const payoutMethodValidator = v.union(
   v.literal("manual"),
   v.literal("bank_transfer"),
   v.literal("paypal"),
-  v.literal("other")
+  v.literal("other"),
 );
 
 export type PayoutMethod = "manual" | "bank_transfer" | "paypal" | "other";
@@ -116,7 +116,7 @@ export const eventTypeValidator = v.union(
   v.literal("signup"),
   v.literal("conversion"),
   v.literal("refund"),
-  v.literal("payout")
+  v.literal("payout"),
 );
 
 export type EventType = "click" | "signup" | "conversion" | "refund" | "payout";
@@ -153,7 +153,7 @@ export const promoContentTypeValidator = v.union(
   v.literal("twitter"),
   v.literal("instagram"),
   v.literal("tiktok"),
-  v.literal("other")
+  v.literal("other"),
 );
 
 export type PromoContentType =
@@ -208,7 +208,7 @@ export const recruitmentReferralStatusValidator = v.union(
   v.literal("clicked"),
   v.literal("signed_up"),
   v.literal("approved"),
-  v.literal("expired")
+  v.literal("expired"),
 );
 
 export type RecruitmentReferralStatus =
@@ -223,7 +223,7 @@ export type RecruitmentReferralStatus =
 
 export const landingPageStatusValidator = v.union(
   v.literal("draft"),
-  v.literal("published")
+  v.literal("published"),
 );
 
 export type LandingPageStatus = "draft" | "published";
@@ -308,7 +308,7 @@ export function generateAffiliateCode(prefix?: string): string {
 export function calculateCommissionAmount(
   saleAmountCents: number,
   commissionType: CommissionType,
-  commissionValue: number
+  commissionValue: number,
 ): number {
   if (commissionType === "percentage") {
     return Math.round((saleAmountCents * commissionValue) / 100);
