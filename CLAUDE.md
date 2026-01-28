@@ -2,9 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Mandatory Rule: Keep Docs Updated
+
+After making any code changes (schema, API, architecture, features), **always update this file and README.md** to reflect those changes before committing. Documentation must stay in sync with the codebase.
+
 ## Project Overview
 
-This is a **Convex Component** - a reusable backend package that implements a comments/affiliates system. The component is published to npm as `chief_emerie` and demonstrates best practices for building production-ready Convex components.
+This is a **Convex Component** for **affiliate marketing** — published to npm as `convex-affiliates`. It provides referral tracking, commission management, campaign configuration, payouts, Stripe integration, and fraud prevention. There is no comments functionality.
 
 ## Development Commands
 
@@ -37,47 +41,58 @@ npm run release           # Publish patch version
 
 ## Architecture
 
-### Two-Layer Component Structure
+### Component Structure
 
 ```
 src/
 ├── component/              # Core component logic (runs in Convex)
-│   ├── convex.config.ts    # Component name and configuration
-│   ├── schema.ts           # Component's database tables
-│   └── lib.ts              # Queries, mutations, actions
-├── client/                 # Client-side API (used by consuming apps)
-│   └── index.ts            # exposeApi(), registerRoutes(), translate()
-└── react/                  # React hooks (optional)
-    └── index.ts
+│   ├── convex.config.ts    # Component name ("affiliates") + rate-limiter dep
+│   ├── schema.ts           # 9 database tables
+│   ├── affiliates.ts       # Affiliate account management
+│   ├── campaigns.ts        # Campaign CRUD
+│   ├── commissions.ts      # Commission calculation & tracking
+│   ├── referrals.ts        # Click & attribution tracking
+│   ├── payouts.ts          # Payout recording
+│   ├── analytics.ts        # Dashboard aggregation
+│   ├── crons.ts            # Scheduled tasks
+│   └── validators.ts       # Shared type validators
+├── client/                 # Host app API wrapper
+│   └── index.ts            # createAffiliateApi() factory function
+└── react/                  # React hooks & headless components
+    ├── index.ts
+    └── hooks.ts
 ```
 
 ### Example App
 
 The `example/` directory contains a working Convex app that demonstrates component usage:
-- `example/convex/convex.config.ts` - Shows how to import and use the component
-- `example/convex/example.ts` - Example function implementations
-- `example/convex/http.ts` - HTTP endpoint registration
+- `example/convex/convex.config.ts` - Imports and installs the component
+- `example/convex/example.ts` - Creates API via `createAffiliateApi()` and re-exports functions
 - `example/src/App.tsx` - Frontend demo
 
 ### Key Patterns
 
-**Component Registration** (in consuming app's convex.config.ts):
+**Component Registration** (in consuming app's `convex.config.ts`):
 ```typescript
-import affiliates from "chief_emerie/convex.config.js";
+import affiliates from "convex-affiliates/convex.config.js";
 const app = defineApp();
 app.use(affiliates);
 ```
 
-**Calling Component Functions**:
+**Creating the API** (in consuming app's Convex functions):
 ```typescript
-import { components } from "./_generated/api";
-await ctx.runMutation(components.affiliates.lib.add, { ... });
-```
+import { createAffiliateApi } from "convex-affiliates";
+import { components } from "./_generated/api.js";
 
-**HTTP Route Registration**:
-```typescript
-import { registerRoutes } from "chief_emerie";
-registerRoutes(http, components.affiliates, { pathPrefix: "/comments" });
+const affiliates = createAffiliateApi(components.affiliates, {
+  defaultCommissionType: "percentage",
+  defaultCommissionValue: 20,
+  defaultPayoutTerm: "NET-30",
+  auth: async (ctx) => { /* return userId */ },
+  isAdmin: async (ctx) => { /* return boolean */ },
+});
+
+export const { trackClick, register, getAffiliate, ... } = affiliates;
 ```
 
 ## Testing
@@ -89,7 +104,7 @@ npm run test              # Run all tests
 npm run test:watch        # Watch mode for development
 ```
 
-## Convex Best Practices (from .cursor/rules/convex_rules.mdc)
+## Convex Best Practices
 
 - **Always use new function syntax** with `args` and `returns` validators
 - **Use `v.null()`** for null values (not undefined)
@@ -102,12 +117,28 @@ npm run test:watch        # Watch mode for development
 
 ## Database Schema
 
-The component defines a `comments` table:
-```typescript
-comments: {
-  text: string
-  userId: string    // External user reference
-  targetId: string  // Entity being commented on
-  indexes: ["by_target"] on targetId
-}
-```
+The component defines these core tables (see `src/component/schema.ts` for full details):
+
+| Table | Purpose |
+|-------|---------|
+| `campaigns` | Affiliate programs with commission rates, tiers, referral discounts, rate limiting |
+| `affiliates` | Affiliate profiles with Stripe Connect, custom commissions, denormalized stats |
+| `commissionTiers` | Volume-based tiered commission structures |
+| `productCommissions` | Per-Stripe-product commission overrides |
+| `referrals` | Click/signup/conversion tracking with device, IP, UTM attribution |
+| `commissions` | Earned commissions (pending → approved → processing → paid/reversed) |
+| `payouts` | Payout records (manual, bank_transfer, paypal, other) |
+| `events` | Analytics event log |
+
+Also depends on `@convex-dev/rate-limiter` for IP-based fraud prevention.
+
+## Key Features
+
+- Zero-cookie referral tracking (URL params + localStorage)
+- Stripe webhook handlers (invoice.paid, charge.refunded, checkout.session.completed)
+- Multi-campaign support with per-campaign rates
+- Commission tiers based on referral volume
+- Two-sided rewards (referee discounts)
+- Payout scheduling (NET-0/15/30/60/90)
+- Self-referral prevention and IP rate limiting
+- Headless React components for affiliate portal and admin dashboard
