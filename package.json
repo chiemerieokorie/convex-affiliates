@@ -19,6 +19,9 @@
     "payout"
   ],
   "type": "module",
+  "bin": {
+    "convex-affiliates": "./dist/bin/init.mjs"
+  },
   "scripts": {
     "dev": "run-p -r 'dev:*'",
     "dev:backend": "convex dev --typecheck-components",

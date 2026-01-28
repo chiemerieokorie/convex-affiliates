@@ -42,68 +42,41 @@ app.use(affiliates);
 export default app;
 ```
 
-### 2. Create and Export the API
+### 2. Generate the API file
 
-Create `convex/affiliates.ts`:
+```bash
+npx convex-affiliates init
+```
+
+This creates `convex/affiliates.ts` with all exports pre-configured. Edit the file to set your auth callback and commission defaults.
+
+<details>
+<summary>Or create it manually</summary>
 
 ```typescript
 import { components } from "./_generated/api";
 import { createAffiliateApi } from "convex-affiliates";
 
-// Create the API with your config
 const affiliates = createAffiliateApi(components.affiliates, {
-  // Commission defaults
-  defaultCommissionType: "percentage",
-  defaultCommissionValue: 20, // 20%
+  defaultCommissionValue: 20,
   defaultPayoutTerm: "NET-30",
-  minPayoutCents: 5000, // $50 minimum
-  defaultCookieDurationDays: 30,
-
-  // Your app's base URL for generating affiliate links
   baseUrl: process.env.BASE_URL ?? "https://yourapp.com",
-
-  // Authentication callback - works with any Convex auth provider
   auth: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    return identity.subject; // User ID from JWT token
-  },
-
-  // Optional: Admin authorization callback
-  isAdmin: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    // Example: check email domain or custom claim
-    return identity?.email?.endsWith("@yourcompany.com") ?? false;
+    return identity.subject;
   },
 });
 
-// Re-export ready-to-use functions
-export const {
-  // Public (no auth required)
-  trackClick,
-  validateCode,
-
-  // Authenticated user functions
-  register,
-  getAffiliate,
-  getPortalData,
-  listCommissions,
-  listPayouts,
-  listReferrals,
-  generateLink,
-  attributeSignup,
-
-  // Admin functions
-  adminDashboard,
-  adminListAffiliates,
-  adminTopAffiliates,
-  adminApproveAffiliate,
-  adminRejectAffiliate,
-  adminSuspendAffiliate,
-  adminListCampaigns,
-  adminCreateCampaign,
-} = affiliates;
+// Export only the functions you need
+export const { trackClick, validateCode } = affiliates;
+export const { register, getAffiliate, getPortalData, listCommissions,
+  listPayouts, listReferrals, generateLink, attributeSignup } = affiliates;
+export const { adminDashboard, adminListAffiliates, adminApproveAffiliate,
+  adminRejectAffiliate, adminSuspendAffiliate, adminListCampaigns,
+  adminCreateCampaign } = affiliates;
 ```
+</details>
 
 ### 3. Deploy
 
