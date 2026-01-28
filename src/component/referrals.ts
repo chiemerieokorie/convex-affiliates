@@ -32,7 +32,7 @@ export const isCustomerAttributed = query({
     const referral = await ctx.db
       .query("referrals")
       .withIndex("by_stripeCustomer", (q) =>
-        q.eq("stripeCustomerId", args.stripeCustomerId)
+        q.eq("stripeCustomerId", args.stripeCustomerId),
       )
       .first();
 
@@ -77,7 +77,7 @@ export const getByReferralId = query({
       convertedAt: v.optional(v.number()),
       expiresAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db
@@ -115,7 +115,7 @@ export const getByUserId = query({
       convertedAt: v.optional(v.number()),
       expiresAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db
@@ -153,13 +153,13 @@ export const getByStripeCustomer = query({
       convertedAt: v.optional(v.number()),
       expiresAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("referrals")
       .withIndex("by_stripeCustomer", (q) =>
-        q.eq("stripeCustomerId", args.stripeCustomerId)
+        q.eq("stripeCustomerId", args.stripeCustomerId),
       )
       .first();
   },
@@ -194,7 +194,7 @@ export const listByAffiliate = query({
       signedUpAt: v.optional(v.number()),
       convertedAt: v.optional(v.number()),
       expiresAt: v.number(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 100;
@@ -204,7 +204,7 @@ export const listByAffiliate = query({
       return await ctx.db
         .query("referrals")
         .withIndex("by_affiliate_status", (q) =>
-          q.eq("affiliateId", args.affiliateId).eq("status", status)
+          q.eq("affiliateId", args.affiliateId).eq("status", status),
         )
         .take(limit);
     }
@@ -235,7 +235,7 @@ export const getRefereeDiscount = query({
       affiliateCode: v.string(),
       affiliateDisplayName: v.optional(v.string()),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     // Find the referral by any of the provided identifiers
@@ -276,7 +276,9 @@ export const getRefereeDiscount = query({
     if (!affiliate && args.affiliateCode) {
       affiliate = await ctx.db
         .query("affiliates")
-        .withIndex("by_code", (q) => q.eq("code", args.affiliateCode!.toUpperCase()))
+        .withIndex("by_code", (q) =>
+          q.eq("code", args.affiliateCode!.toUpperCase()),
+        )
         .first();
     }
 
@@ -291,7 +293,10 @@ export const getRefereeDiscount = query({
     }
 
     // Check if campaign has a referee discount configured
-    if (!campaign.refereeDiscountType || campaign.refereeDiscountValue === undefined) {
+    if (
+      !campaign.refereeDiscountType ||
+      campaign.refereeDiscountValue === undefined
+    ) {
       return null;
     }
 
@@ -326,13 +331,15 @@ export const trackClick = mutation({
     v.object({
       referralId: v.string(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     // Find the affiliate by code
     const affiliate = await ctx.db
       .query("affiliates")
-      .withIndex("by_code", (q) => q.eq("code", args.affiliateCode.toUpperCase()))
+      .withIndex("by_code", (q) =>
+        q.eq("code", args.affiliateCode.toUpperCase()),
+      )
       .first();
 
     if (!affiliate) {
@@ -482,7 +489,9 @@ export const attributeSignupByCode = mutation({
     // Find the affiliate by code
     const affiliate = await ctx.db
       .query("affiliates")
-      .withIndex("by_code", (q) => q.eq("code", args.affiliateCode.toUpperCase()))
+      .withIndex("by_code", (q) =>
+        q.eq("code", args.affiliateCode.toUpperCase()),
+      )
       .first();
 
     if (!affiliate || affiliate.status !== "approved") {
@@ -606,7 +615,7 @@ export const linkStripeCustomer = mutation({
         const existingReferral = await ctx.db
           .query("referrals")
           .withIndex("by_stripeCustomer", (q) =>
-            q.eq("stripeCustomerId", args.stripeCustomerId)
+            q.eq("stripeCustomerId", args.stripeCustomerId),
           )
           .first();
 
@@ -619,7 +628,8 @@ export const linkStripeCustomer = mutation({
         const campaign = await ctx.db.get(affiliate.campaignId);
         if (campaign && campaign.isActive) {
           const now = Date.now();
-          const expiresAt = now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
+          const expiresAt =
+            now + campaign.cookieDurationDays * 24 * 60 * 60 * 1000;
 
           // Note: args.userId is guaranteed to be defined here (checked above)
           await ctx.db.insert("referrals", {
@@ -710,8 +720,8 @@ export const expireReferrals = mutation({
         q.and(
           q.lt(q.field("expiresAt"), now),
           q.neq(q.field("status"), "expired"),
-          q.neq(q.field("status"), "converted")
-        )
+          q.neq(q.field("status"), "converted"),
+        ),
       )
       .take(100); // Process in batches
 

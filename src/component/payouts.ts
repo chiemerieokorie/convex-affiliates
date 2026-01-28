@@ -22,7 +22,7 @@ export const listByAffiliate = query({
       return await ctx.db
         .query("payouts")
         .withIndex("by_affiliate_status", (q) =>
-          q.eq("affiliateId", args.affiliateId).eq("status", status)
+          q.eq("affiliateId", args.affiliateId).eq("status", status),
         )
         .order("desc")
         .paginate(args.paginationOpts);
@@ -59,7 +59,7 @@ export const get = query({
       createdAt: v.number(),
       completedAt: v.optional(v.number()),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.payoutId);
@@ -84,7 +84,7 @@ export const listPending = query({
       amountCents: v.number(),
       currency: v.string(),
       method: payoutMethodValidator,
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 100;
@@ -116,7 +116,7 @@ export const getAffiliatesDueForPayout = query({
       affiliateId: v.id("affiliates"),
       totalDueCents: v.number(),
       commissionCount: v.number(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -145,7 +145,7 @@ export const getAffiliatesDueForPayout = query({
 
     // Filter by minimum payout and return
     const results: Array<{
-      affiliateId: typeof dueCommissions[0]["affiliateId"];
+      affiliateId: (typeof dueCommissions)[0]["affiliateId"];
       totalDueCents: number;
       commissionCount: number;
     }> = [];
@@ -153,7 +153,7 @@ export const getAffiliatesDueForPayout = query({
     for (const [affiliateId, data] of byAffiliate) {
       if (data.totalCents >= args.minPayoutCents) {
         results.push({
-          affiliateId: affiliateId as typeof dueCommissions[0]["affiliateId"],
+          affiliateId: affiliateId as (typeof dueCommissions)[0]["affiliateId"],
           totalDueCents: data.totalCents,
           commissionCount: data.count,
         });
@@ -329,7 +329,7 @@ export const record = mutation({
     const dueCommissions = await ctx.db
       .query("commissions")
       .withIndex("by_affiliate_status", (q) =>
-        q.eq("affiliateId", args.affiliateId).eq("status", "approved")
+        q.eq("affiliateId", args.affiliateId).eq("status", "approved"),
       )
       .filter((q) => q.lte(q.field("dueAt"), now))
       .collect();
@@ -340,9 +340,10 @@ export const record = mutation({
       amountCents: args.amountCents,
       currency: args.currency,
       method: args.method,
-      periodStart: dueCommissions.length > 0
-        ? Math.min(...dueCommissions.map(c => c.createdAt))
-        : now,
+      periodStart:
+        dueCommissions.length > 0
+          ? Math.min(...dueCommissions.map((c) => c.createdAt))
+          : now,
       periodEnd: now,
       status: "completed",
       commissionsCount: dueCommissions.length,
@@ -361,11 +362,15 @@ export const record = mutation({
     }
 
     // Update affiliate stats
-    const totalPaid = dueCommissions.reduce((sum, c) => sum + c.commissionAmountCents, 0);
+    const totalPaid = dueCommissions.reduce(
+      (sum, c) => sum + c.commissionAmountCents,
+      0,
+    );
     await ctx.db.patch(affiliate._id, {
       stats: {
         ...affiliate.stats,
-        pendingCommissionsCents: affiliate.stats.pendingCommissionsCents - totalPaid,
+        pendingCommissionsCents:
+          affiliate.stats.pendingCommissionsCents - totalPaid,
         paidCommissionsCents: affiliate.stats.paidCommissionsCents + totalPaid,
       },
       updatedAt: now,

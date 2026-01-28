@@ -63,15 +63,14 @@ export interface AffiliatePortalContextValue {
   baseUrl: string;
 }
 
-const AffiliatePortalContext = React.createContext<AffiliatePortalContextValue | null>(
-  null
-);
+const AffiliatePortalContext =
+  React.createContext<AffiliatePortalContextValue | null>(null);
 
 export function useAffiliatePortalContext() {
   const context = React.useContext(AffiliatePortalContext);
   if (!context) {
     throw new Error(
-      "useAffiliatePortalContext must be used within an AffiliatePortalProvider"
+      "useAffiliatePortalContext must be used within an AffiliatePortalProvider",
     );
   }
   return context;
@@ -109,7 +108,7 @@ export function AffiliatePortalProvider({
       isLoading,
       baseUrl,
     }),
-    [affiliate, campaign, recentCommissions, pendingPayout, isLoading, baseUrl]
+    [affiliate, campaign, recentCommissions, pendingPayout, isLoading, baseUrl],
   );
 
   return (
@@ -145,7 +144,10 @@ export interface AffiliateStatsProps {
   currency?: string;
 }
 
-export function AffiliateStatsDisplay({ children, currency = "USD" }: AffiliateStatsProps) {
+export function AffiliateStatsDisplay({
+  children,
+  currency = "USD",
+}: AffiliateStatsProps) {
   const { affiliate } = useAffiliatePortalContext();
 
   if (!affiliate) return null;
@@ -185,7 +187,9 @@ export interface AffiliateLinkGeneratorProps {
   children: (props: AffiliateLinkGeneratorRenderProps) => React.ReactNode;
 }
 
-export function AffiliateLinkGenerator({ children }: AffiliateLinkGeneratorProps) {
+export function AffiliateLinkGenerator({
+  children,
+}: AffiliateLinkGeneratorProps) {
   const { affiliate, baseUrl } = useAffiliatePortalContext();
   const [copied, setCopied] = React.useState(false);
 
@@ -199,7 +203,7 @@ export function AffiliateLinkGenerator({ children }: AffiliateLinkGeneratorProps
       }
       return url.toString();
     },
-    [affiliate, baseUrl]
+    [affiliate, baseUrl],
   );
 
   const copyLink = React.useCallback(async (link: string) => {
@@ -498,7 +502,7 @@ export function PayoutHistory({
 // =============================================================================
 
 function getStatusColor(
-  status: string
+  status: string,
 ): "yellow" | "green" | "blue" | "red" | "gray" {
   switch (status) {
     case "pending":
@@ -517,7 +521,7 @@ function getStatusColor(
 }
 
 function getPayoutStatusColor(
-  status: string
+  status: string,
 ): "yellow" | "green" | "blue" | "red" | "gray" {
   switch (status) {
     case "pending":

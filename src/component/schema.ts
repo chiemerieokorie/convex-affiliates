@@ -14,6 +14,12 @@ import {
   customCopyValidator,
   promoContentValidator,
   affiliateStatsValidator,
+  subAffiliateStatsValidator,
+  recruitmentReferralStatusValidator,
+  landingPageStatusValidator,
+  testimonialValidator,
+  ctaConfigValidator,
+  heroContentValidator,
 } from "./validators.js";
 
 export default defineSchema({
@@ -53,6 +59,12 @@ export default defineSchema({
 
     // Fraud prevention settings
     maxClicksPerIpPerHour: v.optional(v.number()), // Default: 10, 0 = disabled
+
+    // Affiliate recruitment settings
+    affiliateRecruitmentEnabled: v.optional(v.boolean()),
+    subAffiliateCommissionPercent: v.optional(v.number()), // % of sub-affiliate's commissions (0-100)
+    recruitmentCookieDurationDays: v.optional(v.number()), // How long recruitment attribution lasts
+    maxSubAffiliatesPerAffiliate: v.optional(v.number()), // Anti-abuse limit
 
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -94,8 +106,8 @@ export default defineSchema({
       v.union(
         v.literal("pending"),
         v.literal("enabled"),
-        v.literal("disabled")
-      )
+        v.literal("disabled"),
+      ),
     ),
     payoutEmail: v.optional(v.string()),
 
@@ -105,6 +117,11 @@ export default defineSchema({
     // Denormalized stats (updated on each conversion)
     stats: affiliateStatsValidator,
 
+    // Affiliate recruitment (who referred this affiliate)
+    referredByAffiliateId: v.optional(v.id("affiliates")),
+    recruitmentCode: v.optional(v.string()), // Special code for recruiting affiliates
+    subAffiliateStats: v.optional(subAffiliateStatsValidator),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -112,7 +129,9 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_campaign", ["campaignId"])
     .index("by_campaign_status", ["campaignId", "status"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_referredByAffiliateId", ["referredByAffiliateId"])
+    .index("by_recruitmentCode", ["recruitmentCode"]),
 
   // ============================================
   // Commission Tiers (for tiered commission structures)
@@ -266,4 +285,109 @@ export default defineSchema({
     .index("by_affiliate", ["affiliateId"])
     .index("by_affiliate_type", ["affiliateId", "type"])
     .index("by_timestamp", ["timestamp"]),
+
+  // ============================================
+  // Affiliate Recruitment Referrals
+  // ============================================
+  affiliateRecruitmentReferrals: defineTable({
+    recruitingAffiliateId: v.id("affiliates"),
+
+    // Tracking
+    referralId: v.string(), // UUID for attribution
+    landingPage: v.optional(v.string()),
+    ipAddress: v.optional(v.string()),
+
+    // Status flow: clicked -> signed_up -> approved -> expired
+    status: recruitmentReferralStatusValidator,
+
+    // Linked recruit
+    recruitedAffiliateId: v.optional(v.id("affiliates")),
+
+    // Timestamps
+    clickedAt: v.number(),
+    signedUpAt: v.optional(v.number()),
+    approvedAt: v.optional(v.number()),
+    expiresAt: v.number(),
+  })
+    .index("by_referralId", ["referralId"])
+    .index("by_recruitingAffiliateId", ["recruitingAffiliateId"])
+    .index("by_recruitingAffiliateId_status", [
+      "recruitingAffiliateId",
+      "status",
+    ])
+    .index("by_recruitedAffiliateId", ["recruitedAffiliateId"])
+    .index("by_expiresAt", ["expiresAt"]),
+
+  // ============================================
+  // Campaign Landing Pages (for A/B testing recruitment pages)
+  // ============================================
+  campaignLandingPages: defineTable({
+    campaignId: v.id("campaigns"),
+    mediaPreset: v.string(), // Matches ?media= URL param for A/B testing
+
+    // Hero content
+    hero: heroContentValidator,
+
+    // Benefits list
+    benefits: v.optional(v.array(v.string())),
+
+    // Testimonials
+    testimonials: v.optional(v.array(testimonialValidator)),
+
+    // Social proof
+    socialProofText: v.optional(v.string()),
+
+    // Commission preview
+    commissionPreviewText: v.optional(v.string()),
+
+    // CTA configuration
+    cta: v.optional(ctaConfigValidator),
+
+    // Status
+    status: landingPageStatusValidator,
+
+    // View tracking
+    totalViews: v.number(),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_campaignId", ["campaignId"])
+    .index("by_campaignId_mediaPreset", ["campaignId", "mediaPreset"])
+    .index("by_status", ["status"]),
+
+  // ============================================
+  // Sub-Affiliate Commissions
+  // ============================================
+  subAffiliateCommissions: defineTable({
+    parentAffiliateId: v.id("affiliates"),
+    subAffiliateId: v.id("affiliates"),
+    sourceCommissionId: v.id("commissions"),
+
+    // Amounts
+    sourceCommissionAmountCents: v.number(),
+    subCommissionAmountCents: v.number(),
+    subCommissionPercent: v.number(), // Rate used (for audit)
+    currency: v.string(),
+
+    // Status (mirrors commissions)
+    status: commissionStatusValidator,
+
+    // Payout tracking
+    payoutId: v.optional(v.id("payouts")),
+    dueAt: v.number(),
+
+    // Timestamps
+    createdAt: v.number(),
+    approvedAt: v.optional(v.number()),
+    paidAt: v.optional(v.number()),
+    reversedAt: v.optional(v.number()),
+    reversalReason: v.optional(v.string()),
+  })
+    .index("by_parentAffiliate", ["parentAffiliateId"])
+    .index("by_parentAffiliate_status", ["parentAffiliateId", "status"])
+    .index("by_subAffiliate", ["subAffiliateId"])
+    .index("by_sourceCommission", ["sourceCommissionId"])
+    .index("by_payout", ["payoutId"])
+    .index("by_status_dueAt", ["status", "dueAt"]),
 });

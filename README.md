@@ -1,17 +1,24 @@
 # Convex Affiliates
 
-A comprehensive affiliate marketing component for [Convex](https://convex.dev) with zero-cookie tracking, flexible commission structures, and seamless Stripe integration.
+A comprehensive affiliate marketing component for [Convex](https://convex.dev)
+with zero-cookie tracking, flexible commission structures, and seamless Stripe
+integration.
 
 [![npm version](https://badge.fury.io/js/chief_emerie.svg)](https://www.npmjs.com/package/chief_emerie)
 
 ## Features
 
-- **Zero-Cookie Tracking** - URL parameter-based attribution that works without cookies
-- **Stripe Integration** - Easy webhook handlers for automatic commission creation
-- **Flexible Commission Structures** - Percentage or fixed, with tiered and product-specific rates
+- **Zero-Cookie Tracking** - URL parameter-based attribution that works without
+  cookies
+- **Stripe Integration** - Easy webhook handlers for automatic commission
+  creation
+- **Flexible Commission Structures** - Percentage or fixed, with tiered and
+  product-specific rates
 - **Campaign Management** - Multiple campaigns with different terms
-- **NET-0/15/30/60/90 Scheduling** - Configurable payout terms with automatic due date calculation
-- **Manual Payout Recording** - Record payouts made via PayPal, bank transfer, or other methods
+- **NET-0/15/30/60/90 Scheduling** - Configurable payout terms with automatic
+  due date calculation
+- **Manual Payout Recording** - Record payouts made via PayPal, bank transfer,
+  or other methods
 - **Pure Data Layer** - Component handles data, your app handles integrations
 
 ## Installation
@@ -113,7 +120,8 @@ npx convex deploy
 
 ### 4. Add Lifecycle Hooks (Optional)
 
-The affiliate API supports type-safe hooks for lifecycle events. Use these to send emails, trigger webhooks, or integrate with other systems.
+The affiliate API supports type-safe hooks for lifecycle events. Use these to
+send emails, trigger webhooks, or integrate with other systems.
 
 ```typescript
 import { components } from "./_generated/api";
@@ -129,13 +137,22 @@ const affiliates = createAffiliateApi(components.affiliates, {
     },
     "affiliate.approved": async (data) => {
       // data: { affiliateId, affiliateCode, affiliateEmail, affiliateUserId }
-      await sendEmail(data.affiliateEmail, "Your application has been approved!");
+      await sendEmail(
+        data.affiliateEmail,
+        "Your application has been approved!",
+      );
     },
     "affiliate.rejected": async (data) => {
-      await sendEmail(data.affiliateEmail, "Unfortunately, your application was not approved.");
+      await sendEmail(
+        data.affiliateEmail,
+        "Unfortunately, your application was not approved.",
+      );
     },
     "affiliate.suspended": async (data) => {
-      await sendEmail(data.affiliateEmail, "Your affiliate account has been suspended.");
+      await sendEmail(
+        data.affiliateEmail,
+        "Your affiliate account has been suspended.",
+      );
     },
   },
 });
@@ -143,14 +160,14 @@ const affiliates = createAffiliateApi(components.affiliates, {
 
 #### Available Hooks
 
-| Hook | Typed Data | Fields |
-|------|-----------|--------|
-| `affiliate.registered` | `AffiliateRegisteredData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
-| `affiliate.approved` | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
-| `affiliate.rejected` | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
-| `affiliate.suspended` | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId |
-| `commission.created` | `CommissionCreatedData` | commissionId, affiliateId, affiliateCode, commissionAmountCents, currency |
-| `commission.reversed` | `CommissionReversedData` | commissionId, affiliateId, commissionAmountCents |
+| Hook                   | Typed Data                  | Fields                                                                    |
+| ---------------------- | --------------------------- | ------------------------------------------------------------------------- |
+| `affiliate.registered` | `AffiliateRegisteredData`   | affiliateId, affiliateCode, affiliateEmail, affiliateUserId               |
+| `affiliate.approved`   | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId               |
+| `affiliate.rejected`   | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId               |
+| `affiliate.suspended`  | `AffiliateStatusChangeData` | affiliateId, affiliateCode, affiliateEmail, affiliateUserId               |
+| `commission.created`   | `CommissionCreatedData`     | commissionId, affiliateId, affiliateCode, commissionAmountCents, currency |
+| `commission.reversed`  | `CommissionReversedData`    | commissionId, affiliateId, commissionAmountCents                          |
 
 #### Stripe Integration with Hooks
 
@@ -165,19 +182,27 @@ export const stripeHandlers = getAffiliateStripeHandlers(
     hooks: {
       "commission.created": async (data) => {
         // data: { commissionId, affiliateId, affiliateCode, commissionAmountCents, currency }
-        await notifyAffiliate(data.affiliateId, `You earned $${(data.commissionAmountCents / 100).toFixed(2)}!`);
+        await notifyAffiliate(
+          data.affiliateId,
+          `You earned $${(data.commissionAmountCents / 100).toFixed(2)}!`,
+        );
       },
       "commission.reversed": async (data) => {
-        await notifyAffiliate(data.affiliateId, "A commission was reversed due to a refund.");
+        await notifyAffiliate(
+          data.affiliateId,
+          "A commission was reversed due to a refund.",
+        );
       },
     },
-  }
+  },
 );
 ```
 
 #### Error Handling
 
-Hooks are wrapped in try/catch - if a hook throws an error, the mutation still succeeds. Errors are logged to console. This ensures hook failures don't break critical operations like registrations or approvals.
+Hooks are wrapped in try/catch - if a hook throws an error, the mutation still
+succeeds. Errors are logged to console. This ensures hook failures don't break
+critical operations like registrations or approvals.
 
 ## Usage Guide
 
@@ -225,7 +250,10 @@ function ReferralTracker() {
     const code = params.get("ref") || params.get("via");
 
     if (code) {
-      trackClick({ affiliateCode: code, landingPage: window.location.pathname });
+      trackClick({
+        affiliateCode: code,
+        landingPage: window.location.pathname,
+      });
     }
   }, []);
 
@@ -235,7 +263,8 @@ function ReferralTracker() {
 
 ### Attribution (Better Auth Integration)
 
-Attribute signups to affiliates after user registration. In your Better Auth hook or signup handler:
+Attribute signups to affiliates after user registration. In your Better Auth
+hook or signup handler:
 
 ```typescript
 // convex/users.ts
@@ -261,7 +290,8 @@ export const onUserCreated = internalMutation({
 
 #### With @convex-dev/stripe (Recommended)
 
-If you're using `@convex-dev/stripe`, use `getAffiliateStripeHandlers` to get type-safe handlers:
+If you're using `@convex-dev/stripe`, use `getAffiliateStripeHandlers` to get
+type-safe handlers:
 
 ```typescript
 // convex/stripeHandlers.ts
@@ -269,14 +299,18 @@ import { getAffiliateStripeHandlers } from "chief_emerie";
 import { components } from "./_generated/api";
 
 // Get affiliate handlers for invoice.paid, charge.refunded, checkout.session.completed
-export const affiliateHandlers = getAffiliateStripeHandlers(components.affiliates);
+export const affiliateHandlers = getAffiliateStripeHandlers(
+  components.affiliates,
+);
 ```
 
-Then use them in your Stripe webhook setup. You can combine with your own handlers as needed.
+Then use them in your Stripe webhook setup. You can combine with your own
+handlers as needed.
 
 #### Standalone Webhook Handler
 
-If you're not using `@convex-dev/stripe`, use the standalone handler with built-in signature verification:
+If you're not using `@convex-dev/stripe`, use the standalone handler with
+built-in signature verification:
 
 ```typescript
 // convex/http.ts
@@ -299,7 +333,8 @@ export default http;
 
 Set `STRIPE_WEBHOOK_SECRET` in your Convex environment variables.
 
-Both approaches handle `invoice.paid`, `charge.refunded`, and `checkout.session.completed` events automatically
+Both approaches handle `invoice.paid`, `charge.refunded`, and
+`checkout.session.completed` events automatically
 
 ### Recording Payouts
 
@@ -333,7 +368,9 @@ function Dashboard() {
     <div>
       <h1>Welcome, {portal.affiliate.displayName}</h1>
       <p>Your code: {portal.affiliate.code}</p>
-      <p>Total earnings: ${portal.affiliate.stats.paidCommissionsCents / 100}</p>
+      <p>
+        Total earnings: ${portal.affiliate.stats.paidCommissionsCents / 100}
+      </p>
     </div>
   );
 }
@@ -341,7 +378,8 @@ function Dashboard() {
 
 ### Admin Functions
 
-All admin functions are exported and check authorization via your `isAdmin` callback:
+All admin functions are exported and check authorization via your `isAdmin`
+callback:
 
 ```tsx
 import { useQuery, useMutation } from "convex/react";
@@ -349,7 +387,9 @@ import { api } from "../convex/_generated/api";
 
 function AdminDashboard() {
   const dashboard = useQuery(api.affiliates.adminDashboard);
-  const affiliates = useQuery(api.affiliates.adminListAffiliates, { status: "pending" });
+  const affiliates = useQuery(api.affiliates.adminListAffiliates, {
+    status: "pending",
+  });
   const approve = useMutation(api.affiliates.adminApproveAffiliate);
 
   return (
@@ -370,7 +410,8 @@ function AdminDashboard() {
 
 ## React Integration
 
-Since all functions are exported directly from your `convex/affiliates.ts`, use standard Convex hooks:
+Since all functions are exported directly from your `convex/affiliates.ts`, use
+standard Convex hooks:
 
 ### Track Referrals on Page Load
 
@@ -417,19 +458,28 @@ export function AffiliatePortal() {
   if (!portal) return <div>Loading...</div>;
 
   const formatCents = (cents: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(cents / 100);
 
   return (
     <div>
       <h1>Welcome, {portal.affiliate.displayName}</h1>
-      <p>Your code: <code>{portal.affiliate.code}</code></p>
+      <p>
+        Your code: <code>{portal.affiliate.code}</code>
+      </p>
 
       <div className="stats">
         <div>Clicks: {portal.affiliate.stats.totalClicks}</div>
         <div>Signups: {portal.affiliate.stats.totalSignups}</div>
         <div>Conversions: {portal.affiliate.stats.totalConversions}</div>
-        <div>Pending: {formatCents(portal.affiliate.stats.pendingCommissionsCents)}</div>
-        <div>Paid: {formatCents(portal.affiliate.stats.paidCommissionsCents)}</div>
+        <div>
+          Pending: {formatCents(portal.affiliate.stats.pendingCommissionsCents)}
+        </div>
+        <div>
+          Paid: {formatCents(portal.affiliate.stats.paidCommissionsCents)}
+        </div>
       </div>
 
       <h2>Recent Commissions</h2>
@@ -448,7 +498,13 @@ export function AffiliatePortal() {
 ```tsx
 import { useState } from "react";
 
-export function LinkGenerator({ code, baseUrl }: { code: string; baseUrl: string }) {
+export function LinkGenerator({
+  code,
+  baseUrl,
+}: {
+  code: string;
+  baseUrl: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   const link = `${baseUrl}?ref=${code}`;
@@ -475,43 +531,43 @@ export function LinkGenerator({ code, baseUrl }: { code: string; baseUrl: string
 ```typescript
 function createAffiliateApi(
   component: ComponentApi,
-  config: AffiliateApiConfig
+  config: AffiliateApiConfig,
 ): AffiliateApi;
 ```
 
 Returns an object with ready-to-export Convex functions:
 
-| Function | Type | Auth | Description |
-|----------|------|------|-------------|
-| `trackClick` | mutation | public | Track affiliate link click |
-| `validateCode` | query | public | Validate affiliate code |
-| `register` | mutation | user | Register as affiliate |
-| `getAffiliate` | query | user | Get current user's affiliate |
-| `getPortalData` | query | user | Get dashboard data |
-| `listCommissions` | query | user | List user's commissions |
-| `listPayouts` | query | user | List user's payouts |
-| `listReferrals` | query | user | List user's referrals |
-| `generateLink` | query | user | Generate affiliate link |
-| `attributeSignup` | mutation | user | Attribute signup to referral |
-| `adminDashboard` | query | admin | Admin dashboard stats |
-| `adminListAffiliates` | query | admin | List all affiliates |
-| `adminTopAffiliates` | query | admin | Top performing affiliates |
-| `adminApproveAffiliate` | mutation | admin | Approve affiliate |
-| `adminRejectAffiliate` | mutation | admin | Reject affiliate |
-| `adminSuspendAffiliate` | mutation | admin | Suspend affiliate |
-| `adminListCampaigns` | query | admin | List campaigns |
-| `adminCreateCampaign` | mutation | admin | Create campaign |
+| Function                | Type     | Auth   | Description                  |
+| ----------------------- | -------- | ------ | ---------------------------- |
+| `trackClick`            | mutation | public | Track affiliate link click   |
+| `validateCode`          | query    | public | Validate affiliate code      |
+| `register`              | mutation | user   | Register as affiliate        |
+| `getAffiliate`          | query    | user   | Get current user's affiliate |
+| `getPortalData`         | query    | user   | Get dashboard data           |
+| `listCommissions`       | query    | user   | List user's commissions      |
+| `listPayouts`           | query    | user   | List user's payouts          |
+| `listReferrals`         | query    | user   | List user's referrals        |
+| `generateLink`          | query    | user   | Generate affiliate link      |
+| `attributeSignup`       | mutation | user   | Attribute signup to referral |
+| `adminDashboard`        | query    | admin  | Admin dashboard stats        |
+| `adminListAffiliates`   | query    | admin  | List all affiliates          |
+| `adminTopAffiliates`    | query    | admin  | Top performing affiliates    |
+| `adminApproveAffiliate` | mutation | admin  | Approve affiliate            |
+| `adminRejectAffiliate`  | mutation | admin  | Reject affiliate             |
+| `adminSuspendAffiliate` | mutation | admin  | Suspend affiliate            |
+| `adminListCampaigns`    | query    | admin  | List campaigns               |
+| `adminCreateCampaign`   | mutation | admin  | Create campaign              |
 
 ### Component Mutations (for webhook handlers)
 
 Call these directly via `components.affiliates.*`:
 
-| Function | Description |
-|----------|-------------|
+| Function                        | Description                                |
+| ------------------------------- | ------------------------------------------ |
 | `commissions.createFromInvoice` | Create commission from Stripe invoice data |
-| `commissions.reverseByCharge` | Reverse commission on refund |
-| `referrals.linkStripeCustomer` | Link Stripe customer to affiliate referral |
-| `payouts.record` | Record a manual payout |
+| `commissions.reverseByCharge`   | Reverse commission on refund               |
+| `referrals.linkStripeCustomer`  | Link Stripe customer to affiliate referral |
+| `payouts.record`                | Record a manual payout                     |
 
 ### Configuration
 
@@ -597,6 +653,7 @@ This component follows a **pure data layer** pattern:
 ```
 
 This design:
+
 - Keeps the component lightweight and portable
 - Gives you full control over webhook handling and verification
 - Works with any payment processor (not just Stripe)
@@ -604,21 +661,33 @@ This design:
 
 ## Fraud Prevention
 
-The component includes comprehensive fraud prevention measures to protect your affiliate program:
+The component includes comprehensive fraud prevention measures to protect your
+affiliate program:
 
 ### Self-Referral Protection
 
-Affiliates cannot earn commissions on their own purchases. This is enforced at multiple levels:
+Affiliates cannot earn commissions on their own purchases. This is enforced at
+multiple levels:
 
-- **Signup Attribution**: `attributeSignup` and `attributeSignupByCode` block attempts where the signing-up user matches the affiliate's userId
-- **Stripe Customer Linking**: `linkStripeCustomer` blocks self-referral when linking customers to affiliates
-- **Commission Creation**: `createFromInvoice` rejects commissions where the referral's userId matches the affiliate
+- **Signup Attribution**: `attributeSignup` and `attributeSignupByCode` block
+  attempts where the signing-up user matches the affiliate's userId
+- **Stripe Customer Linking**: `linkStripeCustomer` blocks self-referral when
+  linking customers to affiliates
+- **Commission Creation**: `createFromInvoice` rejects commissions where the
+  referral's userId matches the affiliate
 
 ### Attribution Security
 
-- **First-Touch Attribution**: Once a user is attributed to an affiliate, they cannot be re-attributed to a different affiliate (prevents affiliate code switching)
-- **Authenticated Attribution Only**: Affiliate code attribution via `linkStripeCustomer` requires a userId - guest checkout cannot use affiliate codes to prevent anonymous self-referral
-- **Webhook Attribution Disabled**: The `createFromInvoice` webhook handler does not create new referrals via affiliate codes - all attribution must happen through the authenticated frontend flow (`trackClick` → `attributeSignup` → `linkStripeCustomer`)
+- **First-Touch Attribution**: Once a user is attributed to an affiliate, they
+  cannot be re-attributed to a different affiliate (prevents affiliate code
+  switching)
+- **Authenticated Attribution Only**: Affiliate code attribution via
+  `linkStripeCustomer` requires a userId - guest checkout cannot use affiliate
+  codes to prevent anonymous self-referral
+- **Webhook Attribution Disabled**: The `createFromInvoice` webhook handler does
+  not create new referrals via affiliate codes - all attribution must happen
+  through the authenticated frontend flow (`trackClick` → `attributeSignup` →
+  `linkStripeCustomer`)
 
 ### Click Velocity Limiting
 
@@ -626,18 +695,21 @@ IP-based rate limiting prevents click fraud using `@convex-dev/rate-limiter`:
 
 ```typescript
 // Configurable per campaign (default: 10 clicks per IP per hour)
-maxClicksPerIpPerHour: 10
+maxClicksPerIpPerHour: 10;
 ```
 
 ### Silent Rejection
 
-All fraud prevention checks silently reject suspicious activity (returning `null` or `{ success: false }`) without throwing errors. This prevents attackers from learning detection logic through error messages.
+All fraud prevention checks silently reject suspicious activity (returning
+`null` or `{ success: false }`) without throwing errors. This prevents attackers
+from learning detection logic through error messages.
 
 ## Troubleshooting
 
 ### TypeScript type errors with components.affiliates
 
-If you get type errors when passing `components.affiliates` to `createAffiliateApi`, you can use a type assertion:
+If you get type errors when passing `components.affiliates` to
+`createAffiliateApi`, you can use a type assertion:
 
 ```typescript
 import { createAffiliateApi, ComponentApi } from "chief_emerie";
@@ -648,11 +720,14 @@ const affiliates = createAffiliateApi(
 );
 ```
 
-This may be needed if your TypeScript configuration differs from the component's.
+This may be needed if your TypeScript configuration differs from the
+component's.
 
 ### Authentication with different providers
 
-The `auth` callback receives the full Convex context, but the type only shows `{ auth: Auth }`. The recommended pattern works with any Convex-compatible auth provider:
+The `auth` callback receives the full Convex context, but the type only shows
+`{ auth: Auth }`. The recommended pattern works with any Convex-compatible auth
+provider:
 
 ```typescript
 auth: async (ctx) => {
@@ -662,7 +737,8 @@ auth: async (ctx) => {
 },
 ```
 
-For Better Auth or other providers, the `identity.subject` contains the user ID from your auth provider's JWT token.
+For Better Auth or other providers, the `identity.subject` contains the user ID
+from your auth provider's JWT token.
 
 ## Common Recipes
 
@@ -687,10 +763,13 @@ export function ReferralTracker() {
         landingPage: window.location.pathname,
       }).then((result) => {
         if (result?.referralId) {
-          localStorage.setItem("affiliateReferral", JSON.stringify({
-            referralId: result.referralId,
-            code,
-          }));
+          localStorage.setItem(
+            "affiliateReferral",
+            JSON.stringify({
+              referralId: result.referralId,
+              code,
+            }),
+          );
         }
       });
     }
@@ -735,9 +814,10 @@ if (discount) {
     });
   } else {
     // Calculate discount manually
-    const discountAmount = discount.discountType === "percentage"
-      ? Math.round((subtotalCents * discount.discountValue) / 100)
-      : discount.discountValue;
+    const discountAmount =
+      discount.discountType === "percentage"
+        ? Math.round((subtotalCents * discount.discountValue) / 100)
+        : discount.discountValue;
     // Apply to your checkout
   }
 }

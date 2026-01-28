@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel.js";
 import {
   affiliateStatusValidator,
   commissionTypeValidator,
@@ -8,7 +9,10 @@ import {
   customCopyValidator,
   promoContentValidator,
   affiliateStatsValidator,
+  subAffiliateStatsValidator,
   generateAffiliateCode,
+  generateRecruitmentCode,
+  initializeSubAffiliateStats,
 } from "./validators.js";
 
 // ============================================
@@ -41,10 +45,13 @@ export const getByCode = query({
       payoutEmail: v.optional(v.string()),
       status: affiliateStatusValidator,
       stats: affiliateStatsValidator,
+      referredByAffiliateId: v.optional(v.id("affiliates")),
+      recruitmentCode: v.optional(v.string()),
+      subAffiliateStats: v.optional(subAffiliateStatsValidator),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db
@@ -80,10 +87,13 @@ export const getById = query({
       payoutEmail: v.optional(v.string()),
       status: affiliateStatusValidator,
       stats: affiliateStatsValidator,
+      referredByAffiliateId: v.optional(v.id("affiliates")),
+      recruitmentCode: v.optional(v.string()),
+      subAffiliateStats: v.optional(subAffiliateStatsValidator),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.affiliateId);
@@ -116,10 +126,13 @@ export const getByUserId = query({
       payoutEmail: v.optional(v.string()),
       status: affiliateStatusValidator,
       stats: affiliateStatsValidator,
+      referredByAffiliateId: v.optional(v.id("affiliates")),
+      recruitmentCode: v.optional(v.string()),
+      subAffiliateStats: v.optional(subAffiliateStatsValidator),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db
@@ -157,9 +170,12 @@ export const list = query({
       payoutEmail: v.optional(v.string()),
       status: affiliateStatusValidator,
       stats: affiliateStatsValidator,
+      referredByAffiliateId: v.optional(v.id("affiliates")),
+      recruitmentCode: v.optional(v.string()),
+      subAffiliateStats: v.optional(subAffiliateStatsValidator),
       createdAt: v.number(),
       updatedAt: v.number(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 100;
@@ -169,7 +185,7 @@ export const list = query({
       return await ctx.db
         .query("affiliates")
         .withIndex("by_campaign_status", (q) =>
-          q.eq("campaignId", campaignId).eq("status", status)
+          q.eq("campaignId", campaignId).eq("status", status),
         )
         .take(limit);
     }
@@ -209,6 +225,7 @@ export const register = mutation({
     website: v.optional(v.string()),
     socialMedia: v.optional(v.string()),
     payoutEmail: v.optional(v.string()),
+    recruitmentReferralId: v.optional(v.string()), // Track who recruited this affiliate
   },
   returns: v.object({
     affiliateId: v.id("affiliates"),
@@ -230,6 +247,30 @@ export const register = mutation({
       throw new Error("Campaign not found");
     }
 
+    // Look up recruitment referral if provided
+    let referredByAffiliateId: Id<"affiliates"> | undefined = undefined;
+    if (args.recruitmentReferralId) {
+      const recruitmentReferral = await ctx.db
+        .query("affiliateRecruitmentReferrals")
+        .withIndex("by_referralId", (q) =>
+          q.eq("referralId", args.recruitmentReferralId!),
+        )
+        .first();
+
+      if (recruitmentReferral && recruitmentReferral.status === "clicked") {
+        // Check if referral hasn't expired
+        if (recruitmentReferral.expiresAt > Date.now()) {
+          referredByAffiliateId = recruitmentReferral.recruitingAffiliateId;
+
+          // Prevent self-recruitment
+          const recruitingAffiliate = await ctx.db.get(referredByAffiliateId);
+          if (recruitingAffiliate?.userId === args.userId) {
+            throw new Error("Cannot recruit yourself as an affiliate");
+          }
+        }
+      }
+    }
+
     // Generate or validate code
     let code = args.customCode?.toUpperCase() ?? generateAffiliateCode();
 
@@ -247,15 +288,20 @@ export const register = mutation({
         .first();
     }
 
+    // Generate recruitment code for this affiliate
+    const recruitmentCode = generateRecruitmentCode(code);
+
     const now = Date.now();
     const affiliateId = await ctx.db.insert("affiliates", {
       userId: args.userId,
       campaignId: args.campaignId,
       code,
+      recruitmentCode,
       displayName: args.displayName,
       website: args.website,
       payoutEmail: args.payoutEmail ?? args.email,
       status: "pending",
+      referredByAffiliateId,
       stats: {
         totalClicks: 0,
         totalSignups: 0,
@@ -268,6 +314,38 @@ export const register = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Update recruitment referral status if applicable
+    if (args.recruitmentReferralId && referredByAffiliateId) {
+      const recruitmentReferral = await ctx.db
+        .query("affiliateRecruitmentReferrals")
+        .withIndex("by_referralId", (q) =>
+          q.eq("referralId", args.recruitmentReferralId!),
+        )
+        .first();
+
+      if (recruitmentReferral) {
+        await ctx.db.patch(recruitmentReferral._id, {
+          status: "signed_up",
+          recruitedAffiliateId: affiliateId,
+          signedUpAt: now,
+        });
+      }
+
+      // Update parent's totalRecruits
+      const parentAffiliate = await ctx.db.get(referredByAffiliateId);
+      if (parentAffiliate) {
+        const subStats =
+          parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
+        await ctx.db.patch(referredByAffiliateId, {
+          subAffiliateStats: {
+            ...subStats,
+            totalRecruits: subStats.totalRecruits + 1,
+          },
+          updatedAt: now,
+        });
+      }
+    }
 
     return { affiliateId, code };
   },
@@ -288,13 +366,48 @@ export const approve = mutation({
     }
 
     if (affiliate.status !== "pending") {
-      throw new Error(`Cannot approve affiliate with status: ${affiliate.status}`);
+      throw new Error(
+        `Cannot approve affiliate with status: ${affiliate.status}`,
+      );
     }
+
+    const now = Date.now();
 
     await ctx.db.patch(args.affiliateId, {
       status: "approved",
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
+
+    // Update parent affiliate's stats if this affiliate was recruited
+    if (affiliate.referredByAffiliateId) {
+      const parentAffiliate = await ctx.db.get(affiliate.referredByAffiliateId);
+      if (parentAffiliate) {
+        const subStats =
+          parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
+        await ctx.db.patch(affiliate.referredByAffiliateId, {
+          subAffiliateStats: {
+            ...subStats,
+            activeRecruits: subStats.activeRecruits + 1,
+          },
+          updatedAt: now,
+        });
+      }
+
+      // Update recruitment referral status to approved
+      const recruitmentReferral = await ctx.db
+        .query("affiliateRecruitmentReferrals")
+        .withIndex("by_recruitedAffiliateId", (q) =>
+          q.eq("recruitedAffiliateId", args.affiliateId),
+        )
+        .first();
+
+      if (recruitmentReferral) {
+        await ctx.db.patch(recruitmentReferral._id, {
+          status: "approved",
+          approvedAt: now,
+        });
+      }
+    }
 
     return null;
   },
@@ -315,7 +428,9 @@ export const reject = mutation({
     }
 
     if (affiliate.status !== "pending") {
-      throw new Error(`Cannot reject affiliate with status: ${affiliate.status}`);
+      throw new Error(
+        `Cannot reject affiliate with status: ${affiliate.status}`,
+      );
     }
 
     await ctx.db.patch(args.affiliateId, {
@@ -369,7 +484,9 @@ export const reactivate = mutation({
     }
 
     if (affiliate.status !== "suspended") {
-      throw new Error(`Cannot reactivate affiliate with status: ${affiliate.status}`);
+      throw new Error(
+        `Cannot reactivate affiliate with status: ${affiliate.status}`,
+      );
     }
 
     await ctx.db.patch(args.affiliateId, {
@@ -405,7 +522,8 @@ export const updateProfile = mutation({
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
     if (args.displayName !== undefined) updates.displayName = args.displayName;
     if (args.bio !== undefined) updates.bio = args.bio;
-    if (args.promoContent !== undefined) updates.promoContent = args.promoContent;
+    if (args.promoContent !== undefined)
+      updates.promoContent = args.promoContent;
     if (args.website !== undefined) updates.website = args.website;
     if (args.socials !== undefined) updates.socials = args.socials;
     if (args.customCopy !== undefined) updates.customCopy = args.customCopy;

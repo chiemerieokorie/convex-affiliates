@@ -39,9 +39,13 @@ export const list = query({
       refereeDiscountValue: v.optional(v.number()),
       refereeStripeCouponId: v.optional(v.string()),
       maxClicksPerIpPerHour: v.optional(v.number()),
+      affiliateRecruitmentEnabled: v.optional(v.boolean()),
+      subAffiliateCommissionPercent: v.optional(v.number()),
+      recruitmentCookieDurationDays: v.optional(v.number()),
+      maxSubAffiliatesPerAffiliate: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     if (args.activeOnly) {
@@ -83,10 +87,14 @@ export const get = query({
       refereeDiscountValue: v.optional(v.number()),
       refereeStripeCouponId: v.optional(v.string()),
       maxClicksPerIpPerHour: v.optional(v.number()),
+      affiliateRecruitmentEnabled: v.optional(v.boolean()),
+      subAffiliateCommissionPercent: v.optional(v.number()),
+      recruitmentCookieDurationDays: v.optional(v.number()),
+      maxSubAffiliatesPerAffiliate: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.campaignId);
@@ -122,10 +130,14 @@ export const getBySlug = query({
       refereeDiscountValue: v.optional(v.number()),
       refereeStripeCouponId: v.optional(v.string()),
       maxClicksPerIpPerHour: v.optional(v.number()),
+      affiliateRecruitmentEnabled: v.optional(v.boolean()),
+      subAffiliateCommissionPercent: v.optional(v.number()),
+      recruitmentCookieDurationDays: v.optional(v.number()),
+      maxSubAffiliatesPerAffiliate: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db
@@ -162,10 +174,14 @@ export const getDefault = query({
       refereeDiscountValue: v.optional(v.number()),
       refereeStripeCouponId: v.optional(v.string()),
       maxClicksPerIpPerHour: v.optional(v.number()),
+      affiliateRecruitmentEnabled: v.optional(v.boolean()),
+      subAffiliateCommissionPercent: v.optional(v.number()),
+      recruitmentCookieDurationDays: v.optional(v.number()),
+      maxSubAffiliatesPerAffiliate: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx) => {
     return await ctx.db
@@ -203,6 +219,11 @@ export const create = mutation({
     refereeDiscountValue: v.optional(v.number()),
     refereeStripeCouponId: v.optional(v.string()),
     maxClicksPerIpPerHour: v.optional(v.number()),
+    // Affiliate recruitment settings
+    affiliateRecruitmentEnabled: v.optional(v.boolean()),
+    subAffiliateCommissionPercent: v.optional(v.number()),
+    recruitmentCookieDurationDays: v.optional(v.number()),
+    maxSubAffiliatesPerAffiliate: v.optional(v.number()),
   },
   returns: v.id("campaigns"),
   handler: async (ctx, args) => {
@@ -246,6 +267,10 @@ export const create = mutation({
       refereeDiscountValue: args.refereeDiscountValue,
       refereeStripeCouponId: args.refereeStripeCouponId,
       maxClicksPerIpPerHour: args.maxClicksPerIpPerHour,
+      affiliateRecruitmentEnabled: args.affiliateRecruitmentEnabled,
+      subAffiliateCommissionPercent: args.subAffiliateCommissionPercent,
+      recruitmentCookieDurationDays: args.recruitmentCookieDurationDays,
+      maxSubAffiliatesPerAffiliate: args.maxSubAffiliatesPerAffiliate,
       createdAt: now,
       updatedAt: now,
     });
@@ -276,6 +301,11 @@ export const update = mutation({
     refereeDiscountValue: v.optional(v.number()),
     refereeStripeCouponId: v.optional(v.string()),
     maxClicksPerIpPerHour: v.optional(v.number()),
+    // Affiliate recruitment settings
+    affiliateRecruitmentEnabled: v.optional(v.boolean()),
+    subAffiliateCommissionPercent: v.optional(v.number()),
+    recruitmentCookieDurationDays: v.optional(v.number()),
+    maxSubAffiliatesPerAffiliate: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -326,6 +356,16 @@ export const update = mutation({
       updates.refereeStripeCouponId = args.refereeStripeCouponId;
     if (args.maxClicksPerIpPerHour !== undefined)
       updates.maxClicksPerIpPerHour = args.maxClicksPerIpPerHour;
+    if (args.affiliateRecruitmentEnabled !== undefined)
+      updates.affiliateRecruitmentEnabled = args.affiliateRecruitmentEnabled;
+    if (args.subAffiliateCommissionPercent !== undefined)
+      updates.subAffiliateCommissionPercent =
+        args.subAffiliateCommissionPercent;
+    if (args.recruitmentCookieDurationDays !== undefined)
+      updates.recruitmentCookieDurationDays =
+        args.recruitmentCookieDurationDays;
+    if (args.maxSubAffiliatesPerAffiliate !== undefined)
+      updates.maxSubAffiliatesPerAffiliate = args.maxSubAffiliatesPerAffiliate;
 
     await ctx.db.patch(args.campaignId, updates);
     return null;

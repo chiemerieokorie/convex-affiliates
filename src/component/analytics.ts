@@ -39,14 +39,14 @@ export const getPortalData = query({
           currency: v.string(),
           status: v.string(),
           createdAt: v.number(),
-        })
+        }),
       ),
       pendingPayout: v.object({
         amountCents: v.number(),
         count: v.number(),
       }),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     // Find affiliate by user ID
@@ -76,14 +76,14 @@ export const getPortalData = query({
     const pendingCommissions = await ctx.db
       .query("commissions")
       .withIndex("by_affiliate_status", (q) =>
-        q.eq("affiliateId", affiliate._id).eq("status", "pending")
+        q.eq("affiliateId", affiliate._id).eq("status", "pending"),
       )
       .collect();
 
     const approvedCommissions = await ctx.db
       .query("commissions")
       .withIndex("by_affiliate_status", (q) =>
-        q.eq("affiliateId", affiliate._id).eq("status", "approved")
+        q.eq("affiliateId", affiliate._id).eq("status", "approved"),
       )
       .collect();
 
@@ -91,7 +91,7 @@ export const getPortalData = query({
     const pendingPayout = {
       amountCents: allPending.reduce(
         (sum, c) => sum + c.commissionAmountCents,
-        0
+        0,
       ),
       count: allPending.length,
     };
@@ -144,10 +144,10 @@ export const getAdminDashboard = query({
     // Count affiliates
     const allAffiliates = await ctx.db.query("affiliates").collect();
     const pendingAffiliates = allAffiliates.filter(
-      (a) => a.status === "pending"
+      (a) => a.status === "pending",
     );
     const activeAffiliates = allAffiliates.filter(
-      (a) => a.status === "approved"
+      (a) => a.status === "approved",
     );
 
     // Aggregate stats from all affiliates
@@ -200,8 +200,8 @@ export const getTopAffiliates = query({
       v.union(
         v.literal("conversions"),
         v.literal("revenue"),
-        v.literal("commissions")
-      )
+        v.literal("commissions"),
+      ),
     ),
     limit: v.optional(v.number()),
   },
@@ -211,7 +211,7 @@ export const getTopAffiliates = query({
       code: v.string(),
       displayName: v.optional(v.string()),
       stats: affiliateStatsValidator,
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 10;
@@ -286,7 +286,8 @@ export const getConversionFunnel = query({
     }
 
     const clickToSignupRate = clicks > 0 ? (signups / clicks) * 100 : 0;
-    const signupToConversionRate = signups > 0 ? (conversions / signups) * 100 : 0;
+    const signupToConversionRate =
+      signups > 0 ? (conversions / signups) * 100 : 0;
     const overallConversionRate = clicks > 0 ? (conversions / clicks) * 100 : 0;
 
     return {
@@ -339,7 +340,7 @@ export const getRecentEvents = query({
       type: eventTypeValidator,
       metadata: v.optional(v.string()),
       timestamp: v.number(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 50;
@@ -349,7 +350,7 @@ export const getRecentEvents = query({
       return await ctx.db
         .query("events")
         .withIndex("by_affiliate_type", (q) =>
-          q.eq("affiliateId", args.affiliateId).eq("type", type)
+          q.eq("affiliateId", args.affiliateId).eq("type", type),
         )
         .order("desc")
         .take(limit);

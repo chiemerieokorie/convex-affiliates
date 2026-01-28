@@ -9,8 +9,15 @@ describe("client tests", () => {
     const link = generateAffiliateLink(baseUrl, "ABC123", "/pricing");
     expect(link).toBe("https://example.com/pricing?ref=ABC123");
 
-    const linkWithSubId = generateAffiliateLink(baseUrl, "ABC123", "/pricing", "campaign1");
-    expect(linkWithSubId).toBe("https://example.com/pricing?ref=ABC123&sub=campaign1");
+    const linkWithSubId = generateAffiliateLink(
+      baseUrl,
+      "ABC123",
+      "/pricing",
+      "campaign1",
+    );
+    expect(linkWithSubId).toBe(
+      "https://example.com/pricing?ref=ABC123&sub=campaign1",
+    );
   });
 
   test("should track click and attribute signup", async () => {
@@ -27,7 +34,7 @@ describe("client tests", () => {
         payoutTerm: "NET-30",
         cookieDurationDays: 30,
         isDefault: true,
-      }
+      },
     );
 
     // Register an affiliate
@@ -37,7 +44,7 @@ describe("client tests", () => {
         userId: "affiliate-user",
         email: "affiliate@example.com",
         campaignId,
-      }
+      },
     );
 
     // Approve the affiliate
@@ -51,7 +58,7 @@ describe("client tests", () => {
       {
         affiliateCode: affiliateResult.code,
         landingPage: "/pricing",
-      }
+      },
     );
 
     expect(clickResult).toBeDefined();
@@ -63,7 +70,7 @@ describe("client tests", () => {
       {
         affiliateCode: affiliateResult.code,
         userId: "new-customer",
-      }
+      },
     );
 
     expect(signupResult.success).toBe(true);
@@ -72,7 +79,7 @@ describe("client tests", () => {
     // Get the referral
     const referral = await t.query(
       components.affiliates.referrals.getByUserId,
-      { userId: "new-customer" }
+      { userId: "new-customer" },
     );
 
     expect(referral).toBeDefined();

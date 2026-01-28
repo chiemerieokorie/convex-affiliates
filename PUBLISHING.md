@@ -1,6 +1,8 @@
 # Publishing
 
-This package uses **semantic-release** for fully automated versioning and publishing. Releases are triggered automatically when commits are pushed to `main`.
+This package uses **semantic-release** for fully automated versioning and
+publishing. Releases are triggered automatically when commits are pushed to
+`main`.
 
 ## How It Works
 
@@ -15,16 +17,17 @@ Push to main → CI runs tests → semantic-release analyzes commits →
 
 ## Commit Convention
 
-Releases are determined by commit messages using [Conventional Commits](https://www.conventionalcommits.org/):
+Releases are determined by commit messages using
+[Conventional Commits](https://www.conventionalcommits.org/):
 
-| Commit Type | Description | Version Bump |
-|-------------|-------------|--------------|
-| `feat:` | New feature | Minor (0.x.0) |
-| `fix:` | Bug fix | Patch (0.0.x) |
-| `perf:` | Performance improvement | Patch |
-| `docs:` | Documentation (README only) | Patch |
-| `feat!:` or `BREAKING CHANGE:` | Breaking change | Major (x.0.0) |
-| `chore:`, `ci:`, `style:`, `refactor:`, `test:` | Maintenance | No release |
+| Commit Type                                     | Description                 | Version Bump  |
+| ----------------------------------------------- | --------------------------- | ------------- |
+| `feat:`                                         | New feature                 | Minor (0.x.0) |
+| `fix:`                                          | Bug fix                     | Patch (0.0.x) |
+| `perf:`                                         | Performance improvement     | Patch         |
+| `docs:`                                         | Documentation (README only) | Patch         |
+| `feat!:` or `BREAKING CHANGE:`                  | Breaking change             | Major (x.0.0) |
+| `chore:`, `ci:`, `style:`, `refactor:`, `test:` | Maintenance                 | No release    |
 
 ### Examples
 
@@ -60,6 +63,7 @@ The release workflow requires the following secret:
 ### Package Registries
 
 The package is published to:
+
 1. **npm** (primary): https://www.npmjs.com/package/chief_emerie
 2. **GitHub Packages**: https://github.com/chiemerieokorie/affiliates/packages
 

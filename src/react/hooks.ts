@@ -123,6 +123,43 @@ export interface Payout {
   failureReason?: string;
 }
 
+export interface LandingPageData {
+  landingPage: {
+    _id: string;
+    campaignId: string;
+    mediaPreset: string;
+    hero: {
+      headline: string;
+      subheadline?: string;
+      videoUrl?: string;
+      imageUrl?: string;
+    };
+    benefits?: string[];
+    testimonials?: Array<{
+      name: string;
+      quote: string;
+      avatar?: string;
+      earnings?: string;
+    }>;
+    socialProofText?: string;
+    commissionPreviewText?: string;
+    cta?: {
+      text: string;
+      subtext?: string;
+      buttonLabel?: string;
+      url?: string;
+    };
+    status: string;
+    totalViews: number;
+  };
+  campaign: {
+    name: string;
+    slug: string;
+    commissionType: string;
+    commissionValue: number;
+  } | null;
+}
+
 // Generic API type
 type AffiliateApi = {
   getPortalData: FunctionReference<"query">;
@@ -136,6 +173,9 @@ type AffiliateApi = {
   adminApproveAffiliate: FunctionReference<"mutation">;
   adminRejectAffiliate: FunctionReference<"mutation">;
   adminTopAffiliates: FunctionReference<"query">;
+  getLandingPageData: FunctionReference<"query">;
+  trackLandingPageView: FunctionReference<"mutation">;
+  adminListLandingPages: FunctionReference<"query">;
 };
 
 // =============================================================================
@@ -163,19 +203,21 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
      * Get all data needed for the affiliate portal.
      */
     useAffiliatePortal: () => {
-      return useQuery(affiliateApi.getPortalData) as AffiliatePortalData | undefined;
+      return useQuery(affiliateApi.getPortalData) as
+        | AffiliatePortalData
+        | undefined;
     },
 
     /**
      * Get paginated commission history.
      */
     useAffiliateCommissions: (
-      status?: "pending" | "approved" | "paid" | "reversed" | "processing"
+      status?: "pending" | "approved" | "paid" | "reversed" | "processing",
     ) => {
       return usePaginatedQuery(
         affiliateApi.listCommissions,
         { status },
-        { initialNumItems: 10 }
+        { initialNumItems: 10 },
       );
     },
 
@@ -183,12 +225,12 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
      * Get paginated payout history.
      */
     useAffiliatePayouts: (
-      status?: "pending" | "processing" | "completed" | "failed" | "cancelled"
+      status?: "pending" | "processing" | "completed" | "failed" | "cancelled",
     ) => {
       return usePaginatedQuery(
         affiliateApi.listPayouts,
         { status },
-        { initialNumItems: 10 }
+        { initialNumItems: 10 },
       );
     },
 
@@ -208,7 +250,7 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
         }) => {
           return await register(params);
         },
-        [register]
+        [register],
       );
     },
 
@@ -228,7 +270,7 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
         }) => {
           return await trackClick(params);
         },
-        [trackClick]
+        [trackClick],
       );
     },
 
@@ -236,7 +278,9 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
      * Get admin dashboard data.
      */
     useAdminDashboard: () => {
-      return useQuery(affiliateApi.adminDashboard) as AdminDashboardData | undefined;
+      return useQuery(affiliateApi.adminDashboard) as
+        | AdminDashboardData
+        | undefined;
     },
 
     /**
@@ -270,7 +314,7 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
         async (affiliateId: string) => {
           return await approve({ affiliateId: affiliateId as any });
         },
-        [approve]
+        [approve],
       );
     },
 
@@ -284,7 +328,45 @@ export function createAffiliateHooks(affiliateApi: AffiliateApi) {
         async (affiliateId: string, reason?: string) => {
           return await reject({ affiliateId: affiliateId as any, reason });
         },
-        [reject]
+        [reject],
+      );
+    },
+
+    /**
+     * Fetch landing page data by campaign slug and optional media preset.
+     * Automatically tracks the view on first load.
+     */
+    useLandingPage: (campaignSlug: string, mediaPreset?: string) => {
+      const data = useQuery(affiliateApi.getLandingPageData, {
+        slug: campaignSlug,
+        mediaPreset,
+      }) as LandingPageData | null | undefined;
+      const trackView = useMutation(affiliateApi.trackLandingPageView);
+      const [viewTracked, setViewTracked] = useState(false);
+
+      useEffect(() => {
+        if (data?.landingPage && !viewTracked) {
+          trackView({ slug: campaignSlug, mediaPreset }).catch(() => {});
+          setViewTracked(true);
+        }
+      }, [
+        data?.landingPage,
+        viewTracked,
+        trackView,
+        campaignSlug,
+        mediaPreset,
+      ]);
+
+      return data;
+    },
+
+    /**
+     * Admin: list all landing pages for a campaign.
+     */
+    useAdminLandingPages: (campaignId?: string) => {
+      return useQuery(
+        affiliateApi.adminListLandingPages,
+        campaignId ? { campaignId: campaignId as any } : "skip",
       );
     },
   };
@@ -305,7 +387,7 @@ export function useTrackReferralOnLoad(
     referrer?: string;
     userAgent?: string;
     subId?: string;
-  }) => Promise<{ referralId: string } | null>
+  }) => Promise<{ referralId: string } | null>,
 ) {
   const [tracked, setTracked] = useState(false);
   const [referralId, setReferralId] = useState<string | null>(null);
@@ -388,7 +470,7 @@ export function useAffiliateLinkGenerator(baseUrl: string, code: string) {
       }
       return url.toString();
     },
-    [baseUrl, code]
+    [baseUrl, code],
   );
 
   return { generate };
@@ -414,6 +496,115 @@ export function useCopyToClipboard() {
   return { copy, copied };
 }
 
+/**
+ * Parse Smartlead URL parameters for landing page context.
+ * Extracts: name, email, company, ref, sub, media from the URL.
+ * SSR-safe.
+ *
+ * @example
+ * ```tsx
+ * const { name, email, company, ref, sub, media } = useLandingPageParams();
+ * // Pre-fill registration form with name/email
+ * // Use media to select landing page preset
+ * ```
+ */
+export function useLandingPageParams() {
+  const [params] = useState<{
+    name: string | null;
+    email: string | null;
+    company: string | null;
+    ref: string | null;
+    sub: string | null;
+    media: string | null;
+  }>(() => {
+    if (typeof window === "undefined") {
+      return {
+        name: null,
+        email: null,
+        company: null,
+        ref: null,
+        sub: null,
+        media: null,
+      };
+    }
+    const sp = new URLSearchParams(window.location.search);
+    return {
+      name: sp.get("name"),
+      email: sp.get("email"),
+      company: sp.get("company"),
+      ref: sp.get("ref"),
+      sub: sp.get("sub"),
+      media: sp.get("media"),
+    };
+  });
+
+  return params;
+}
+
+/**
+ * Handle auto-registration of an affiliate from landing page URL params.
+ * Call this after the user authenticates on the landing page.
+ *
+ * @param registerFn - The register mutation function
+ * @param options.autoRegister - If true, registers automatically when params exist
+ *
+ * @example
+ * ```tsx
+ * const { register, registered, error, loading, params } =
+ *   useAutoRegisterAffiliate(registerMutation, { autoRegister: true });
+ *
+ * if (registered) {
+ *   return <div>Welcome aboard!</div>;
+ * }
+ * ```
+ */
+export function useAutoRegisterAffiliate(
+  registerFn: (params: {
+    email: string;
+    displayName?: string;
+    customCode?: string;
+  }) => Promise<{ affiliateId: string; code: string }>,
+  options?: { autoRegister?: boolean },
+) {
+  const params = useLandingPageParams();
+  const [registered, setRegistered] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const doRegister = useCallback(async () => {
+    if (!params.email) {
+      setError("Email is required for registration");
+      return null;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await registerFn({
+        email: params.email,
+        displayName: params.name ?? undefined,
+        customCode: params.ref ?? undefined,
+      });
+      setRegistered(true);
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [params.email, params.name, params.ref, registerFn]);
+
+  useEffect(() => {
+    if (options?.autoRegister && params.email && !registered && !loading) {
+      doRegister();
+    }
+  }, [options?.autoRegister, params.email, registered, loading, doRegister]);
+
+  return { register: doRegister, registered, error, loading, params };
+}
+
 // =============================================================================
 // Formatting Utilities
 // =============================================================================
@@ -424,7 +615,7 @@ export function useCopyToClipboard() {
 export function formatCents(
   cents: number,
   currency = "USD",
-  locale = "en-US"
+  locale = "en-US",
 ): string {
   return new Intl.NumberFormat(locale, {
     style: "currency",
@@ -444,7 +635,7 @@ export function formatPercentage(value: number, decimals = 1): string {
  */
 export function formatDate(
   timestamp: number,
-  options?: Intl.DateTimeFormatOptions
+  options?: Intl.DateTimeFormatOptions,
 ): string {
   return new Date(timestamp).toLocaleDateString(undefined, {
     year: "numeric",
