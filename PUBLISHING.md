@@ -49,13 +49,13 @@ git commit -m "test: add unit tests for referral tracking"
 
 ## Setup Requirements
 
-### GitHub Secrets
+### Trusted Publishing (OIDC)
 
-The release workflow requires the following secret:
+The release workflow uses OIDC trusted publishing — no long-lived NPM_TOKEN needed. Configure the trusted publisher on npmjs.com:
 
-- **`NPM_TOKEN`** - npm automation token with publish permissions
-  - Generate at: https://www.npmjs.com/settings/tokens
-  - Select "Automation" type for CI usage
+1. Go to https://www.npmjs.com/package/convex-affiliates/access
+2. Add GitHub Actions as a trusted publisher
+3. Set owner: `chiemerieokorie`, repository: `convex-affiliates`, workflow: `release.yml`
 
 ### Package Registries
 
@@ -83,7 +83,7 @@ npm publish --access public
 
 If a bad version is published:
 
-1. **Within 72 hours**: `npm unpublish chief_emerie@<bad-version>`
+1. **Within 72 hours**: `npm unpublish convex-affiliates@<bad-version>`
 2. Fix the issue
 3. Push a `fix:` commit to trigger a patch release
 
@@ -94,6 +94,6 @@ For testing locally before merge:
 ```bash
 npm run build:clean
 npm pack
-# Creates chief_emerie-x.x.x.tgz
-# Install in another project: npm install ./path/to/chief_emerie-x.x.x.tgz
+# Creates convex-affiliates-x.x.x.tgz
+# Install in another project: npm install ./path/to/convex-affiliates-x.x.x.tgz
 ```

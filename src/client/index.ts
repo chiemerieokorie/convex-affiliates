@@ -244,7 +244,7 @@ type _ActionCtx = { runQuery: any; runMutation: any; runAction: any; auth: Auth 
  * @example
  * ```typescript
  * // convex/affiliates.ts
- * import { createAffiliateApi } from "chief_emerie";
+ * import { createAffiliateApi } from "convex-affiliates";
  * import { components } from "./_generated/api";
  *
  * export const {
@@ -333,7 +333,9 @@ export function createAffiliateApi(
     /**
      * Track when a visitor clicks an affiliate link.
      * Call this when a user lands on your site with a `?ref=CODE` parameter.
-     * Returns a referral ID that should be stored client-side (localStorage/cookie).
+     * Returns a referral ID that should be stored client-side.
+     * When using the React hooks, storage is handled automatically via the
+     * configured storage adapter (localStorage, cookie, or both).
      *
      * @param affiliateCode - The affiliate's unique code from the URL (e.g., "JOHN20")
      * @param landingPage - The URL path where the user landed (e.g., "/pricing")
@@ -355,6 +357,8 @@ export function createAffiliateApi(
      *     landingPage: window.location.pathname,
      *     referrer: document.referrer,
      *   });
+     *   // Store referralId — handled automatically by useTrackReferralOnLoad,
+     *   // or store manually via your preferred method (localStorage, cookie, etc.)
      *   if (referralId) {
      *     localStorage.setItem("referralId", referralId);
      *   }
@@ -746,7 +750,7 @@ export function createAffiliateApi(
      *
      * @param userId - The newly registered user's ID
      * @param referralCode - The affiliate code from URL params (if available)
-     * @param referralId - The referral ID from localStorage/cookie (preferred)
+     * @param referralId - The referral ID from storage (preferred). Retrieved automatically by useStoredReferral hook.
      * @returns Object with `attributed: boolean` indicating success
      *
      * @example
@@ -1279,7 +1283,7 @@ export interface StripeWebhookConfig {
  * @example
  * ```typescript
  * import { httpRouter } from "convex/server";
- * import { createStripeWebhookHandler } from "chief_emerie";
+ * import { createStripeWebhookHandler } from "convex-affiliates";
  * import { components } from "./_generated/api";
  *
  * const http = httpRouter();
@@ -1416,7 +1420,7 @@ export interface AffiliateStripeHandlersOptions {
  *
  * @example
  * ```typescript
- * import { getAffiliateStripeHandlers } from "chief_emerie";
+ * import { getAffiliateStripeHandlers } from "convex-affiliates";
  *
  * export const affiliateHandlers = getAffiliateStripeHandlers(
  *   components.affiliates,
