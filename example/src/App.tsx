@@ -73,11 +73,20 @@ function AdminDashboard() {
         }}
       >
         <StatCard label="Total Affiliates" value={dashboard.totalAffiliates} />
-        <StatCard label="Pending Approvals" value={dashboard.pendingApprovals} />
-        <StatCard label="Active Affiliates" value={dashboard.activeAffiliates} />
+        <StatCard
+          label="Pending Approvals"
+          value={dashboard.pendingApprovals}
+        />
+        <StatCard
+          label="Active Affiliates"
+          value={dashboard.activeAffiliates}
+        />
         <StatCard label="Total Clicks" value={dashboard.totalClicks} />
         <StatCard label="Total Signups" value={dashboard.totalSignups} />
-        <StatCard label="Total Conversions" value={dashboard.totalConversions} />
+        <StatCard
+          label="Total Conversions"
+          value={dashboard.totalConversions}
+        />
         <StatCard
           label="Total Revenue"
           value={`$${(dashboard.totalRevenueCents / 100).toFixed(2)}`}
@@ -126,8 +135,8 @@ function App() {
         >
           <h3>About This Component</h3>
           <p style={{ fontSize: "0.9rem", marginBottom: "0.5rem" }}>
-            This example demonstrates the Convex Affiliates component - a pure data
-            layer for affiliate marketing.
+            This example demonstrates the Convex Affiliates component - a pure
+            data layer for affiliate marketing.
           </p>
           <ul style={{ fontSize: "0.9rem", textAlign: "left" }}>
             <li>Zero-cookie tracking via URL parameters</li>

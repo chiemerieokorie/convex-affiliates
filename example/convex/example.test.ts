@@ -15,15 +15,18 @@ describe("affiliate example", () => {
     const t = initConvexTest();
 
     // First create a campaign
-    const campaignId = await t.mutation(components.affiliates.campaigns.create, {
-      name: "Test Campaign",
-      slug: "test",
-      commissionType: "percentage",
-      commissionValue: 20,
-      payoutTerm: "NET-30",
-      cookieDurationDays: 30,
-      isDefault: true,
-    });
+    const campaignId = await t.mutation(
+      components.affiliates.campaigns.create,
+      {
+        name: "Test Campaign",
+        slug: "test",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      },
+    );
 
     // Register an affiliate
     const affiliateResult = await t.mutation(
@@ -32,7 +35,7 @@ describe("affiliate example", () => {
         userId: "user-123",
         email: "test@example.com",
         campaignId,
-      }
+      },
     );
 
     // Approve the affiliate
@@ -66,7 +69,7 @@ describe("affiliate example", () => {
 
     // Query the dashboard directly from the component
     const dashboard = await t.query(
-      components.affiliates.analytics.getAdminDashboard
+      components.affiliates.analytics.getAdminDashboard,
     );
 
     expect(dashboard).toBeDefined();

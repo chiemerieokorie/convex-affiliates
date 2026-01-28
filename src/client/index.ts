@@ -23,17 +23,18 @@ import type { ComponentApi } from "../component/_generated/component.js";
  * const affiliates = createAffiliateApi(components.affiliates, { ... });
  * ```
  */
-export type UseApi<API> = API extends FunctionReference<
-  infer FType,
-  infer _Visibility,
-  infer Args,
-  infer Returns,
-  infer Name
->
-  ? FunctionReference<FType, "public" | "internal", Args, Returns, Name>
-  : API extends object
-    ? { [K in keyof API]: UseApi<API[K]> }
-    : API;
+export type UseApi<API> =
+  API extends FunctionReference<
+    infer FType,
+    infer _Visibility,
+    infer Args,
+    infer Returns,
+    infer Name
+  >
+    ? FunctionReference<FType, "public" | "internal", Args, Returns, Name>
+    : API extends object
+      ? { [K in keyof API]: UseApi<API[K]> }
+      : API;
 import {
   affiliateStatusValidator,
   payoutTermValidator,
@@ -71,7 +72,10 @@ type StripeEvent = {
 /**
  * Generic Stripe event handler function type.
  */
-type StripeHandler = (ctx: StripeHandlerCtx, event: StripeEvent) => Promise<void>;
+type StripeHandler = (
+  ctx: StripeHandlerCtx,
+  event: StripeEvent,
+) => Promise<void>;
 
 /**
  * Map of Stripe event types to their handlers.
@@ -124,7 +128,6 @@ export interface CommissionReversedData {
   affiliateId: string;
   commissionAmountCents: number;
 }
-
 
 /**
  * Type-safe hooks interface for affiliate lifecycle events.
@@ -231,7 +234,12 @@ export interface CreateAffiliateApiConfig extends AffiliateConfig {
 // Context types for internal use
 type QueryCtx = { runQuery: any; auth: Auth };
 type MutationCtx = { runQuery: any; runMutation: any; auth: Auth };
-type _ActionCtx = { runQuery: any; runMutation: any; runAction: any; auth: Auth };
+type _ActionCtx = {
+  runQuery: any;
+  runMutation: any;
+  runAction: any;
+  auth: Auth;
+};
 
 // =============================================================================
 // createAffiliateApi - Main API Factory
@@ -264,7 +272,7 @@ type _ActionCtx = { runQuery: any; runMutation: any; runAction: any; auth: Auth 
  */
 export function createAffiliateApi(
   component: UseApi<ComponentApi>,
-  config: CreateAffiliateApiConfig
+  config: CreateAffiliateApiConfig,
 ) {
   const defaults = {
     defaultCommissionType: config.defaultCommissionType ?? "percentage",
@@ -312,7 +320,7 @@ export function createAffiliateApi(
   // Helper to call lifecycle hooks safely (errors are logged, not thrown)
   async function callHook<K extends keyof AffiliateHooks>(
     hookName: K,
-    data: Parameters<NonNullable<AffiliateHooks[K]>>[0]
+    data: Parameters<NonNullable<AffiliateHooks[K]>>[0],
   ): Promise<void> {
     const hook = config.hooks?.[hookName];
     if (hook) {
@@ -670,8 +678,8 @@ export function createAffiliateApi(
             v.literal("clicked"),
             v.literal("signed_up"),
             v.literal("converted"),
-            v.literal("expired")
-          )
+            v.literal("expired"),
+          ),
         ),
         limit: v.optional(v.number()),
       },
@@ -776,7 +784,7 @@ export function createAffiliateApi(
         if (args.referralId) {
           const referral = await ctx.runQuery(
             component.referrals.getByReferralId,
-            { referralId: args.referralId }
+            { referralId: args.referralId },
           );
           if (referral && referral.status === "clicked") {
             await ctx.runMutation(component.referrals.attributeSignup, {
@@ -794,9 +802,12 @@ export function createAffiliateApi(
             {
               userId: args.userId,
               affiliateCode: args.referralCode,
-            }
+            },
           );
-          return { attributed: result.success, affiliateCode: args.referralCode };
+          return {
+            attributed: result.success,
+            affiliateCode: args.referralCode,
+          };
         }
 
         return { attributed: false };
@@ -842,7 +853,7 @@ export function createAffiliateApi(
         // Note: The type will be properly resolved after running `npx convex dev` to regenerate types
         return ctx.runQuery(
           (component.referrals as any).getRefereeDiscount,
-          args
+          args,
         );
       },
     }),
@@ -934,8 +945,8 @@ export function createAffiliateApi(
           v.union(
             v.literal("conversions"),
             v.literal("revenue"),
-            v.literal("commissions")
-          )
+            v.literal("commissions"),
+          ),
         ),
         limit: v.optional(v.number()),
       },
@@ -1189,7 +1200,7 @@ export function createAffiliateApi(
       handler: async (ctx, args) => {
         const page = await ctx.runQuery(
           component.landingPages.getBySlugAndPreset,
-          { slug: args.slug, mediaPreset: args.mediaPreset }
+          { slug: args.slug, mediaPreset: args.mediaPreset },
         );
 
         if (!page) return null;
@@ -1235,7 +1246,7 @@ export function createAffiliateApi(
       handler: async (ctx, args) => {
         const page = await ctx.runQuery(
           component.landingPages.getBySlugAndPreset,
-          { slug: args.slug, mediaPreset: args.mediaPreset }
+          { slug: args.slug, mediaPreset: args.mediaPreset },
         );
         if (page) {
           await ctx.runMutation(component.landingPages.incrementViews, {
@@ -1322,8 +1333,8 @@ export function createAffiliateApi(
               quote: v.string(),
               avatar: v.optional(v.string()),
               earnings: v.optional(v.string()),
-            })
-          )
+            }),
+          ),
         ),
         socialProofText: v.optional(v.string()),
         commissionPreviewText: v.optional(v.string()),
@@ -1333,7 +1344,7 @@ export function createAffiliateApi(
             subtext: v.optional(v.string()),
             buttonLabel: v.optional(v.string()),
             url: v.optional(v.string()),
-          })
+          }),
         ),
         status: v.optional(v.union(v.literal("draft"), v.literal("published"))),
       },
@@ -1367,7 +1378,7 @@ export function createAffiliateApi(
             subheadline: v.optional(v.string()),
             videoUrl: v.optional(v.string()),
             imageUrl: v.optional(v.string()),
-          })
+          }),
         ),
         benefits: v.optional(v.array(v.string())),
         testimonials: v.optional(
@@ -1377,8 +1388,8 @@ export function createAffiliateApi(
               quote: v.string(),
               avatar: v.optional(v.string()),
               earnings: v.optional(v.string()),
-            })
-          )
+            }),
+          ),
         ),
         socialProofText: v.optional(v.string()),
         commissionPreviewText: v.optional(v.string()),
@@ -1388,7 +1399,7 @@ export function createAffiliateApi(
             subtext: v.optional(v.string()),
             buttonLabel: v.optional(v.string()),
             url: v.optional(v.string()),
-          })
+          }),
         ),
         status: v.optional(v.union(v.literal("draft"), v.literal("published"))),
         mediaPreset: v.optional(v.string()),
@@ -1434,7 +1445,7 @@ export function registerRoutes(
   component: UseApi<ComponentApi>,
   options: {
     pathPrefix?: string;
-  } = {}
+  } = {},
 ) {
   const prefix = options.pathPrefix ?? "/affiliates";
 
@@ -1473,7 +1484,7 @@ export function registerRoutes(
         {
           status: 200,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }),
   });
@@ -1497,13 +1508,13 @@ export function registerRoutes(
 
       const page = await ctx.runQuery(
         component.landingPages.getBySlugAndPreset,
-        { slug, mediaPreset: preset }
+        { slug, mediaPreset: preset },
       );
 
       if (!page) {
         return new Response(
           JSON.stringify({ error: "Landing page not found" }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
+          { status: 404, headers: { "Content-Type": "application/json" } },
         );
       }
 
@@ -1529,7 +1540,7 @@ export function registerRoutes(
               }
             : null,
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }),
   });
@@ -1546,7 +1557,7 @@ export function registerRoutes(
 async function verifyStripeSignature(
   payload: string,
   signature: string,
-  secret: string
+  secret: string,
 ): Promise<boolean> {
   // Parse signature header: t=timestamp,v1=signature
   const parts = signature.split(",");
@@ -1567,12 +1578,12 @@ async function verifyStripeSignature(
     encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
   const signatureBytes = await crypto.subtle.sign(
     "HMAC",
     key,
-    encoder.encode(signedPayload)
+    encoder.encode(signedPayload),
   );
   const expectedSig = Array.from(new Uint8Array(signatureBytes))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -1616,13 +1627,13 @@ export interface StripeWebhookConfig {
  */
 export function createStripeWebhookHandler(
   component: UseApi<ComponentApi>,
-  config: StripeWebhookConfig
+  config: StripeWebhookConfig,
 ) {
   // Validate webhook secret at creation time for helpful error messages
   if (!config.webhookSecret) {
     throw new Error(
       "webhookSecret is required for Stripe webhook handler. " +
-        "Set STRIPE_WEBHOOK_SECRET in your Convex environment variables."
+        "Set STRIPE_WEBHOOK_SECRET in your Convex environment variables.",
     );
   }
 
@@ -1635,14 +1646,14 @@ export function createStripeWebhookHandler(
     if (!signature) {
       return new Response(
         JSON.stringify({ error: "Missing stripe-signature header" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: { "Content-Type": "application/json" } },
       );
     }
 
     const isValid = await verifyStripeSignature(
       rawBody,
       signature,
-      config.webhookSecret
+      config.webhookSecret,
     );
     if (!isValid) {
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
@@ -1651,7 +1662,10 @@ export function createStripeWebhookHandler(
       });
     }
 
-    const event = JSON.parse(rawBody) as { type: string; data: { object: any } };
+    const event = JSON.parse(rawBody) as {
+      type: string;
+      data: { object: any };
+    };
 
     try {
       switch (event.type) {
@@ -1700,7 +1714,7 @@ export function createStripeWebhookHandler(
         JSON.stringify({
           error: error instanceof Error ? error.message : "Unknown error",
         }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
   });
@@ -1756,13 +1770,16 @@ export interface AffiliateStripeHandlersOptions {
  */
 export function getAffiliateStripeHandlers(
   component: UseApi<ComponentApi>,
-  options?: AffiliateStripeHandlersOptions
+  options?: AffiliateStripeHandlersOptions,
 ): AffiliateStripeHandlers {
   // Helper to call hooks safely
-  type StripeHooks = Pick<AffiliateHooks, "commission.created" | "commission.reversed">;
+  type StripeHooks = Pick<
+    AffiliateHooks,
+    "commission.created" | "commission.reversed"
+  >;
   async function callHook<K extends keyof StripeHooks>(
     hookName: K,
-    data: Parameters<NonNullable<StripeHooks[K]>>[0]
+    data: Parameters<NonNullable<StripeHooks[K]>>[0],
   ): Promise<void> {
     const hook = options?.hooks?.[hookName];
     if (hook) {
@@ -1777,19 +1794,25 @@ export function getAffiliateStripeHandlers(
   return {
     "invoice.paid": async (ctx, event) => {
       const invoice = event.data.object as unknown as Record<string, unknown>;
-      const result = await ctx.runMutation(component.commissions.createFromInvoice, {
-        stripeInvoiceId: invoice.id as string,
-        stripeCustomerId: invoice.customer as string,
-        stripeChargeId: (invoice.charge as string) ?? undefined,
-        stripeSubscriptionId: (invoice.subscription as string) ?? undefined,
-        stripeProductId:
-          ((invoice.lines as { data?: Array<{ price?: { product?: string } }> })
-            ?.data?.[0]?.price?.product as string) ?? undefined,
-        amountPaidCents: invoice.amount_paid as number,
-        currency: invoice.currency as string,
-        affiliateCode: (invoice.metadata as Record<string, string>)
-          ?.affiliate_code,
-      });
+      const result = await ctx.runMutation(
+        component.commissions.createFromInvoice,
+        {
+          stripeInvoiceId: invoice.id as string,
+          stripeCustomerId: invoice.customer as string,
+          stripeChargeId: (invoice.charge as string) ?? undefined,
+          stripeSubscriptionId: (invoice.subscription as string) ?? undefined,
+          stripeProductId:
+            ((
+              invoice.lines as {
+                data?: Array<{ price?: { product?: string } }>;
+              }
+            )?.data?.[0]?.price?.product as string) ?? undefined,
+          amountPaidCents: invoice.amount_paid as number,
+          currency: invoice.currency as string,
+          affiliateCode: (invoice.metadata as Record<string, string>)
+            ?.affiliate_code,
+        },
+      );
 
       // Call hook if commission was created
       if (result && result.commissionId) {
@@ -1805,12 +1828,15 @@ export function getAffiliateStripeHandlers(
 
     "charge.refunded": async (ctx, event) => {
       const charge = event.data.object as unknown as Record<string, unknown>;
-      const result = await ctx.runMutation(component.commissions.reverseByCharge, {
-        stripeChargeId: charge.id as string,
-        reason:
-          ((charge.refunds as { data?: Array<{ reason?: string }> })?.data?.[0]
-            ?.reason as string) ?? "Charge refunded",
-      });
+      const result = await ctx.runMutation(
+        component.commissions.reverseByCharge,
+        {
+          stripeChargeId: charge.id as string,
+          reason:
+            ((charge.refunds as { data?: Array<{ reason?: string }> })
+              ?.data?.[0]?.reason as string) ?? "Charge refunded",
+        },
+      );
 
       // Call hook if commission was reversed
       if (result && result.commissionId) {
@@ -1845,7 +1871,7 @@ export function generateAffiliateLink(
   baseUrl: string,
   code: string,
   path = "/",
-  subId?: string
+  subId?: string,
 ): string {
   const url = new URL(path, baseUrl);
   url.searchParams.set("ref", code);
@@ -1887,7 +1913,7 @@ export function parseLandingPageUrl(url: string): {
     const pathParts = parsed.pathname.split("/").filter(Boolean);
     const joinIndex = pathParts.indexOf("join");
     const campaignSlug =
-      joinIndex >= 0 ? pathParts[joinIndex + 1] ?? null : null;
+      joinIndex >= 0 ? (pathParts[joinIndex + 1] ?? null) : null;
 
     return {
       campaignSlug,
