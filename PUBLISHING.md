@@ -60,8 +60,8 @@ The release workflow requires the following secret:
 ### Package Registries
 
 The package is published to:
-1. **npm** (primary): https://www.npmjs.com/package/chief_emerie
-2. **GitHub Packages**: https://github.com/chiemerieokorie/affiliates/packages
+1. **npm** (primary): https://www.npmjs.com/package/convex-affiliates
+2. **GitHub Packages**: https://github.com/chiemerieokorie/convex-affiliates/packages
 
 ## Workflow Files
 
