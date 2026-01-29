@@ -1,3 +1,9 @@
+## [2.0.1](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.0...v2.0.1) (2026-01-29)
+
+### Bug Fixes
+
+* align component boundary types with consumer codegen output ([4ceb104](https://github.com/chiemerieokorie/convex-affiliates/commit/4ceb104c7a39f92e899b2088abd0016c83867ba2))
+
 ## [2.0.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.1.4...v2.0.0) (2026-01-29)
 
 ### ⚠ BREAKING CHANGES
