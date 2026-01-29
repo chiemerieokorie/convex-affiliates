@@ -1,8 +1,16 @@
 import { httpRouter } from "convex/server";
 import { components } from "./_generated/api.js";
-import { registerRoutes, createStripeWebhookHandler } from "convex-affiliates";
+import { createAffiliateApi } from "convex-affiliates";
 
 const http = httpRouter();
+
+const affiliates = createAffiliateApi(components.affiliates, {
+  auth: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    return identity.subject;
+  },
+});
 
 // =============================================================================
 // Affiliate Component Routes
@@ -11,7 +19,7 @@ const http = httpRouter();
 // Register HTTP routes for the affiliate component
 // This exposes endpoints like:
 // - GET /affiliates/affiliate/:code - Validate affiliate code
-registerRoutes(http, components.affiliates, {
+affiliates.registerRoutes(http, {
   pathPrefix: "/affiliates",
 });
 
@@ -24,7 +32,7 @@ registerRoutes(http, components.affiliates, {
 http.route({
   path: "/webhooks/stripe",
   method: "POST",
-  handler: createStripeWebhookHandler(components.affiliates, {
+  handler: affiliates.createStripeWebhookHandler({
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
   }),
 });

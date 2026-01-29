@@ -1133,69 +1133,184 @@ export function createAffiliateApi(
         });
       },
     }),
+
+    // =========================================================================
+    // HTTP Routes
+    // =========================================================================
+
+    /**
+     * Register HTTP routes for affiliate functionality.
+     * The component reference is already available from the closure.
+     *
+     * @param http - The Convex HTTP router
+     * @param options - Optional configuration (e.g., pathPrefix)
+     *
+     * @example
+     * ```typescript
+     * const affiliates = createAffiliateApi(components.affiliates, { ... });
+     * affiliates.registerRoutes(http, { pathPrefix: "/affiliates" });
+     * ```
+     */
+    registerRoutes(
+      http: HttpRouter,
+      options: { pathPrefix?: string } = {}
+    ): void {
+      const prefix = options.pathPrefix ?? "/affiliates";
+
+      http.route({
+        path: `${prefix}/affiliate/:code`,
+        method: "GET",
+        handler: httpActionGeneric(async (ctx, request) => {
+          const url = new URL(request.url);
+          const code = url.pathname.split("/").pop();
+
+          if (!code) {
+            return new Response(JSON.stringify({ error: "Code required" }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          const affiliate = await ctx.runQuery(component.affiliates.getByCode, {
+            code: code.toUpperCase(),
+          });
+
+          if (!affiliate) {
+            return new Response(JSON.stringify({ error: "Affiliate not found" }), {
+              status: 404,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          return new Response(
+            JSON.stringify({
+              code: affiliate.code,
+              displayName: affiliate.displayName,
+              valid: affiliate.status === "approved",
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }),
+      });
+    },
+
+    // =========================================================================
+    // Stripe Webhook Handler
+    // =========================================================================
+
+    /**
+     * Create a Stripe webhook handler that processes affiliate-related events.
+     * The component reference is already available from the closure.
+     *
+     * @param webhookConfig - Configuration with webhookSecret
+     * @returns An HTTP action handler for Stripe webhooks
+     *
+     * @example
+     * ```typescript
+     * const affiliates = createAffiliateApi(components.affiliates, { ... });
+     *
+     * http.route({
+     *   path: "/webhooks/stripe",
+     *   method: "POST",
+     *   handler: affiliates.createStripeWebhookHandler({
+     *     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+     *   }),
+     * });
+     * ```
+     */
+    createStripeWebhookHandler(webhookConfig: StripeWebhookConfig) {
+      if (!webhookConfig.webhookSecret) {
+        throw new Error(
+          "webhookSecret is required for Stripe webhook handler. " +
+            "Set STRIPE_WEBHOOK_SECRET in your Convex environment variables."
+        );
+      }
+
+      return httpActionGeneric(async (ctx, request) => {
+        const rawBody = await request.text();
+
+        const signature = request.headers.get("stripe-signature");
+        if (!signature) {
+          return new Response(
+            JSON.stringify({ error: "Missing stripe-signature header" }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        const isValid = await verifyStripeSignature(
+          rawBody,
+          signature,
+          webhookConfig.webhookSecret
+        );
+        if (!isValid) {
+          return new Response(JSON.stringify({ error: "Invalid signature" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const event = JSON.parse(rawBody) as { type: string; data: { object: any } };
+
+        try {
+          switch (event.type) {
+            case "invoice.paid": {
+              const invoice = event.data.object;
+              await ctx.runMutation(component.commissions.createFromInvoice, {
+                stripeInvoiceId: invoice.id,
+                stripeCustomerId: invoice.customer,
+                stripeChargeId: invoice.charge,
+                stripeSubscriptionId: invoice.subscription,
+                stripeProductId: invoice.lines?.data?.[0]?.price?.product,
+                amountPaidCents: invoice.amount_paid,
+                currency: invoice.currency,
+                affiliateCode: invoice.metadata?.affiliate_code,
+              });
+              break;
+            }
+
+            case "charge.refunded": {
+              const charge = event.data.object;
+              await ctx.runMutation(component.commissions.reverseByCharge, {
+                stripeChargeId: charge.id,
+                reason: charge.refunds?.data?.[0]?.reason ?? "Charge refunded",
+              });
+              break;
+            }
+
+            case "checkout.session.completed": {
+              const session = event.data.object;
+              await ctx.runMutation(component.referrals.linkStripeCustomer, {
+                stripeCustomerId: session.customer,
+                userId: session.client_reference_id,
+                affiliateCode: session.metadata?.affiliate_code,
+              });
+              break;
+            }
+          }
+
+          return new Response(JSON.stringify({ received: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (error) {
+          console.error("Stripe webhook error:", error);
+          return new Response(
+            JSON.stringify({
+              error: error instanceof Error ? error.message : "Unknown error",
+            }),
+            { status: 500, headers: { "Content-Type": "application/json" } }
+          );
+        }
+      });
+    },
   };
 }
 
 // =============================================================================
-// HTTP Routes Helper
-// =============================================================================
-
-/**
- * Register HTTP routes for affiliate functionality.
- * Useful for public API endpoints and webhook handling.
- */
-export function registerRoutes(
-  http: HttpRouter,
-  component: ComponentApi,
-  options: {
-    pathPrefix?: string;
-  } = {}
-) {
-  const prefix = options.pathPrefix ?? "/affiliates";
-
-  // Get affiliate by code (public endpoint for link validation)
-  http.route({
-    path: `${prefix}/affiliate/:code`,
-    method: "GET",
-    handler: httpActionGeneric(async (ctx, request) => {
-      const url = new URL(request.url);
-      const code = url.pathname.split("/").pop();
-
-      if (!code) {
-        return new Response(JSON.stringify({ error: "Code required" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      const affiliate = await ctx.runQuery(component.affiliates.getByCode, {
-        code: code.toUpperCase(),
-      });
-
-      if (!affiliate) {
-        return new Response(JSON.stringify({ error: "Affiliate not found" }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      return new Response(
-        JSON.stringify({
-          code: affiliate.code,
-          displayName: affiliate.displayName,
-          valid: affiliate.status === "approved",
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }),
-  });
-}
-
-// =============================================================================
-// Stripe Webhook Handler
+// Stripe Webhook Signature Verification
 // =============================================================================
 
 /**
@@ -1248,121 +1363,6 @@ export interface StripeWebhookConfig {
    * Get this from Stripe Dashboard > Webhooks > Signing secret.
    */
   webhookSecret: string;
-}
-
-/**
- * Create a Stripe webhook handler that processes affiliate-related events.
- * Handles invoice.paid, charge.refunded, and checkout.session.completed events.
- *
- * @example
- * ```typescript
- * import { httpRouter } from "convex/server";
- * import { createStripeWebhookHandler } from "convex-affiliates";
- * import { components } from "./_generated/api";
- *
- * const http = httpRouter();
- *
- * http.route({
- *   path: "/webhooks/stripe",
- *   method: "POST",
- *   handler: createStripeWebhookHandler(components.affiliates, {
- *     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
- *   }),
- * });
- *
- * export default http;
- * ```
- */
-export function createStripeWebhookHandler(
-  component: ComponentApi,
-  config: StripeWebhookConfig
-) {
-  // Validate webhook secret at creation time for helpful error messages
-  if (!config.webhookSecret) {
-    throw new Error(
-      "webhookSecret is required for Stripe webhook handler. " +
-        "Set STRIPE_WEBHOOK_SECRET in your Convex environment variables."
-    );
-  }
-
-  return httpActionGeneric(async (ctx, request) => {
-    // Get raw body for signature verification
-    const rawBody = await request.text();
-
-    // Verify signature (required)
-    const signature = request.headers.get("stripe-signature");
-    if (!signature) {
-      return new Response(
-        JSON.stringify({ error: "Missing stripe-signature header" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    const isValid = await verifyStripeSignature(
-      rawBody,
-      signature,
-      config.webhookSecret
-    );
-    if (!isValid) {
-      return new Response(JSON.stringify({ error: "Invalid signature" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const event = JSON.parse(rawBody) as { type: string; data: { object: any } };
-
-    try {
-      switch (event.type) {
-        case "invoice.paid": {
-          const invoice = event.data.object;
-          await ctx.runMutation(component.commissions.createFromInvoice, {
-            stripeInvoiceId: invoice.id,
-            stripeCustomerId: invoice.customer,
-            stripeChargeId: invoice.charge,
-            stripeSubscriptionId: invoice.subscription,
-            stripeProductId: invoice.lines?.data?.[0]?.price?.product,
-            amountPaidCents: invoice.amount_paid,
-            currency: invoice.currency,
-            affiliateCode: invoice.metadata?.affiliate_code,
-          });
-          break;
-        }
-
-        case "charge.refunded": {
-          const charge = event.data.object;
-          await ctx.runMutation(component.commissions.reverseByCharge, {
-            stripeChargeId: charge.id,
-            reason: charge.refunds?.data?.[0]?.reason ?? "Charge refunded",
-          });
-          break;
-        }
-
-        case "checkout.session.completed": {
-          const session = event.data.object;
-          await ctx.runMutation(component.referrals.linkStripeCustomer, {
-            stripeCustomerId: session.customer,
-            userId: session.client_reference_id,
-            affiliateCode: session.metadata?.affiliate_code,
-          });
-          break;
-        }
-      }
-
-      return new Response(JSON.stringify({ received: true }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (error) {
-      console.error("Stripe webhook error:", error);
-      return new Response(
-        JSON.stringify({
-          error: error instanceof Error ? error.message : "Unknown error",
-        }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-  });
 }
 
 // =============================================================================
