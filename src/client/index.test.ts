@@ -5,11 +5,27 @@ import { generateAffiliateLink } from "./index.js";
 import { components, initConvexTest } from "./setup.test.js";
 
 describe("component boundary validation", () => {
+  const componentPath = resolve(__dirname, "../component/_generated/component.ts");
+  const content = readFileSync(componentPath, "utf-8");
+
   test("component.ts should use internal visibility for all functions", () => {
-    const componentPath = resolve(__dirname, "../component/_generated/component.ts");
-    const content = readFileSync(componentPath, "utf-8");
     const publicMatches = content.match(/"public"/g);
     expect(publicMatches).toBeNull();
+  });
+
+  test("component.ts should not contain branded Id<> types", () => {
+    const idMatches = content.match(/Id<"/g);
+    expect(idMatches).toBeNull();
+  });
+
+  test("component.ts should not import from dataModel", () => {
+    expect(content).not.toContain('from "./dataModel');
+  });
+
+  test("client code should not use 'as any' type casts", () => {
+    const clientContent = readFileSync(resolve(__dirname, "./index.ts"), "utf-8");
+    const anyCasts = clientContent.match(/as any/g);
+    expect(anyCasts).toBeNull();
   });
 });
 
