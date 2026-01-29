@@ -11,6 +11,13 @@ describe("component boundary validation", () => {
     const publicMatches = content.match(/"public"/g);
     expect(publicMatches).toBeNull();
   });
+
+  test("component.ts should not contain branded Id<> types (boundary uses string)", () => {
+    const componentPath = resolve(__dirname, "../component/_generated/component.ts");
+    const content = readFileSync(componentPath, "utf-8");
+    const idMatches = content.match(/Id<"/g);
+    expect(idMatches).toBeNull();
+  });
 });
 
 describe("client tests", () => {

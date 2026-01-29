@@ -9,7 +9,6 @@
  */
 
 import type { FunctionReference, PaginationResult } from "convex/server";
-import type { Id } from "./dataModel.js";
 
 // Type definitions for validators
 type CommissionType = "percentage" | "fixed";
@@ -49,6 +48,14 @@ type CustomCopy = {
   cta?: string;
 };
 
+// Promo content type
+type PromoContentType = "youtube_video" | "blog" | "twitter" | "instagram" | "tiktok" | "other";
+type PromoContent = {
+  title?: string;
+  type: PromoContentType;
+  url: string;
+};
+
 // Pagination options type
 type PaginationOpts = {
   numItems: number;
@@ -70,7 +77,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { activeOnly?: boolean },
       Array<{
-        _id: Id<"campaigns">;
+        _id: string;
         _creationTime: number;
         name: string;
         slug: string;
@@ -84,6 +91,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         payoutTerm: PayoutTerm;
         cookieDurationDays: number;
         minPayoutCents: number;
+        maxClicksPerIpPerHour?: number;
+        refereeDiscountType?: CommissionType;
+        refereeDiscountValue?: number;
+        refereeStripeCouponId?: string;
         allowedProducts?: string[];
         excludedProducts?: string[];
         createdAt: number;
@@ -94,9 +105,9 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     get: FunctionReference<
       "query",
       "internal",
-      { campaignId: Id<"campaigns"> },
+      { campaignId: string },
       {
-        _id: Id<"campaigns">;
+        _id: string;
         _creationTime: number;
         name: string;
         slug: string;
@@ -110,6 +121,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         payoutTerm: PayoutTerm;
         cookieDurationDays: number;
         minPayoutCents: number;
+        maxClicksPerIpPerHour?: number;
+        refereeDiscountType?: CommissionType;
+        refereeDiscountValue?: number;
+        refereeStripeCouponId?: string;
         allowedProducts?: string[];
         excludedProducts?: string[];
         createdAt: number;
@@ -122,7 +137,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { slug: string },
       {
-        _id: Id<"campaigns">;
+        _id: string;
         _creationTime: number;
         name: string;
         slug: string;
@@ -136,6 +151,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         payoutTerm: PayoutTerm;
         cookieDurationDays: number;
         minPayoutCents: number;
+        maxClicksPerIpPerHour?: number;
+        refereeDiscountType?: CommissionType;
+        refereeDiscountValue?: number;
+        refereeStripeCouponId?: string;
         allowedProducts?: string[];
         excludedProducts?: string[];
         createdAt: number;
@@ -148,7 +167,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       Record<string, never>,
       {
-        _id: Id<"campaigns">;
+        _id: string;
         _creationTime: number;
         name: string;
         slug: string;
@@ -162,6 +181,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         payoutTerm: PayoutTerm;
         cookieDurationDays: number;
         minPayoutCents: number;
+        maxClicksPerIpPerHour?: number;
+        refereeDiscountType?: CommissionType;
+        refereeDiscountValue?: number;
+        refereeStripeCouponId?: string;
         allowedProducts?: string[];
         excludedProducts?: string[];
         createdAt: number;
@@ -185,17 +208,21 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         minPayoutCents?: number;
         isActive?: boolean;
         isDefault?: boolean;
+        maxClicksPerIpPerHour?: number;
+        refereeDiscountType?: CommissionType;
+        refereeDiscountValue?: number;
+        refereeStripeCouponId?: string;
         allowedProducts?: string[];
         excludedProducts?: string[];
       },
-      Id<"campaigns">,
+      string,
       Name
     >;
     update: FunctionReference<
       "mutation",
       "internal",
       {
-        campaignId: Id<"campaigns">;
+        campaignId: string;
         name?: string;
         slug?: string;
         description?: string;
@@ -207,6 +234,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         cookieDurationDays?: number;
         minPayoutCents?: number;
         isActive?: boolean;
+        maxClicksPerIpPerHour?: number;
+        refereeDiscountType?: CommissionType;
+        refereeDiscountValue?: number;
+        refereeStripeCouponId?: string;
         allowedProducts?: string[];
         excludedProducts?: string[];
       },
@@ -216,14 +247,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     setDefault: FunctionReference<
       "mutation",
       "internal",
-      { campaignId: Id<"campaigns"> },
+      { campaignId: string },
       null,
       Name
     >;
     archive: FunctionReference<
       "mutation",
       "internal",
-      { campaignId: Id<"campaigns"> },
+      { campaignId: string },
       null,
       Name
     >;
@@ -234,12 +265,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     getById: FunctionReference<
       "query",
       "internal",
-      { affiliateId: Id<"affiliates"> },
+      { affiliateId: string },
       {
-        _id: Id<"affiliates">;
+        _id: string;
         _creationTime: number;
         userId: string;
-        campaignId: Id<"campaigns">;
+        campaignId: string;
         code: string;
         displayName?: string;
         bio?: string;
@@ -247,6 +278,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         website?: string;
         socials?: Socials;
         customCopy?: CustomCopy;
+        promoContent?: PromoContent;
         customCommissionType?: CommissionType;
         customCommissionValue?: number;
         payoutMethod?: PayoutMethod;
@@ -263,10 +295,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { code: string },
       {
-        _id: Id<"affiliates">;
+        _id: string;
         _creationTime: number;
         userId: string;
-        campaignId: Id<"campaigns">;
+        campaignId: string;
         code: string;
         displayName?: string;
         bio?: string;
@@ -274,6 +306,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         website?: string;
         socials?: Socials;
         customCopy?: CustomCopy;
+        promoContent?: PromoContent;
         customCommissionType?: CommissionType;
         customCommissionValue?: number;
         payoutMethod?: PayoutMethod;
@@ -290,10 +323,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { userId: string },
       {
-        _id: Id<"affiliates">;
+        _id: string;
         _creationTime: number;
         userId: string;
-        campaignId: Id<"campaigns">;
+        campaignId: string;
         code: string;
         displayName?: string;
         bio?: string;
@@ -301,6 +334,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         website?: string;
         socials?: Socials;
         customCopy?: CustomCopy;
+        promoContent?: PromoContent;
         customCommissionType?: CommissionType;
         customCommissionValue?: number;
         payoutMethod?: PayoutMethod;
@@ -315,12 +349,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     list: FunctionReference<
       "query",
       "internal",
-      { status?: AffiliateStatus; campaignId?: Id<"campaigns">; limit?: number },
+      { status?: AffiliateStatus; campaignId?: string; limit?: number },
       Array<{
-        _id: Id<"affiliates">;
+        _id: string;
         _creationTime: number;
         userId: string;
-        campaignId: Id<"campaigns">;
+        campaignId: string;
         code: string;
         displayName?: string;
         bio?: string;
@@ -328,6 +362,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         website?: string;
         socials?: Socials;
         customCopy?: CustomCopy;
+        promoContent?: PromoContent;
         customCommissionType?: CommissionType;
         customCommissionValue?: number;
         payoutMethod?: PayoutMethod;
@@ -345,31 +380,32 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       {
         userId: string;
         email: string;
-        campaignId: Id<"campaigns">;
+        campaignId: string;
         customCode?: string;
         displayName?: string;
         website?: string;
         socialMedia?: string;
         payoutEmail?: string;
       },
-      { affiliateId: Id<"affiliates">; code: string },
+      { affiliateId: string; code: string },
       Name
     >;
-    approve: FunctionReference<"mutation", "internal", { affiliateId: Id<"affiliates"> }, null, Name>;
-    reject: FunctionReference<"mutation", "internal", { affiliateId: Id<"affiliates"> }, null, Name>;
-    suspend: FunctionReference<"mutation", "internal", { affiliateId: Id<"affiliates"> }, null, Name>;
-    reactivate: FunctionReference<"mutation", "internal", { affiliateId: Id<"affiliates"> }, null, Name>;
+    approve: FunctionReference<"mutation", "internal", { affiliateId: string }, null, Name>;
+    reject: FunctionReference<"mutation", "internal", { affiliateId: string }, null, Name>;
+    suspend: FunctionReference<"mutation", "internal", { affiliateId: string }, null, Name>;
+    reactivate: FunctionReference<"mutation", "internal", { affiliateId: string }, null, Name>;
     updateProfile: FunctionReference<
       "mutation",
       "internal",
       {
-        affiliateId: Id<"affiliates">;
+        affiliateId: string;
         displayName?: string;
         bio?: string;
         avatarUrl?: string;
         website?: string;
         socials?: Socials;
         customCopy?: CustomCopy;
+        promoContent?: PromoContent;
         payoutEmail?: string;
       },
       null,
@@ -378,7 +414,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     setCustomCommission: FunctionReference<
       "mutation",
       "internal",
-      { affiliateId: Id<"affiliates">; commissionType: CommissionType; commissionValue: number },
+      { affiliateId: string; commissionType: CommissionType; commissionValue: number },
       null,
       Name
     >;
@@ -386,7 +422,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "mutation",
       "internal",
       {
-        affiliateId: Id<"affiliates">;
+        affiliateId: string;
         incrementClicks?: number;
         incrementSignups?: number;
         incrementConversions?: number;
@@ -408,9 +444,9 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { referralId: string },
       {
-        _id: Id<"referrals">;
+        _id: string;
         _creationTime: number;
-        affiliateId: Id<"affiliates">;
+        affiliateId: string;
         referralId: string;
         landingPage: string;
         utmSource?: string;
@@ -434,9 +470,9 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { userId: string },
       {
-        _id: Id<"referrals">;
+        _id: string;
         _creationTime: number;
-        affiliateId: Id<"affiliates">;
+        affiliateId: string;
         referralId: string;
         landingPage: string;
         utmSource?: string;
@@ -460,9 +496,9 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { stripeCustomerId: string },
       {
-        _id: Id<"referrals">;
+        _id: string;
         _creationTime: number;
-        affiliateId: Id<"affiliates">;
+        affiliateId: string;
         referralId: string;
         landingPage: string;
         utmSource?: string;
@@ -484,11 +520,11 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     listByAffiliate: FunctionReference<
       "query",
       "internal",
-      { affiliateId: Id<"affiliates">; status?: ReferralStatus; limit?: number },
+      { affiliateId: string; status?: ReferralStatus; limit?: number },
       Array<{
-        _id: Id<"referrals">;
+        _id: string;
         _creationTime: number;
-        affiliateId: Id<"affiliates">;
+        affiliateId: string;
         referralId: string;
         landingPage: string;
         utmSource?: string;
@@ -532,7 +568,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "mutation",
       "internal",
       { affiliateCode: string; userId: string; landingPage?: string },
-      { success: boolean; referralId?: Id<"referrals"> },
+      { success: boolean; referralId?: string },
       Name
     >;
     linkStripeCustomer: FunctionReference<
@@ -545,7 +581,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     convertReferral: FunctionReference<
       "mutation",
       "internal",
-      { referralId: Id<"referrals"> },
+      { referralId: string },
       null,
       Name
     >;
@@ -557,12 +593,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     listByAffiliate: FunctionReference<
       "query",
       "internal",
-      { affiliateId: Id<"affiliates">; status?: CommissionStatus; paginationOpts: PaginationOpts },
+      { affiliateId: string; status?: CommissionStatus; paginationOpts: PaginationOpts },
       PaginationResult<{
-        _id: Id<"commissions">;
+        _id: string;
         _creationTime: number;
-        affiliateId: Id<"affiliates">;
-        referralId: Id<"referrals">;
+        affiliateId: string;
+        referralId: string;
         stripeCustomerId: string;
         stripeProductId?: string;
         stripeInvoiceId?: string;
@@ -576,7 +612,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         commissionType: CommissionType;
         currency: string;
         status: CommissionStatus;
-        payoutId?: Id<"payouts">;
+        payoutId?: string;
         dueAt: number;
         createdAt: number;
         approvedAt?: number;
@@ -589,30 +625,30 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     getPendingTotal: FunctionReference<
       "query",
       "internal",
-      { affiliateId: Id<"affiliates"> },
+      { affiliateId: string },
       { totalCents: number; count: number },
       Name
     >;
     calculateCommission: FunctionReference<
       "query",
       "internal",
-      { affiliateId: Id<"affiliates">; saleAmountCents: number; stripeProductId?: string },
+      { affiliateId: string; saleAmountCents: number; stripeProductId?: string },
       { commissionAmountCents: number; commissionType: CommissionType; commissionRate: number },
       Name
     >;
     getDueForPayout: FunctionReference<
       "query",
       "internal",
-      { affiliateId: Id<"affiliates"> },
-      Array<{ _id: Id<"commissions">; commissionAmountCents: number; currency: string }>,
+      { affiliateId: string },
+      Array<{ _id: string; commissionAmountCents: number; currency: string }>,
       Name
     >;
     create: FunctionReference<
       "mutation",
       "internal",
       {
-        affiliateId: Id<"affiliates">;
-        referralId: Id<"referrals">;
+        affiliateId: string;
+        referralId: string;
         stripeCustomerId: string;
         stripeProductId?: string;
         stripeInvoiceId?: string;
@@ -626,21 +662,21 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         commissionType: CommissionType;
         currency: string;
       },
-      Id<"commissions">,
+      string,
       Name
     >;
-    approve: FunctionReference<"mutation", "internal", { commissionId: Id<"commissions"> }, null, Name>;
+    approve: FunctionReference<"mutation", "internal", { commissionId: string }, null, Name>;
     markPaid: FunctionReference<
       "mutation",
       "internal",
-      { commissionId: Id<"commissions">; payoutId: Id<"payouts"> },
+      { commissionId: string; payoutId: string },
       null,
       Name
     >;
     reverse: FunctionReference<
       "mutation",
       "internal",
-      { commissionId: Id<"commissions">; reason: string },
+      { commissionId: string; reason: string },
       null,
       Name
     >;
@@ -648,14 +684,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "query",
       "internal",
       { stripeInvoiceId: string },
-      { _id: Id<"commissions">; affiliateId: Id<"affiliates">; status: CommissionStatus } | null,
+      { _id: string; affiliateId: string; status: CommissionStatus } | null,
       Name
     >;
     getByStripeCharge: FunctionReference<
       "query",
       "internal",
       { stripeChargeId: string },
-      { _id: Id<"commissions">; affiliateId: Id<"affiliates">; status: CommissionStatus } | null,
+      { _id: string; affiliateId: string; status: CommissionStatus } | null,
       Name
     >;
     createFromInvoice: FunctionReference<
@@ -672,8 +708,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         affiliateCode?: string;
       },
       {
-        commissionId: Id<"commissions">;
-        affiliateId: Id<"affiliates">;
+        commissionId: string;
+        affiliateId: string;
         affiliateCode: string;
         affiliateUserId: string;
         commissionAmountCents: number;
@@ -685,8 +721,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { stripeChargeId: string; reason?: string },
       {
-        commissionId: Id<"commissions">;
-        affiliateId: Id<"affiliates">;
+        commissionId: string;
+        affiliateId: string;
         affiliateCode?: string;
         commissionAmountCents: number;
       } | null,
@@ -699,11 +735,11 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     listByAffiliate: FunctionReference<
       "query",
       "internal",
-      { affiliateId: Id<"affiliates">; status?: PayoutStatus; paginationOpts: PaginationOpts },
+      { affiliateId: string; status?: PayoutStatus; paginationOpts: PaginationOpts },
       PaginationResult<{
-        _id: Id<"payouts">;
+        _id: string;
         _creationTime: number;
-        affiliateId: Id<"affiliates">;
+        affiliateId: string;
         amountCents: number;
         currency: string;
         method: PayoutMethod;
@@ -720,11 +756,11 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     get: FunctionReference<
       "query",
       "internal",
-      { payoutId: Id<"payouts"> },
+      { payoutId: string },
       {
-        _id: Id<"payouts">;
+        _id: string;
         _creationTime: number;
-        affiliateId: Id<"affiliates">;
+        affiliateId: string;
         amountCents: number;
         currency: string;
         method: PayoutMethod;
@@ -743,8 +779,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { limit?: number },
       Array<{
-        _id: Id<"payouts">;
-        affiliateId: Id<"affiliates">;
+        _id: string;
+        affiliateId: string;
         amountCents: number;
         currency: string;
         method: PayoutMethod;
@@ -755,35 +791,35 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "query",
       "internal",
       { minPayoutCents: number },
-      Array<{ affiliateId: Id<"affiliates">; totalDueCents: number; commissionCount: number }>,
+      Array<{ affiliateId: string; totalDueCents: number; commissionCount: number }>,
       Name
     >;
     create: FunctionReference<
       "mutation",
       "internal",
       {
-        affiliateId: Id<"affiliates">;
+        affiliateId: string;
         amountCents: number;
         currency: string;
         method: PayoutMethod;
         periodStart: number;
         periodEnd: number;
-        commissionIds: Id<"commissions">[];
+        commissionIds: string[];
       },
-      Id<"payouts">,
+      string,
       Name
     >;
     markCompleted: FunctionReference<
       "mutation",
       "internal",
-      { payoutId: Id<"payouts"> },
+      { payoutId: string },
       null,
       Name
     >;
     cancel: FunctionReference<
       "mutation",
       "internal",
-      { payoutId: Id<"payouts">; notes?: string },
+      { payoutId: string; notes?: string },
       null,
       Name
     >;
@@ -791,13 +827,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "mutation",
       "internal",
       {
-        affiliateId: Id<"affiliates">;
+        affiliateId: string;
         amountCents: number;
         currency: string;
         method: PayoutMethod;
         notes?: string;
       },
-      Id<"payouts">,
+      string,
       Name
     >;
   };
@@ -810,7 +846,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       { userId: string },
       {
         affiliate: {
-          _id: Id<"affiliates">;
+          _id: string;
           code: string;
           displayName?: string;
           status: AffiliateStatus;
@@ -818,11 +854,11 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         };
         campaign: { name: string; commissionType: CommissionType; commissionValue: number };
         recentCommissions: Array<{
-          _id: Id<"commissions">;
+          _id: string;
           saleAmountCents: number;
           commissionAmountCents: number;
           currency: string;
-          status: CommissionStatus;
+          status: string;
           createdAt: number;
         }>;
         pendingPayout: { amountCents: number; count: number };
@@ -853,7 +889,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       { limit?: number; sortBy?: "commissions" | "conversions" | "revenue" },
       Array<{
-        _id: Id<"affiliates">;
+        _id: string;
         code: string;
         displayName?: string;
         stats: AffiliateStats;
@@ -863,7 +899,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     getConversionFunnel: FunctionReference<
       "query",
       "internal",
-      { affiliateId?: Id<"affiliates">; startDate?: number; endDate?: number },
+      { affiliateId?: string; startDate?: number; endDate?: number },
       {
         clicks: number;
         signups: number;
@@ -877,21 +913,19 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     recordEvent: FunctionReference<
       "mutation",
       "internal",
-      { affiliateId: Id<"affiliates">; type: EventType; metadata?: string },
-      Id<"events">,
+      { affiliateId: string; type: EventType; metadata?: string },
+      string,
       Name
     >;
     getRecentEvents: FunctionReference<
       "query",
       "internal",
-      { affiliateId: Id<"affiliates">; type?: EventType; limit?: number },
+      { affiliateId: string; type?: EventType; limit?: number },
       Array<{
-        _id: Id<"events">;
-        _creationTime: number;
-        affiliateId: Id<"affiliates">;
-        type: EventType;
+        _id: string;
         metadata?: string;
         timestamp: number;
+        type: EventType;
       }>,
       Name
     >;
