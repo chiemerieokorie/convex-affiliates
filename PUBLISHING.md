@@ -49,12 +49,16 @@ git commit -m "test: add unit tests for referral tracking"
 
 ## Setup Requirements
 
-### GitHub Secrets
+### npm Trusted Publishing (OIDC)
 
-The release workflow requires these GitHub Actions secrets:
+The release workflow uses **OIDC trusted publishing** — no npm token secret needed. The GitHub Actions workflow exchanges a short-lived OIDC token with npm automatically.
 
-- **`NPM_TOKEN`** — npm automation token for publishing. Generate at https://www.npmjs.com/settings/tokens
-- **`GITHUB_TOKEN`** — automatically provided by GitHub Actions
+**Setup**: Go to https://www.npmjs.com → package settings → Trusted Publishers → Add GitHub Actions:
+- Repository: `chiemerieokorie/convex-affiliates`
+- Workflow: `release.yml`
+
+**Secrets**:
+- **`GITHUB_TOKEN`** — automatically provided by GitHub Actions (no manual setup)
 
 ### Package Registry
 
