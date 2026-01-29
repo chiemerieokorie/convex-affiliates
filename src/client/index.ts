@@ -4,7 +4,14 @@ import {
   queryGeneric,
   paginationOptsValidator,
 } from "convex/server";
-import type { Auth, HttpRouter, PaginationResult } from "convex/server";
+import type {
+  Auth,
+  GenericDataModel,
+  GenericMutationCtx,
+  GenericQueryCtx,
+  HttpRouter,
+  PaginationResult,
+} from "convex/server";
 import { v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
 
@@ -254,8 +261,8 @@ export interface CreateAffiliateApiConfig<Ctx extends { auth: Auth } = { auth: A
 }
 
 // Context types for internal use (what we call on ctx inside handlers)
-type QueryCtx = { runQuery: any; auth: Auth };
-type MutationCtx = { runQuery: any; runMutation: any; auth: Auth };
+type QueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery" | "auth">;
+type MutationCtx = Pick<GenericMutationCtx<GenericDataModel>, "runQuery" | "runMutation" | "auth">;
 
 // =============================================================================
 // createAffiliateApi - Main API Factory
