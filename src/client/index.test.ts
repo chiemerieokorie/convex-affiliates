@@ -1,6 +1,17 @@
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import { generateAffiliateLink } from "./index.js";
 import { components, initConvexTest } from "./setup.test.js";
+
+describe("component boundary validation", () => {
+  test("component.ts should use internal visibility for all functions", () => {
+    const componentPath = resolve(__dirname, "../component/_generated/component.ts");
+    const content = readFileSync(componentPath, "utf-8");
+    const publicMatches = content.match(/"public"/g);
+    expect(publicMatches).toBeNull();
+  });
+});
 
 describe("client tests", () => {
   test("generateAffiliateLink generates link correctly", async () => {

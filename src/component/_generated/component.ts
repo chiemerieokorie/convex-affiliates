@@ -67,7 +67,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
   campaigns: {
     list: FunctionReference<
       "query",
-      "public",
+      "internal",
       { activeOnly?: boolean },
       Array<{
         _id: Id<"campaigns">;
@@ -93,7 +93,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     get: FunctionReference<
       "query",
-      "public",
+      "internal",
       { campaignId: Id<"campaigns"> },
       {
         _id: Id<"campaigns">;
@@ -119,7 +119,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getBySlug: FunctionReference<
       "query",
-      "public",
+      "internal",
       { slug: string },
       {
         _id: Id<"campaigns">;
@@ -145,7 +145,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getDefault: FunctionReference<
       "query",
-      "public",
+      "internal",
       Record<string, never>,
       {
         _id: Id<"campaigns">;
@@ -171,7 +171,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     create: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       {
         name: string;
         slug: string;
@@ -193,7 +193,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     update: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       {
         campaignId: Id<"campaigns">;
         name?: string;
@@ -215,14 +215,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     setDefault: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { campaignId: Id<"campaigns"> },
       null,
       Name
     >;
     archive: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { campaignId: Id<"campaigns"> },
       null,
       Name
@@ -233,7 +233,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
   affiliates: {
     getById: FunctionReference<
       "query",
-      "public",
+      "internal",
       { affiliateId: Id<"affiliates"> },
       {
         _id: Id<"affiliates">;
@@ -260,7 +260,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getByCode: FunctionReference<
       "query",
-      "public",
+      "internal",
       { code: string },
       {
         _id: Id<"affiliates">;
@@ -287,7 +287,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getByUserId: FunctionReference<
       "query",
-      "public",
+      "internal",
       { userId: string },
       {
         _id: Id<"affiliates">;
@@ -314,7 +314,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     list: FunctionReference<
       "query",
-      "public",
+      "internal",
       { status?: AffiliateStatus; campaignId?: Id<"campaigns">; limit?: number },
       Array<{
         _id: Id<"affiliates">;
@@ -341,7 +341,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     register: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       {
         userId: string;
         email: string;
@@ -361,7 +361,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     reactivate: FunctionReference<"mutation", "internal", { affiliateId: Id<"affiliates"> }, null, Name>;
     updateProfile: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       {
         affiliateId: Id<"affiliates">;
         displayName?: string;
@@ -377,14 +377,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     setCustomCommission: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { affiliateId: Id<"affiliates">; commissionType: CommissionType; commissionValue: number },
       null,
       Name
     >;
     updateStats: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       {
         affiliateId: Id<"affiliates">;
         incrementClicks?: number;
@@ -405,7 +405,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
   referrals: {
     getByReferralId: FunctionReference<
       "query",
-      "public",
+      "internal",
       { referralId: string },
       {
         _id: Id<"referrals">;
@@ -431,7 +431,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getByUserId: FunctionReference<
       "query",
-      "public",
+      "internal",
       { userId: string },
       {
         _id: Id<"referrals">;
@@ -457,7 +457,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getByStripeCustomer: FunctionReference<
       "query",
-      "public",
+      "internal",
       { stripeCustomerId: string },
       {
         _id: Id<"referrals">;
@@ -483,7 +483,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     listByAffiliate: FunctionReference<
       "query",
-      "public",
+      "internal",
       { affiliateId: Id<"affiliates">; status?: ReferralStatus; limit?: number },
       Array<{
         _id: Id<"referrals">;
@@ -509,7 +509,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     trackClick: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       {
         affiliateCode: string;
         landingPage: string;
@@ -523,28 +523,28 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     attributeSignup: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { referralId: string; userId: string },
       null,
       Name
     >;
     attributeSignupByCode: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { affiliateCode: string; userId: string; landingPage?: string },
       { success: boolean; referralId?: Id<"referrals"> },
       Name
     >;
     linkStripeCustomer: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { stripeCustomerId: string; userId?: string; affiliateCode?: string },
       null,
       Name
     >;
     convertReferral: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { referralId: Id<"referrals"> },
       null,
       Name
@@ -556,7 +556,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
   commissions: {
     listByAffiliate: FunctionReference<
       "query",
-      "public",
+      "internal",
       { affiliateId: Id<"affiliates">; status?: CommissionStatus; paginationOpts: PaginationOpts },
       PaginationResult<{
         _id: Id<"commissions">;
@@ -588,28 +588,28 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getPendingTotal: FunctionReference<
       "query",
-      "public",
+      "internal",
       { affiliateId: Id<"affiliates"> },
       { totalCents: number; count: number },
       Name
     >;
     calculateCommission: FunctionReference<
       "query",
-      "public",
+      "internal",
       { affiliateId: Id<"affiliates">; saleAmountCents: number; stripeProductId?: string },
       { commissionAmountCents: number; commissionType: CommissionType; commissionRate: number },
       Name
     >;
     getDueForPayout: FunctionReference<
       "query",
-      "public",
+      "internal",
       { affiliateId: Id<"affiliates"> },
       Array<{ _id: Id<"commissions">; commissionAmountCents: number; currency: string }>,
       Name
     >;
     create: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       {
         affiliateId: Id<"affiliates">;
         referralId: Id<"referrals">;
@@ -632,35 +632,35 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     approve: FunctionReference<"mutation", "internal", { commissionId: Id<"commissions"> }, null, Name>;
     markPaid: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { commissionId: Id<"commissions">; payoutId: Id<"payouts"> },
       null,
       Name
     >;
     reverse: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { commissionId: Id<"commissions">; reason: string },
       null,
       Name
     >;
     getByStripeInvoice: FunctionReference<
       "query",
-      "public",
+      "internal",
       { stripeInvoiceId: string },
       { _id: Id<"commissions">; affiliateId: Id<"affiliates">; status: CommissionStatus } | null,
       Name
     >;
     getByStripeCharge: FunctionReference<
       "query",
-      "public",
+      "internal",
       { stripeChargeId: string },
       { _id: Id<"commissions">; affiliateId: Id<"affiliates">; status: CommissionStatus } | null,
       Name
     >;
     createFromInvoice: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       {
         stripeInvoiceId: string;
         stripeCustomerId: string;
@@ -682,7 +682,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     reverseByCharge: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { stripeChargeId: string; reason?: string },
       {
         commissionId: Id<"commissions">;
@@ -698,7 +698,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
   payouts: {
     listByAffiliate: FunctionReference<
       "query",
-      "public",
+      "internal",
       { affiliateId: Id<"affiliates">; status?: PayoutStatus; paginationOpts: PaginationOpts },
       PaginationResult<{
         _id: Id<"payouts">;
@@ -719,7 +719,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     get: FunctionReference<
       "query",
-      "public",
+      "internal",
       { payoutId: Id<"payouts"> },
       {
         _id: Id<"payouts">;
@@ -740,7 +740,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     listPending: FunctionReference<
       "query",
-      "public",
+      "internal",
       { limit?: number },
       Array<{
         _id: Id<"payouts">;
@@ -753,14 +753,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getAffiliatesDueForPayout: FunctionReference<
       "query",
-      "public",
+      "internal",
       { minPayoutCents: number },
       Array<{ affiliateId: Id<"affiliates">; totalDueCents: number; commissionCount: number }>,
       Name
     >;
     create: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       {
         affiliateId: Id<"affiliates">;
         amountCents: number;
@@ -775,21 +775,21 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     markCompleted: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { payoutId: Id<"payouts"> },
       null,
       Name
     >;
     cancel: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { payoutId: Id<"payouts">; notes?: string },
       null,
       Name
     >;
     record: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       {
         affiliateId: Id<"affiliates">;
         amountCents: number;
@@ -806,7 +806,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
   analytics: {
     getPortalData: FunctionReference<
       "query",
-      "public",
+      "internal",
       { userId: string },
       {
         affiliate: {
@@ -831,7 +831,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getAdminDashboard: FunctionReference<
       "query",
-      "public",
+      "internal",
       Record<string, never>,
       {
         totalAffiliates: number;
@@ -850,7 +850,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getTopAffiliates: FunctionReference<
       "query",
-      "public",
+      "internal",
       { limit?: number; sortBy?: "commissions" | "conversions" | "revenue" },
       Array<{
         _id: Id<"affiliates">;
@@ -862,7 +862,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     getConversionFunnel: FunctionReference<
       "query",
-      "public",
+      "internal",
       { affiliateId?: Id<"affiliates">; startDate?: number; endDate?: number },
       {
         clicks: number;
@@ -876,14 +876,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
     recordEvent: FunctionReference<
       "mutation",
-      "public",
+      "internal",
       { affiliateId: Id<"affiliates">; type: EventType; metadata?: string },
       Id<"events">,
       Name
     >;
     getRecentEvents: FunctionReference<
       "query",
-      "public",
+      "internal",
       { affiliateId: Id<"affiliates">; type?: EventType; limit?: number },
       Array<{
         _id: Id<"events">;
