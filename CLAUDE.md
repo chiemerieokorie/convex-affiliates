@@ -123,6 +123,12 @@ Publishing is fully automated via `semantic-release` on push to `main`. Key rule
 - **GitHub secrets required**: `NPM_TOKEN` for npm publishing, `GITHUB_TOKEN` is automatic
 - **Commit messages control releases**: `fix:` → patch, `feat:` → minor, `feat!:` → major, `chore:/ci:/test:` → no release
 
+Additional CI tooling:
+- **pkg-pr-new** — publishes preview npm packages on every PR for consumer testing (pattern from all `.examples/`)
+- **`npm whoami`** in `prepublishOnly` — catches npm auth issues before publish attempt (pattern from better-auth/stripe)
+- **Concurrency groups** — cancel stale CI runs on new pushes, prevent duplicate releases
+- **30min timeout** — prevent hung CI jobs
+
 See `PUBLISHING.md` for full details and `.examples/better-auth` or `.examples/stripe` for reference patterns used by other Convex components.
 
 ## Documentation Maintenance
