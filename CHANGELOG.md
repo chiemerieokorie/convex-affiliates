@@ -1,3 +1,9 @@
+## [2.0.4](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.3...v2.0.4) (2026-01-29)
+
+### Bug Fixes
+
+* drop generic ctx, use any for auth callbacks ([345e15a](https://github.com/chiemerieokorie/convex-affiliates/commit/345e15ad02b0c4e4bbf5fd6e703cdef24da941d2))
+
 ## [2.0.3](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.2...v2.0.3) (2026-01-29)
 
 ### Bug Fixes
