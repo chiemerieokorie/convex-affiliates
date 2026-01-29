@@ -23,6 +23,9 @@ export {
   type AdminDashboardData,
   type Commission,
   type Payout,
+  type StorageMode,
+  type AffiliateHooksConfig,
+  type CookieOptions,
 } from "./hooks.js";
 
 // =============================================================================
