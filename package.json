@@ -61,6 +61,14 @@
       "types": "./dist/react/index.d.ts",
       "default": "./dist/react/index.js"
     },
+    "./react/portal": {
+      "types": "./dist/react/prebuilt/portal/index.d.ts",
+      "default": "./dist/react/prebuilt/portal/index.js"
+    },
+    "./react/admin": {
+      "types": "./dist/react/prebuilt/admin/index.d.ts",
+      "default": "./dist/react/prebuilt/admin/index.js"
+    },
     "./test": "./src/test.ts",
     "./_generated/component.js": {
       "types": "./dist/component/_generated/component.d.ts"
