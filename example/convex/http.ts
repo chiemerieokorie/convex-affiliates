@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { components } from "./_generated/api.js";
-import { registerRoutes, createStripeWebhookHandler } from "chief_emerie";
+import { registerRoutes, createStripeWebhookHandler } from "convex-affiliates";
 
 const http = httpRouter();
 

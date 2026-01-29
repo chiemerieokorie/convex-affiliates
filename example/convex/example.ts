@@ -1,5 +1,5 @@
 import { components } from "./_generated/api.js";
-import { createAffiliateApi } from "chief_emerie";
+import { createAffiliateApi } from "convex-affiliates";
 import { Auth } from "convex/server";
 
 // =============================================================================

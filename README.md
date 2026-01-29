@@ -1,12 +1,12 @@
 # Convex Affiliates
 
-A comprehensive affiliate marketing component for [Convex](https://convex.dev) with zero-cookie tracking, flexible commission structures, and seamless Stripe integration.
+A comprehensive affiliate marketing component for [Convex](https://convex.dev) with flexible attribution tracking, configurable commission structures, and seamless Stripe integration.
 
-[![npm version](https://badge.fury.io/js/chief_emerie.svg)](https://www.npmjs.com/package/chief_emerie)
+[![npm version](https://badge.fury.io/js/convex-affiliates.svg)](https://www.npmjs.com/package/convex-affiliates)
 
 ## Features
 
-- **Zero-Cookie Tracking** - URL parameter-based attribution that works without cookies
+- **Flexible Attribution Tracking** - Configurable storage (localStorage, cookie, or both) with URL parameter-based attribution
 - **Stripe Integration** - Easy webhook handlers for automatic commission creation
 - **Flexible Commission Structures** - Percentage or fixed, with tiered and product-specific rates
 - **Campaign Management** - Multiple campaigns with different terms
@@ -17,7 +17,7 @@ A comprehensive affiliate marketing component for [Convex](https://convex.dev) w
 ## Installation
 
 ```bash
-npm install chief_emerie
+npm install convex-affiliates
 ```
 
 ### Peer Dependencies
@@ -34,7 +34,7 @@ Create or update `convex/convex.config.ts`:
 
 ```typescript
 import { defineApp } from "convex/server";
-import affiliates from "chief_emerie/convex.config";
+import affiliates from "convex-affiliates/convex.config";
 
 const app = defineApp();
 app.use(affiliates);
@@ -42,68 +42,41 @@ app.use(affiliates);
 export default app;
 ```
 
-### 2. Create and Export the API
+### 2. Generate the API file
 
-Create `convex/affiliates.ts`:
+```bash
+npx convex-affiliates init
+```
+
+This creates `convex/affiliates.ts` with all exports pre-configured. Edit the file to set your auth callback and commission defaults.
+
+<details>
+<summary>Or create it manually</summary>
 
 ```typescript
 import { components } from "./_generated/api";
-import { createAffiliateApi } from "chief_emerie";
+import { createAffiliateApi } from "convex-affiliates";
 
-// Create the API with your config
 const affiliates = createAffiliateApi(components.affiliates, {
-  // Commission defaults
-  defaultCommissionType: "percentage",
-  defaultCommissionValue: 20, // 20%
+  defaultCommissionValue: 20,
   defaultPayoutTerm: "NET-30",
-  minPayoutCents: 5000, // $50 minimum
-  defaultCookieDurationDays: 30,
-
-  // Your app's base URL for generating affiliate links
   baseUrl: process.env.BASE_URL ?? "https://yourapp.com",
-
-  // Authentication callback - works with any Convex auth provider
   auth: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    return identity.subject; // User ID from JWT token
-  },
-
-  // Optional: Admin authorization callback
-  isAdmin: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    // Example: check email domain or custom claim
-    return identity?.email?.endsWith("@yourcompany.com") ?? false;
+    return identity.subject;
   },
 });
 
-// Re-export ready-to-use functions
-export const {
-  // Public (no auth required)
-  trackClick,
-  validateCode,
-
-  // Authenticated user functions
-  register,
-  getAffiliate,
-  getPortalData,
-  listCommissions,
-  listPayouts,
-  listReferrals,
-  generateLink,
-  attributeSignup,
-
-  // Admin functions
-  adminDashboard,
-  adminListAffiliates,
-  adminTopAffiliates,
-  adminApproveAffiliate,
-  adminRejectAffiliate,
-  adminSuspendAffiliate,
-  adminListCampaigns,
-  adminCreateCampaign,
-} = affiliates;
+// Export only the functions you need
+export const { trackClick, validateCode } = affiliates;
+export const { register, getAffiliate, getPortalData, listCommissions,
+  listPayouts, listReferrals, generateLink, attributeSignup } = affiliates;
+export const { adminDashboard, adminListAffiliates, adminApproveAffiliate,
+  adminRejectAffiliate, adminSuspendAffiliate, adminListCampaigns,
+  adminCreateCampaign } = affiliates;
 ```
+</details>
 
 ### 3. Deploy
 
@@ -117,7 +90,7 @@ The affiliate API supports type-safe hooks for lifecycle events. Use these to se
 
 ```typescript
 import { components } from "./_generated/api";
-import { createAffiliateApi } from "chief_emerie";
+import { createAffiliateApi } from "convex-affiliates";
 
 const affiliates = createAffiliateApi(components.affiliates, {
   // ... other config ...
@@ -157,7 +130,7 @@ const affiliates = createAffiliateApi(components.affiliates, {
 For commission events via Stripe webhooks, pass hooks to the Stripe handlers:
 
 ```typescript
-import { getAffiliateStripeHandlers } from "chief_emerie";
+import { getAffiliateStripeHandlers } from "convex-affiliates";
 
 export const stripeHandlers = getAffiliateStripeHandlers(
   components.affiliates,
@@ -265,7 +238,7 @@ If you're using `@convex-dev/stripe`, use `getAffiliateStripeHandlers` to get ty
 
 ```typescript
 // convex/stripeHandlers.ts
-import { getAffiliateStripeHandlers } from "chief_emerie";
+import { getAffiliateStripeHandlers } from "convex-affiliates";
 import { components } from "./_generated/api";
 
 // Get affiliate handlers for invoice.paid, charge.refunded, checkout.session.completed
@@ -282,7 +255,7 @@ If you're not using `@convex-dev/stripe`, use the standalone handler with built-
 // convex/http.ts
 import { httpRouter } from "convex/server";
 import { components } from "./_generated/api";
-import { createStripeWebhookHandler } from "chief_emerie";
+import { createStripeWebhookHandler } from "convex-affiliates";
 
 const http = httpRouter();
 
@@ -402,6 +375,31 @@ export function ReferralTracker() {
   return null;
 }
 ```
+
+### Storage Configuration
+
+By default, referral data is stored in `localStorage`. You can switch to cookies (useful for cross-subdomain tracking or server-side access) or use both:
+
+```ts
+import { createAffiliateHooks } from "convex-affiliates/react";
+import { api } from "../convex/_generated/api";
+
+// Cookie storage with cross-subdomain support
+const hooks = createAffiliateHooks(api.affiliates, {
+  storage: "cookie",
+  cookieOptions: {
+    domain: ".example.com",  // shared across subdomains
+    maxAge: 30 * 24 * 60 * 60, // 30 days (default)
+    secure: true,            // HTTPS only (default)
+    sameSite: "lax",         // default
+  },
+});
+
+// Dual-write: writes to both, reads cookie-first
+const hooks = createAffiliateHooks(api.affiliates, { storage: "both" });
+```
+
+The same config can be passed to `useTrackReferralOnLoad` and `useStoredReferral` standalone hooks.
 
 ### Affiliate Portal Example
 
@@ -640,7 +638,7 @@ All fraud prevention checks silently reject suspicious activity (returning `null
 If you get type errors when passing `components.affiliates` to `createAffiliateApi`, you can use a type assertion:
 
 ```typescript
-import { createAffiliateApi, ComponentApi } from "chief_emerie";
+import { createAffiliateApi, ComponentApi } from "convex-affiliates";
 
 const affiliates = createAffiliateApi(
   components.affiliates as unknown as ComponentApi,
@@ -668,47 +666,40 @@ For Better Auth or other providers, the `identity.subject` contains the user ID 
 
 ### Complete Referral Flow (Track → Store → Attribute)
 
+Using the built-in React hooks with configurable storage:
+
 ```tsx
-// 1. Track referral on landing (ReferralTracker.tsx)
-import { useMutation } from "convex/react";
+import { createAffiliateHooks, useTrackReferralOnLoad, useStoredReferral } from "convex-affiliates/react";
 import { api } from "../convex/_generated/api";
-import { useEffect } from "react";
 
-export function ReferralTracker() {
-  const trackClick = useMutation(api.affiliates.trackClick);
+// Choose storage mode: "localStorage" (default), "cookie", or "both"
+const storageConfig = {
+  storage: "cookie" as const,
+  cookieOptions: { domain: ".example.com", maxAge: 30 * 24 * 60 * 60 },
+};
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("ref");
+const hooks = createAffiliateHooks(api.affiliates, storageConfig);
 
-    if (code && !localStorage.getItem("affiliateReferral")) {
-      trackClick({
-        affiliateCode: code,
-        landingPage: window.location.pathname,
-      }).then((result) => {
-        if (result?.referralId) {
-          localStorage.setItem("affiliateReferral", JSON.stringify({
-            referralId: result.referralId,
-            code,
-          }));
-        }
-      });
-    }
-  }, []);
-
+// 1. Track referral on landing — automatically reads ?ref= and stores the referral ID
+function ReferralTracker() {
+  const trackReferral = hooks.useTrackReferral();
+  useTrackReferralOnLoad(trackReferral, storageConfig);
   return null;
 }
 
 // 2. Attribute after signup (in your auth callback)
-const stored = localStorage.getItem("affiliateReferral");
-if (stored) {
-  const { referralId, code } = JSON.parse(stored);
-  await attributeSignup({
-    userId: newUser.id,
-    referralId,
-    referralCode: code,
-  });
-  localStorage.removeItem("affiliateReferral");
+function useAttributeOnSignup(userId: string) {
+  const { referralId, code, clear } = useStoredReferral(storageConfig);
+  const attributeSignup = useMutation(api.affiliates.attributeSignup);
+
+  useEffect(() => {
+    if (!userId || (!referralId && !code)) return;
+    attributeSignup({
+      userId,
+      referralId: referralId ?? undefined,
+      referralCode: code ?? undefined,
+    }).then(() => clear());
+  }, [userId]);
 }
 ```
 

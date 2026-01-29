@@ -1,6 +1,6 @@
 {
   "name": "convex-affiliates",
-  "description": "A comprehensive affiliate marketing component for Convex with zero-cookie tracking and NET-15/30/60/90 payout scheduling.",
+  "description": "A comprehensive affiliate marketing component for Convex with flexible attribution tracking and NET-15/30/60/90 payout scheduling.",
   "repository": "github:chiemerieokorie/convex-affiliates",
   "homepage": "https://github.com/chiemerieokorie/convex-affiliates#readme",
   "bugs": {
@@ -19,6 +19,9 @@
     "payout"
   ],
   "type": "module",
+  "bin": {
+    "convex-affiliates": "./dist/bin/init.mjs"
+  },
   "scripts": {
     "dev": "run-p -r 'dev:*'",
     "dev:backend": "convex dev --typecheck-components",

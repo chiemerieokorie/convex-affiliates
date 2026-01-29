@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Convex Component** - a reusable backend package that implements a comments/affiliates system. The component is published to npm as `chief_emerie` and demonstrates best practices for building production-ready Convex components.
+This is a **Convex Component** - a reusable backend package that implements a comments/affiliates system. The component is published to npm as `convex-affiliates` and demonstrates best practices for building production-ready Convex components.
 
 ## Development Commands
 
@@ -63,7 +63,7 @@ The `example/` directory contains a working Convex app that demonstrates compone
 
 **Component Registration** (in consuming app's convex.config.ts):
 ```typescript
-import affiliates from "chief_emerie/convex.config.js";
+import affiliates from "convex-affiliates/convex.config.js";
 const app = defineApp();
 app.use(affiliates);
 ```
@@ -76,7 +76,7 @@ await ctx.runMutation(components.affiliates.lib.add, { ... });
 
 **HTTP Route Registration**:
 ```typescript
-import { registerRoutes } from "chief_emerie";
+import { registerRoutes } from "convex-affiliates";
 registerRoutes(http, components.affiliates, { pathPrefix: "/comments" });
 ```
 
@@ -100,14 +100,12 @@ npm run test:watch        # Watch mode for development
 - **Actions**: Use `"use node";` at file top for Node.js modules, cannot use `ctx.db`
 - **Function calls**: Use `ctx.runQuery`, `ctx.runMutation`, `ctx.runAction` with FunctionReferences from `api`/`internal` objects
 
-## Database Schema
+## Documentation Maintenance
 
-The component defines a `comments` table:
-```typescript
-comments: {
-  text: string
-  userId: string    // External user reference
-  targetId: string  // Entity being commented on
-  indexes: ["by_target"] on targetId
-}
-```
+After making changes that affect the public API, package name, repository URLs, schema, or project structure, **always update the relevant docs**:
+
+- **CLAUDE.md** — architecture, commands, key patterns
+- **README.md** — installation, usage examples, API reference
+- **PUBLISHING.md** — release workflow and configuration
+
+Keep all package name references, import paths, and URLs consistent across docs.
