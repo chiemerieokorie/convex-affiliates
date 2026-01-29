@@ -13,8 +13,26 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache-dependency-path: package.json
+          node-version: "25.x"
+          cache: "npm"
+      - run: npm ci --legacy-peer-deps
+      - run: npm run build
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
+
   release:
     name: Release
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -32,7 +50,6 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npm audit signatures
       - run: npm run build
-      - run: npm test
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
