@@ -221,7 +221,7 @@ export interface AffiliateConfig {
   baseUrl?: string;
 }
 
-export interface CreateAffiliateApiConfig<Ctx extends { auth: Auth } = { auth: Auth }> extends AffiliateConfig {
+export interface CreateAffiliateApiConfig<Ctx extends { auth: Auth }> extends AffiliateConfig {
   /**
    * Authentication function that returns the user ID.
    * The ctx type is inferred from your Convex handler — no need to annotate it.
@@ -281,7 +281,7 @@ type MutationCtx = { runQuery: any; runMutation: any; auth: Auth };
  *   });
  * ```
  */
-export function createAffiliateApi<Ctx extends { auth: Auth } = { auth: Auth }>(
+export function createAffiliateApi<Ctx extends { auth: Auth }>(
   component: ComponentApi,
   config: CreateAffiliateApiConfig<Ctx>
 ) {
