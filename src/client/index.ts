@@ -5,7 +5,6 @@ import {
   paginationOptsValidator,
 } from "convex/server";
 import type {
-  Auth,
   GenericDataModel,
   GenericMutationCtx,
   GenericQueryCtx,
@@ -228,18 +227,18 @@ export interface AffiliateConfig {
   baseUrl?: string;
 }
 
-export interface CreateAffiliateApiConfig<Ctx extends { auth: Auth }> extends AffiliateConfig {
+export interface CreateAffiliateApiConfig extends AffiliateConfig {
   /**
    * Authentication function that returns the user ID.
-   * The ctx type is inferred from your Convex handler — no need to annotate it.
+   * Accepts any Convex ctx — no need to annotate it.
    */
-  auth: (ctx: Ctx) => Promise<string>;
+  auth: (ctx: any) => Promise<string>;
 
   /**
    * Optional admin check function.
    * If not provided, admin endpoints will use the auth function only.
    */
-  isAdmin?: (ctx: Ctx) => Promise<boolean>;
+  isAdmin?: (ctx: any) => Promise<boolean>;
 
   /**
    * Optional type-safe hooks for affiliate lifecycle events.
@@ -288,15 +287,12 @@ type MutationCtx = Pick<GenericMutationCtx<GenericDataModel>, "runQuery" | "runM
  *   });
  * ```
  */
-export function createAffiliateApi<Ctx extends { auth: Auth }>(
+export function createAffiliateApi(
   component: ComponentApi,
-  config: CreateAffiliateApiConfig<Ctx>
+  config: CreateAffiliateApiConfig
 ) {
-  // Cast to any-accepting functions internally. The generic Ctx on
-  // CreateAffiliateApiConfig provides type safety at the call site;
-  // internally we just forward the Convex ctx which always satisfies { auth }.
-  const auth = config.auth as (ctx: any) => Promise<string>;
-  const isAdmin = config.isAdmin as ((ctx: any) => Promise<boolean>) | undefined;
+  const auth = config.auth;
+  const isAdmin = config.isAdmin;
   const hooks = config.hooks;
   const defaults = {
     defaultCommissionType: config.defaultCommissionType ?? "percentage",
