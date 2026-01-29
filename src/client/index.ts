@@ -902,12 +902,12 @@ export function createAffiliateApi(
     adminListAffiliates: queryGeneric({
       args: {
         status: v.optional(affiliateStatusValidator),
-        campaignId: v.optional(v.id("campaigns")),
+        campaignId: v.optional(v.string()),
         limit: v.optional(v.number()),
       },
       handler: async (ctx, args) => {
         await requireAdmin(ctx);
-        return ctx.runQuery(component.affiliates.list, args);
+        return ctx.runQuery(component.affiliates.list, args as any);
       },
     }),
 
@@ -970,16 +970,16 @@ export function createAffiliateApi(
      * ```
      */
     adminApproveAffiliate: mutationGeneric({
-      args: { affiliateId: v.id("affiliates") },
+      args: { affiliateId: v.string() },
       handler: async (ctx, args) => {
         await requireAdmin(ctx);
 
         // Get affiliate info before approval for hook
         const affiliateData = await ctx.runQuery(component.affiliates.getById, {
-          affiliateId: args.affiliateId,
+          affiliateId: args.affiliateId as any,
         });
 
-        await ctx.runMutation(component.affiliates.approve, args);
+        await ctx.runMutation(component.affiliates.approve, { affiliateId: args.affiliateId as any });
 
         // Call hook for approval
         if (affiliateData) {
@@ -1014,7 +1014,7 @@ export function createAffiliateApi(
      */
     adminRejectAffiliate: mutationGeneric({
       args: {
-        affiliateId: v.id("affiliates"),
+        affiliateId: v.string(),
         reason: v.optional(v.string()),
       },
       handler: async (ctx, args) => {
@@ -1022,10 +1022,10 @@ export function createAffiliateApi(
 
         // Get affiliate info before rejection for hook
         const affiliateData = await ctx.runQuery(component.affiliates.getById, {
-          affiliateId: args.affiliateId,
+          affiliateId: args.affiliateId as any,
         });
 
-        await ctx.runMutation(component.affiliates.reject, args);
+        await ctx.runMutation(component.affiliates.reject, { affiliateId: args.affiliateId as any });
 
         // Call hook for rejection
         if (affiliateData) {
@@ -1055,16 +1055,16 @@ export function createAffiliateApi(
      * ```
      */
     adminSuspendAffiliate: mutationGeneric({
-      args: { affiliateId: v.id("affiliates") },
+      args: { affiliateId: v.string() },
       handler: async (ctx, args) => {
         await requireAdmin(ctx);
 
         // Get affiliate info before suspension for hook
         const affiliateData = await ctx.runQuery(component.affiliates.getById, {
-          affiliateId: args.affiliateId,
+          affiliateId: args.affiliateId as any,
         });
 
-        await ctx.runMutation(component.affiliates.suspend, args);
+        await ctx.runMutation(component.affiliates.suspend, { affiliateId: args.affiliateId as any });
 
         // Call hook for suspension
         if (affiliateData) {

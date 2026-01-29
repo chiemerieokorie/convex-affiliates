@@ -100,6 +100,14 @@ npm run test:watch        # Watch mode for development
 - **Actions**: Use `"use node";` at file top for Node.js modules, cannot use `ctx.db`
 - **Function calls**: Use `ctx.runQuery`, `ctx.runMutation`, `ctx.runAction` with FunctionReferences from `api`/`internal` objects
 
+## Component Boundary Rules
+
+Convex components serialize data at the boundary between host app and component:
+- **IDs become plain `string`** — branded `Id<"tableName">` types are stripped when crossing the component boundary
+- **Client API validators must use `v.string()`** for any ID args/returns, never `v.id("tableName")`
+- **Only use `v.id()` inside `src/component/`** — the internal functions keep branded IDs
+- **Test from the consumer's perspective** — typecheck the example app or a mock consumer to catch boundary type issues
+
 ## Documentation Maintenance
 
 After making changes that affect the public API, package name, repository URLs, schema, or project structure, **always update the relevant docs**:
