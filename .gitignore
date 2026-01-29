@@ -18,3 +18,4 @@ node_modules
 .npmrc
 .examples
 .claude/
+CLAUDE.md
