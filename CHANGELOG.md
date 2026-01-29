@@ -2,6 +2,13 @@
 
 ### Bug Fixes
 
+* add workflow_dispatch trigger to release workflow ([c8586b9](https://github.com/chiemerieokorie/convex-affiliates/commit/c8586b967364e80201adca115b7ffd8b81cdce1d))
+* update CLAUDE.md with OIDC publishing docs and commit message rules ([3300f88](https://github.com/chiemerieokorie/convex-affiliates/commit/3300f886e8e9b8f68c057a30c4bcfbc88abb6c0d))
+
+## [1.1.1](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.1.0...v1.1.1) (2026-01-29)
+
+### Bug Fixes
+
 * update CLAUDE.md with OIDC publishing docs and commit message rules ([3300f88](https://github.com/chiemerieokorie/convex-affiliates/commit/3300f886e8e9b8f68c057a30c4bcfbc88abb6c0d))
 
 ## [1.1.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.0.1...v1.1.0) (2026-01-29)
