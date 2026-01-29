@@ -1,3 +1,9 @@
+## [2.0.2](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.1...v2.0.2) (2026-01-29)
+
+### Bug Fixes
+
+* use generic ctx type for auth callbacks + typed pagination ([f49557e](https://github.com/chiemerieokorie/convex-affiliates/commit/f49557e0496c89ed33fd1a97eb217dac8a7d853c))
+
 ## [2.0.1](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.0...v2.0.1) (2026-01-29)
 
 ### Bug Fixes
