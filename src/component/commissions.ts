@@ -6,6 +6,7 @@ import {
   commissionTypeValidator,
   calculateCommissionAmount,
   getPayoutTermDelayMs,
+  initializeSubAffiliateStats,
   type CommissionType,
 } from "./validators.js";
 
@@ -734,6 +735,44 @@ export const createFromInvoice = mutation({
       timestamp: now,
     });
 
+    // Create sub-affiliate commission if this affiliate was recruited
+    if (affiliate.referredByAffiliateId && campaign.affiliateRecruitmentEnabled && campaign.subAffiliateCommissionPercent) {
+      const parentAffiliate = await ctx.db.get(affiliate.referredByAffiliateId);
+      if (parentAffiliate && parentAffiliate.status === "approved") {
+        const subCommissionPercent = campaign.subAffiliateCommissionPercent;
+        const subCommissionAmountCents = Math.round(
+          (commissionAmountCents * subCommissionPercent) / 100
+        );
+
+        if (subCommissionAmountCents > 0) {
+          // Create sub-affiliate commission
+          await ctx.db.insert("subAffiliateCommissions", {
+            parentAffiliateId: parentAffiliate._id,
+            subAffiliateId: affiliate._id,
+            sourceCommissionId: commissionId,
+            sourceCommissionAmountCents: commissionAmountCents,
+            subCommissionAmountCents,
+            subCommissionPercent,
+            currency: args.currency,
+            status: "pending",
+            dueAt,
+            createdAt: now,
+          });
+
+          // Update parent's sub-affiliate stats
+          const subStats = parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
+          await ctx.db.patch(parentAffiliate._id, {
+            subAffiliateStats: {
+              ...subStats,
+              totalSubCommissionsCents: subStats.totalSubCommissionsCents + subCommissionAmountCents,
+              pendingSubCommissionsCents: subStats.pendingSubCommissionsCents + subCommissionAmountCents,
+            },
+            updatedAt: now,
+          });
+        }
+      }
+    }
+
     // Return commission details for notification purposes
     return {
       commissionId,
@@ -823,6 +862,42 @@ export const reverseByCharge = mutation({
       }),
       timestamp: now,
     });
+
+    // Also reverse any linked sub-affiliate commission
+    const subCommission = await ctx.db
+      .query("subAffiliateCommissions")
+      .withIndex("by_sourceCommission", (q) =>
+        q.eq("sourceCommissionId", commission._id)
+      )
+      .first();
+
+    if (subCommission && subCommission.status !== "reversed") {
+      // Reverse the sub-affiliate commission
+      await ctx.db.patch(subCommission._id, {
+        status: "reversed",
+        reversedAt: now,
+        reversalReason: reason,
+      });
+
+      // Update parent's sub-affiliate stats
+      const parentAffiliate = await ctx.db.get(subCommission.parentAffiliateId);
+      if (parentAffiliate) {
+        const subStats = parentAffiliate.subAffiliateStats ?? initializeSubAffiliateStats();
+        const subWasPending = subCommission.status === "pending" || subCommission.status === "approved";
+
+        const updates = { ...subStats };
+        if (subWasPending) {
+          updates.pendingSubCommissionsCents -= subCommission.subCommissionAmountCents;
+        } else if (subCommission.status === "paid") {
+          updates.paidSubCommissionsCents -= subCommission.subCommissionAmountCents;
+        }
+
+        await ctx.db.patch(parentAffiliate._id, {
+          subAffiliateStats: updates,
+          updatedAt: now,
+        });
+      }
+    }
 
     // Return commission details for notification purposes
     return {
