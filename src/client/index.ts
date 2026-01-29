@@ -4,7 +4,7 @@ import {
   queryGeneric,
   paginationOptsValidator,
 } from "convex/server";
-import type { Auth, HttpRouter } from "convex/server";
+import type { Auth, HttpRouter, PaginationResult } from "convex/server";
 import { v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
 
@@ -54,6 +54,57 @@ type StripeHandler = (ctx: StripeHandlerCtx, event: StripeEvent) => Promise<void
 export type AffiliateStripeHandlers = {
   [eventType: string]: StripeHandler | undefined;
 };
+
+// =============================================================================
+// Typed Pagination Records
+// =============================================================================
+
+/**
+ * A single commission record as returned by paginated commission queries.
+ */
+export interface CommissionRecord {
+  _id: string;
+  _creationTime: number;
+  affiliateId: string;
+  referralId: string;
+  stripeCustomerId: string;
+  stripeProductId?: string;
+  stripeInvoiceId?: string;
+  stripeChargeId?: string;
+  stripeSubscriptionId?: string;
+  paymentNumber?: number;
+  subscriptionStartedAt?: number;
+  saleAmountCents: number;
+  commissionAmountCents: number;
+  commissionRate: number;
+  commissionType: "percentage" | "fixed";
+  currency: string;
+  status: "pending" | "approved" | "processing" | "paid" | "reversed";
+  payoutId?: string;
+  reversalReason?: string;
+  createdAt: number;
+  paidAt?: number;
+  reversedAt?: number;
+}
+
+/**
+ * A single payout record as returned by paginated payout queries.
+ */
+export interface PayoutRecord {
+  _id: string;
+  _creationTime: number;
+  affiliateId: string;
+  amountCents: number;
+  currency: string;
+  method: "manual" | "bank_transfer" | "paypal" | "other";
+  periodStart: number;
+  periodEnd: number;
+  status: "pending" | "completed" | "cancelled";
+  commissionsCount: number;
+  notes?: string;
+  createdAt: number;
+  completedAt?: number;
+}
 
 // =============================================================================
 // Lifecycle Hook Types (Type-Safe Event Handlers)
@@ -170,36 +221,18 @@ export interface AffiliateConfig {
   baseUrl?: string;
 }
 
-/**
- * Context type for auth callbacks.
- * Uses the full query context so consumers can call helpers like
- * `authComponent.safeGetAuthUser(ctx)` which need `runQuery`.
- */
-export type RunQueryCtx = {
-  runQuery: (query: any, args?: any) => Promise<any>;
-  auth: Auth;
-};
-
-export type RunMutationCtx = RunQueryCtx & {
-  runMutation: (mutation: any, args?: any) => Promise<any>;
-};
-
-export type RunActionCtx = RunMutationCtx & {
-  runAction: (action: any, args?: any) => Promise<any>;
-};
-
-export interface CreateAffiliateApiConfig extends AffiliateConfig {
+export interface CreateAffiliateApiConfig<Ctx extends { auth: Auth } = { auth: Auth }> extends AffiliateConfig {
   /**
    * Authentication function that returns the user ID.
-   * Called for all authenticated endpoints.
+   * The ctx type is inferred from your Convex handler — no need to annotate it.
    */
-  auth: (ctx: RunQueryCtx) => Promise<string>;
+  auth: (ctx: Ctx) => Promise<string>;
 
   /**
    * Optional admin check function.
    * If not provided, admin endpoints will use the auth function only.
    */
-  isAdmin?: (ctx: RunQueryCtx) => Promise<boolean>;
+  isAdmin?: (ctx: Ctx) => Promise<boolean>;
 
   /**
    * Optional type-safe hooks for affiliate lifecycle events.
@@ -220,9 +253,9 @@ export interface CreateAffiliateApiConfig extends AffiliateConfig {
   hooks?: AffiliateHooks;
 }
 
-// Context types for internal use
-type QueryCtx = RunQueryCtx;
-type MutationCtx = RunMutationCtx;
+// Context types for internal use (what we call on ctx inside handlers)
+type QueryCtx = { runQuery: any; auth: Auth };
+type MutationCtx = { runQuery: any; runMutation: any; auth: Auth };
 
 // =============================================================================
 // createAffiliateApi - Main API Factory
@@ -248,12 +281,15 @@ type MutationCtx = RunMutationCtx;
  *   });
  * ```
  */
-export function createAffiliateApi(
+export function createAffiliateApi<Ctx extends { auth: Auth } = { auth: Auth }>(
   component: ComponentApi,
-  config: CreateAffiliateApiConfig
+  config: CreateAffiliateApiConfig<Ctx>
 ) {
-  const auth = config.auth;
-  const isAdmin = config.isAdmin;
+  // Cast to any-accepting functions internally. The generic Ctx on
+  // CreateAffiliateApiConfig provides type safety at the call site;
+  // internally we just forward the Convex ctx which always satisfies { auth }.
+  const auth = config.auth as (ctx: any) => Promise<string>;
+  const isAdmin = config.isAdmin as ((ctx: any) => Promise<boolean>) | undefined;
   const hooks = config.hooks;
   const defaults = {
     defaultCommissionType: config.defaultCommissionType ?? "percentage",
@@ -283,7 +319,7 @@ export function createAffiliateApi(
   };
 
   // Helper to check admin access
-  const requireAdmin = async (ctx: RunQueryCtx) => {
+  const requireAdmin = async (ctx: any) => {
     if (isAdmin) {
       const isAdminResult = await isAdmin(ctx);
       if (!isAdminResult) throw new Error("Not authorized - admin access required");
@@ -583,7 +619,7 @@ export function createAffiliateApi(
         status: v.optional(commissionStatusValidator),
         paginationOpts: paginationOptsValidator,
       },
-      handler: async (ctx, args) => {
+      handler: async (ctx, args): Promise<PaginationResult<CommissionRecord>> => {
         const userId = await auth(ctx);
         const affiliate = await getAffiliateByUserId(ctx, userId);
         if (!affiliate) {
@@ -623,7 +659,7 @@ export function createAffiliateApi(
         status: v.optional(payoutStatusValidator),
         paginationOpts: paginationOptsValidator,
       },
-      handler: async (ctx, args) => {
+      handler: async (ctx, args): Promise<PaginationResult<PayoutRecord>> => {
         const userId = await auth(ctx);
         const affiliate = await getAffiliateByUserId(ctx, userId);
         if (!affiliate) {

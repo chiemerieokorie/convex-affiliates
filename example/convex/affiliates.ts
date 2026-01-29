@@ -1,6 +1,5 @@
 import { components } from "./_generated/api.js";
 import { createAffiliateApi } from "convex-affiliates";
-import { Auth } from "convex/server";
 
 // Single shared affiliate API instance.
 // Import this from other files instead of calling createAffiliateApi again.
@@ -12,13 +11,13 @@ export const affiliates = createAffiliateApi(components.affiliates, {
   defaultCookieDurationDays: 30,
   baseUrl: process.env.BASE_URL ?? "https://example.com",
 
-  auth: async (ctx: { auth: Auth }) => {
+  auth: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     return identity.subject;
   },
 
-  isAdmin: async (ctx: { auth: Auth }) => {
+  isAdmin: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     // TODO: Implement your admin check logic here
     return !!identity;
