@@ -1,3 +1,9 @@
+## [2.0.3](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.2...v2.0.3) (2026-01-29)
+
+### Bug Fixes
+
+* remove generic default that defeats ctx type inference ([41eb815](https://github.com/chiemerieokorie/convex-affiliates/commit/41eb8151d2b5aff7d2ea7ccc0244d9db50644517))
+
 ## [2.0.2](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.1...v2.0.2) (2026-01-29)
 
 ### Bug Fixes
