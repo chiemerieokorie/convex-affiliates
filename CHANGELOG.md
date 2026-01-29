@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.0.1...v1.1.0) (2026-01-29)
+
+### Features
+
+* add pkg-pr-new, CI concurrency, and prepublish auth check ([a2e2741](https://github.com/chiemerieokorie/convex-affiliates/commit/a2e2741880cfb0cf793fe9db1f4f19e4b21a2e78))
+
 ## [1.0.1](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.0.0...v1.0.1) (2026-01-29)
 
 ### Bug Fixes
