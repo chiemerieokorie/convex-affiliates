@@ -1,3 +1,9 @@
+## [1.1.2](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.1.1...v1.1.2) (2026-01-29)
+
+### Bug Fixes
+
+* remove npm whoami from prepublishOnly for OIDC compatibility ([5c530a0](https://github.com/chiemerieokorie/convex-affiliates/commit/5c530a043b7e48c3578d1712f73614f2cff03366))
+
 ## [1.1.1](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.1.0...v1.1.1) (2026-01-29)
 
 ### Bug Fixes
