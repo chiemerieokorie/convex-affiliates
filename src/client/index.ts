@@ -170,18 +170,36 @@ export interface AffiliateConfig {
   baseUrl?: string;
 }
 
+/**
+ * Context type for auth callbacks.
+ * Uses the full query context so consumers can call helpers like
+ * `authComponent.safeGetAuthUser(ctx)` which need `runQuery`.
+ */
+export type RunQueryCtx = {
+  runQuery: (query: any, args?: any) => Promise<any>;
+  auth: Auth;
+};
+
+export type RunMutationCtx = RunQueryCtx & {
+  runMutation: (mutation: any, args?: any) => Promise<any>;
+};
+
+export type RunActionCtx = RunMutationCtx & {
+  runAction: (action: any, args?: any) => Promise<any>;
+};
+
 export interface CreateAffiliateApiConfig extends AffiliateConfig {
   /**
    * Authentication function that returns the user ID.
    * Called for all authenticated endpoints.
    */
-  auth: (ctx: { auth: Auth }) => Promise<string>;
+  auth: (ctx: RunQueryCtx) => Promise<string>;
 
   /**
    * Optional admin check function.
    * If not provided, admin endpoints will use the auth function only.
    */
-  isAdmin?: (ctx: { auth: Auth }) => Promise<boolean>;
+  isAdmin?: (ctx: RunQueryCtx) => Promise<boolean>;
 
   /**
    * Optional type-safe hooks for affiliate lifecycle events.
@@ -203,9 +221,8 @@ export interface CreateAffiliateApiConfig extends AffiliateConfig {
 }
 
 // Context types for internal use
-type QueryCtx = { runQuery: any; auth: Auth };
-type MutationCtx = { runQuery: any; runMutation: any; auth: Auth };
-type _ActionCtx = { runQuery: any; runMutation: any; runAction: any; auth: Auth };
+type QueryCtx = RunQueryCtx;
+type MutationCtx = RunMutationCtx;
 
 // =============================================================================
 // createAffiliateApi - Main API Factory
@@ -266,7 +283,7 @@ export function createAffiliateApi(
   };
 
   // Helper to check admin access
-  const requireAdmin = async (ctx: { auth: Auth }) => {
+  const requireAdmin = async (ctx: RunQueryCtx) => {
     if (isAdmin) {
       const isAdminResult = await isAdmin(ctx);
       if (!isAdminResult) throw new Error("Not authorized - admin access required");
@@ -817,7 +834,7 @@ export function createAffiliateApi(
       handler: async (ctx, args) => {
         // Note: The type will be properly resolved after running `npx convex dev` to regenerate types
         return ctx.runQuery(
-          (component.referrals as any).getRefereeDiscount,
+          component.referrals.getRefereeDiscount,
           args
         );
       },
@@ -879,7 +896,7 @@ export function createAffiliateApi(
       },
       handler: async (ctx, args) => {
         await requireAdmin(ctx);
-        return ctx.runQuery(component.affiliates.list, args as any);
+        return ctx.runQuery(component.affiliates.list, args );
       },
     }),
 
@@ -948,10 +965,10 @@ export function createAffiliateApi(
 
         // Get affiliate info before approval for hook
         const affiliateData = await ctx.runQuery(component.affiliates.getById, {
-          affiliateId: args.affiliateId as any,
+          affiliateId: args.affiliateId ,
         });
 
-        await ctx.runMutation(component.affiliates.approve, { affiliateId: args.affiliateId as any });
+        await ctx.runMutation(component.affiliates.approve, { affiliateId: args.affiliateId  });
 
         // Call hook for approval
         if (affiliateData) {
@@ -994,10 +1011,10 @@ export function createAffiliateApi(
 
         // Get affiliate info before rejection for hook
         const affiliateData = await ctx.runQuery(component.affiliates.getById, {
-          affiliateId: args.affiliateId as any,
+          affiliateId: args.affiliateId ,
         });
 
-        await ctx.runMutation(component.affiliates.reject, { affiliateId: args.affiliateId as any });
+        await ctx.runMutation(component.affiliates.reject, { affiliateId: args.affiliateId  });
 
         // Call hook for rejection
         if (affiliateData) {
@@ -1033,10 +1050,10 @@ export function createAffiliateApi(
 
         // Get affiliate info before suspension for hook
         const affiliateData = await ctx.runQuery(component.affiliates.getById, {
-          affiliateId: args.affiliateId as any,
+          affiliateId: args.affiliateId ,
         });
 
-        await ctx.runMutation(component.affiliates.suspend, { affiliateId: args.affiliateId as any });
+        await ctx.runMutation(component.affiliates.suspend, { affiliateId: args.affiliateId  });
 
         // Call hook for suspension
         if (affiliateData) {
