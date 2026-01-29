@@ -2,55 +2,53 @@
 
 import * as React from "react";
 import { TopAffiliatesLeaderboard } from "../../AdminDashboard.js";
-import { Table, Thead, Th, Td, EmptyState } from "../ui.js";
+import { Card, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState } from "../ui.js";
 
 export function LeaderboardView() {
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900">Top Affiliates</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Top Affiliates</h2>
 
       <TopAffiliatesLeaderboard>
         {({ affiliates, isEmpty }) =>
           isEmpty ? (
             <EmptyState message="No affiliate data yet." />
           ) : (
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+            <Card className="p-0">
               <Table>
-                <Thead>
-                  <tr>
-                    <Th>Rank</Th>
-                    <Th>Affiliate</Th>
-                    <Th>Conversions</Th>
-                    <Th>Revenue</Th>
-                    <Th>Commissions</Th>
-                    <Th>Conv. Rate</Th>
-                  </tr>
-                </Thead>
-                <tbody className="divide-y divide-gray-200">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Rank</TableHead>
+                    <TableHead>Affiliate</TableHead>
+                    <TableHead>Conversions</TableHead>
+                    <TableHead>Revenue</TableHead>
+                    <TableHead>Commissions</TableHead>
+                    <TableHead>Conv. Rate</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {affiliates.map((a) => (
-                    <tr key={a.id}>
-                      <Td>
-                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+                    <TableRow key={a.id}>
+                      <TableCell>
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                           {a.rank}
                         </span>
-                      </Td>
-                      <Td>
+                      </TableCell>
+                      <TableCell>
                         <div>
-                          <p className="font-medium text-gray-900">
-                            {a.displayName}
-                          </p>
-                          <code className="text-xs text-gray-500">{a.code}</code>
+                          <p className="font-medium">{a.displayName}</p>
+                          <code className="text-xs text-muted-foreground">{a.code}</code>
                         </div>
-                      </Td>
-                      <Td>{a.conversions}</Td>
-                      <Td>{a.revenue}</Td>
-                      <Td>{a.commissions}</Td>
-                      <Td>{a.conversionRate}</Td>
-                    </tr>
+                      </TableCell>
+                      <TableCell>{a.conversions}</TableCell>
+                      <TableCell>{a.revenue}</TableCell>
+                      <TableCell>{a.commissions}</TableCell>
+                      <TableCell>{a.conversionRate}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
+                </TableBody>
               </Table>
-            </div>
+            </Card>
           )
         }
       </TopAffiliatesLeaderboard>

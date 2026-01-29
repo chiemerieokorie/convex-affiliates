@@ -5,13 +5,13 @@ import { AffiliateStatsDisplay } from "../../AffiliatePortal.js";
 import { AffiliateStatusBadge } from "../../AffiliatePortal.js";
 import { CommissionRateDisplay } from "../../AffiliatePortal.js";
 import { PendingPayoutDisplay } from "../../AffiliatePortal.js";
-import { StatCard, Card, CardHeader, CardTitle, Badge } from "../ui.js";
+import { StatCard, Card, CardHeader, CardTitle, CardContent, Badge } from "../ui.js";
 
 export function DashboardView() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <h2 className="text-xl font-semibold text-gray-900">Dashboard</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Dashboard</h2>
         <AffiliateStatusBadge>
           {({ statusLabel, statusColor }) => (
             <Badge color={statusColor}>{statusLabel}</Badge>
@@ -37,18 +37,18 @@ export function DashboardView() {
               <CardHeader>
                 <CardTitle>Pending Payout</CardTitle>
               </CardHeader>
-              {hasPayoutPending ? (
-                <div>
-                  <p className="text-3xl font-bold text-gray-900">
-                    {formattedAmount}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {commissionCount} commission{commissionCount !== 1 ? "s" : ""}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">No pending payouts</p>
-              )}
+              <CardContent>
+                {hasPayoutPending ? (
+                  <div>
+                    <p className="text-3xl font-bold">{formattedAmount}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {commissionCount} commission{commissionCount !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No pending payouts</p>
+                )}
+              </CardContent>
             </Card>
           )}
         </PendingPayoutDisplay>
@@ -59,11 +59,13 @@ export function DashboardView() {
               <CardHeader>
                 <CardTitle>Commission Rate</CardTitle>
               </CardHeader>
-              <p className="text-3xl font-bold text-gray-900">{formattedRate}</p>
-              <p className="mt-1 text-sm text-gray-500">
-                {commissionType === "percentage" ? "per sale" : "flat rate"} &middot;{" "}
-                {campaignName}
-              </p>
+              <CardContent>
+                <p className="text-3xl font-bold">{formattedRate}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {commissionType === "percentage" ? "per sale" : "flat rate"} &middot;{" "}
+                  {campaignName}
+                </p>
+              </CardContent>
             </Card>
           )}
         </CommissionRateDisplay>

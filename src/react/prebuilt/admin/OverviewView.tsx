@@ -4,12 +4,12 @@ import * as React from "react";
 import { OverviewStats } from "../../AdminDashboard.js";
 import { ConversionFunnel } from "../../AdminDashboard.js";
 import { PayoutSummary } from "../../AdminDashboard.js";
-import { StatCard, Card, CardHeader, CardTitle } from "../ui.js";
+import { StatCard, Card, CardHeader, CardTitle, CardContent, ProgressBar } from "../ui.js";
 
 export function OverviewView() {
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900">Overview</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Overview</h2>
 
       <OverviewStats>
         {({ metrics }) => (
@@ -28,29 +28,22 @@ export function OverviewView() {
               <CardHeader>
                 <CardTitle>Conversion Funnel</CardTitle>
               </CardHeader>
-              <div className="space-y-4">
+              <CardContent className="space-y-4">
                 {funnel.map((stage) => (
                   <div key={stage.stage}>
-                    <div className="mb-1 flex items-center justify-between text-sm">
-                      <span className="font-medium text-gray-700">
-                        {stage.stage}
-                      </span>
-                      <span className="text-gray-500">
+                    <div className="mb-1.5 flex items-center justify-between text-sm">
+                      <span className="font-medium">{stage.stage}</span>
+                      <span className="text-muted-foreground">
                         {stage.formattedCount} ({stage.formattedPercentage})
                       </span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className="h-full rounded-full bg-indigo-600 transition-all"
-                        style={{ width: `${stage.percentage}%` }}
-                      />
-                    </div>
+                    <ProgressBar value={stage.percentage} />
                   </div>
                 ))}
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Overall conversion rate: {rates.overall.toFixed(1)}%
                 </p>
-              </div>
+              </CardContent>
             </Card>
           )}
         </ConversionFunnel>
@@ -61,24 +54,26 @@ export function OverviewView() {
               <CardHeader>
                 <CardTitle>Payout Summary</CardTitle>
               </CardHeader>
-              <div className="space-y-3">
+              <CardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Pending</span>
-                  <span className="font-medium text-yellow-600">
+                  <span className="text-muted-foreground">Pending</span>
+                  <span className="font-medium text-amber-600 dark:text-amber-400">
                     {pendingAmount}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Paid</span>
-                  <span className="font-medium text-green-600">{paidAmount}</span>
+                  <span className="text-muted-foreground">Paid</span>
+                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                    {paidAmount}
+                  </span>
                 </div>
-                <div className="border-t border-gray-200 pt-3">
+                <div className="border-t border-border pt-3">
                   <div className="flex justify-between text-sm font-medium">
-                    <span className="text-gray-900">Total</span>
-                    <span className="text-gray-900">{totalAmount}</span>
+                    <span>Total</span>
+                    <span>{totalAmount}</span>
                   </div>
                 </div>
-              </div>
+              </CardContent>
             </Card>
           )}
         </PayoutSummary>

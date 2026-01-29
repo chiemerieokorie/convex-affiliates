@@ -2,56 +2,54 @@
 
 import * as React from "react";
 import { AffiliateTable } from "../../AdminDashboard.js";
-import { Table, Thead, Th, Td, Badge, Button, EmptyState } from "../ui.js";
+import { Card, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Badge, Button, EmptyState } from "../ui.js";
 
 export function AffiliatesView() {
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900">Affiliates</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Affiliates</h2>
 
       <AffiliateTable>
         {({ affiliates, isEmpty, onApprove, onReject, onSuspend }) =>
           isEmpty ? (
             <EmptyState message="No affiliates registered yet." />
           ) : (
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+            <Card className="p-0">
               <Table>
-                <Thead>
-                  <tr>
-                    <Th>Affiliate</Th>
-                    <Th>Code</Th>
-                    <Th>Status</Th>
-                    <Th>Clicks</Th>
-                    <Th>Conv.</Th>
-                    <Th>Revenue</Th>
-                    <Th>Commissions</Th>
-                    <Th>Actions</Th>
-                  </tr>
-                </Thead>
-                <tbody className="divide-y divide-gray-200">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Affiliate</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Clicks</TableHead>
+                    <TableHead>Conv.</TableHead>
+                    <TableHead>Revenue</TableHead>
+                    <TableHead>Commissions</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {affiliates.map((a) => (
-                    <tr key={a.id}>
-                      <Td>
+                    <TableRow key={a.id}>
+                      <TableCell>
                         <div>
-                          <p className="font-medium text-gray-900">
-                            {a.displayName}
-                          </p>
-                          <p className="text-xs text-gray-500">{a.email}</p>
+                          <p className="font-medium">{a.displayName}</p>
+                          <p className="text-xs text-muted-foreground">{a.email}</p>
                         </div>
-                      </Td>
-                      <Td>
-                        <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs">
+                      </TableCell>
+                      <TableCell>
+                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
                           {a.code}
                         </code>
-                      </Td>
-                      <Td>
+                      </TableCell>
+                      <TableCell>
                         <Badge color={a.statusColor}>{a.status}</Badge>
-                      </Td>
-                      <Td>{a.clicks}</Td>
-                      <Td>{a.conversions}</Td>
-                      <Td>{a.revenue}</Td>
-                      <Td>{a.commissions}</Td>
-                      <Td>
+                      </TableCell>
+                      <TableCell>{a.clicks}</TableCell>
+                      <TableCell>{a.conversions}</TableCell>
+                      <TableCell>{a.revenue}</TableCell>
+                      <TableCell>{a.commissions}</TableCell>
+                      <TableCell>
                         <div className="flex gap-1">
                           {a.status === "pending" && onApprove && (
                             <Button
@@ -74,19 +72,19 @@ export function AffiliatesView() {
                           {a.status === "approved" && onSuspend && (
                             <Button
                               size="sm"
-                              variant="secondary"
+                              variant="outline"
                               onClick={() => onSuspend(a.id)}
                             >
                               Suspend
                             </Button>
                           )}
                         </div>
-                      </Td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
+                </TableBody>
               </Table>
-            </div>
+            </Card>
           )
         }
       </AffiliateTable>

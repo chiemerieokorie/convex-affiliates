@@ -2,41 +2,41 @@
 
 import * as React from "react";
 import { CommissionHistory } from "../../AffiliatePortal.js";
-import { Table, Thead, Th, Td, Badge, EmptyState } from "../ui.js";
+import { Card, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Badge, EmptyState } from "../ui.js";
 
 export function CommissionsView() {
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900">Commissions</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Commissions</h2>
       <CommissionHistory>
         {({ commissions, isEmpty }) =>
           isEmpty ? (
             <EmptyState message="No commissions yet. Share your link to start earning!" />
           ) : (
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+            <Card className="p-0">
               <Table>
-                <Thead>
-                  <tr>
-                    <Th>Date</Th>
-                    <Th>Sale</Th>
-                    <Th>Commission</Th>
-                    <Th>Status</Th>
-                  </tr>
-                </Thead>
-                <tbody className="divide-y divide-gray-200">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Sale</TableHead>
+                    <TableHead>Commission</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {commissions.map((c) => (
-                    <tr key={c.id}>
-                      <Td>{c.date}</Td>
-                      <Td>{c.saleAmount}</Td>
-                      <Td className="font-medium">{c.commissionAmount}</Td>
-                      <Td>
+                    <TableRow key={c.id}>
+                      <TableCell>{c.date}</TableCell>
+                      <TableCell>{c.saleAmount}</TableCell>
+                      <TableCell className="font-medium">{c.commissionAmount}</TableCell>
+                      <TableCell>
                         <Badge color={c.statusColor}>{c.status}</Badge>
-                      </Td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
+                </TableBody>
               </Table>
-            </div>
+            </Card>
           )
         }
       </CommissionHistory>
