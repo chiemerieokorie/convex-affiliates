@@ -1,30 +1,16 @@
 import { httpRouter } from "convex/server";
-import { components } from "./_generated/api.js";
-import { registerRoutes, createStripeWebhookHandler } from "convex-affiliates";
+import { affiliates } from "./affiliates.js";
 
 const http = httpRouter();
 
-// =============================================================================
-// Affiliate Component Routes
-// =============================================================================
-
 // Register HTTP routes for the affiliate component
-// This exposes endpoints like:
-// - GET /affiliates/affiliate/:code - Validate affiliate code
-registerRoutes(http, components.affiliates, {
-  pathPrefix: "/affiliates",
-});
+affiliates.registerRoutes(http);
 
-// =============================================================================
-// Stripe Webhook Handler
-// =============================================================================
-
-// Stripe webhook with signature verification.
-// Set STRIPE_WEBHOOK_SECRET in your Convex environment variables.
+// Stripe webhook with signature verification
 http.route({
   path: "/webhooks/stripe",
   method: "POST",
-  handler: createStripeWebhookHandler(components.affiliates, {
+  handler: affiliates.createStripeWebhookHandler({
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
   }),
 });
