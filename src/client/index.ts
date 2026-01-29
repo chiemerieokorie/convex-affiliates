@@ -171,35 +171,24 @@ export interface AffiliateConfig {
 }
 
 /**
- * Context type for auth callbacks.
- * Uses the full query context so consumers can call helpers like
- * `authComponent.safeGetAuthUser(ctx)` which need `runQuery`.
+ * Context type for auth/isAdmin callbacks.
+ * Permissive: only requires `auth`, accepts any additional properties
+ * so consumers can pass the full Convex ctx to their auth helpers.
  */
-export type RunQueryCtx = {
-  runQuery: (query: any, args?: any) => Promise<any>;
-  auth: Auth;
-};
-
-export type RunMutationCtx = RunQueryCtx & {
-  runMutation: (mutation: any, args?: any) => Promise<any>;
-};
-
-export type RunActionCtx = RunMutationCtx & {
-  runAction: (action: any, args?: any) => Promise<any>;
-};
+export type AffiliateCtx = { auth: Auth } & Record<string, any>;
 
 export interface CreateAffiliateApiConfig extends AffiliateConfig {
   /**
    * Authentication function that returns the user ID.
    * Called for all authenticated endpoints.
    */
-  auth: (ctx: RunQueryCtx) => Promise<string>;
+  auth: (ctx: AffiliateCtx) => Promise<string>;
 
   /**
    * Optional admin check function.
    * If not provided, admin endpoints will use the auth function only.
    */
-  isAdmin?: (ctx: RunQueryCtx) => Promise<boolean>;
+  isAdmin?: (ctx: AffiliateCtx) => Promise<boolean>;
 
   /**
    * Optional type-safe hooks for affiliate lifecycle events.
@@ -220,9 +209,9 @@ export interface CreateAffiliateApiConfig extends AffiliateConfig {
   hooks?: AffiliateHooks;
 }
 
-// Context types for internal use
-type QueryCtx = RunQueryCtx;
-type MutationCtx = RunMutationCtx;
+// Context types for internal use (what we actually call on ctx)
+type QueryCtx = { runQuery: any; auth: Auth };
+type MutationCtx = { runQuery: any; runMutation: any; auth: Auth };
 
 // =============================================================================
 // createAffiliateApi - Main API Factory
@@ -283,7 +272,7 @@ export function createAffiliateApi(
   };
 
   // Helper to check admin access
-  const requireAdmin = async (ctx: RunQueryCtx) => {
+  const requireAdmin = async (ctx: AffiliateCtx) => {
     if (isAdmin) {
       const isAdminResult = await isAdmin(ctx);
       if (!isAdminResult) throw new Error("Not authorized - admin access required");
