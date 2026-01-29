@@ -120,7 +120,7 @@ Publishing is fully automated via `semantic-release` on push to `main`. Key rule
 - **`prepublishOnly` must NOT run codegen** — use `npm run build` (tsc only), not `build:clean`. Codegen requires `CONVEX_DEPLOYMENT` which is unavailable in CI. Generated types are committed to the repo.
 - **Use `npm ci --legacy-peer-deps`** in CI workflows — the lockfile has peer dep conflicts that require `--legacy-peer-deps`
 - **ESLint must ignore `.examples/`** — these contain compiled `dist/` files that produce thousands of lint errors
-- **GitHub secrets required**: `NPM_TOKEN` for npm publishing, `GITHUB_TOKEN` is automatic
+- **OIDC trusted publishing** — no npm token needed. The release workflow uses GitHub Actions OIDC with `id-token: write` permission. Provenance attestations are generated automatically.
 - **Commit messages control releases**: `fix:` → patch, `feat:` → minor, `feat!:` → major, `chore:/ci:/test:` → no release
 
 Additional CI tooling:
@@ -130,6 +130,40 @@ Additional CI tooling:
 - **30min timeout** — prevent hung CI jobs
 
 See `PUBLISHING.md` for full details and `.examples/better-auth` or `.examples/stripe` for reference patterns used by other Convex components.
+
+## Commit Message Rules
+
+All commits must use [Conventional Commits](https://www.conventionalcommits.org/) format. semantic-release uses these to determine version bumps.
+
+**Format**: `type: description` or `type(scope): description`
+
+| Type | When to use | Release |
+|------|------------|---------|
+| `fix:` | Bug fixes | Patch |
+| `feat:` | New features | Minor |
+| `feat!:` or `BREAKING CHANGE:` footer | Breaking changes | Major |
+| `perf:` | Performance improvements | Patch |
+| `docs:` | Documentation (README only triggers patch) | Patch/None |
+| `chore:` | Dependencies, config, maintenance | None |
+| `ci:` | CI/CD workflow changes | None |
+| `test:` | Adding or updating tests | None |
+| `refactor:` | Code restructuring without behavior change | None |
+
+**Rules**:
+- Use lowercase for type and description
+- No period at the end
+- Keep the first line under 72 characters
+- Use imperative mood ("add feature" not "added feature")
+- Never include AI-generated footers or co-author attributions
+
+**Examples**:
+```
+fix: handle null affiliate codes in referral tracking
+feat: add webhook retry logic for failed payouts
+feat!: change commission calculation API response format
+chore: update dependencies
+ci: add concurrency groups to release workflow
+```
 
 ## Documentation Maintenance
 
