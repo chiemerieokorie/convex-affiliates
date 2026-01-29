@@ -1,3 +1,9 @@
+## [1.1.4](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.1.3...v1.1.4) (2026-01-29)
+
+### Bug Fixes
+
+* use internal visibility in generated component types ([0e061af](https://github.com/chiemerieokorie/convex-affiliates/commit/0e061afaccc1e30c544a31065103a36127cd1e1f))
+
 ## [1.1.3](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.1.2...v1.1.3) (2026-01-29)
 
 ### Bug Fixes
