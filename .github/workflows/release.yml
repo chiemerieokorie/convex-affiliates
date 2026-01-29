@@ -24,7 +24,7 @@ jobs:
           node-version: "lts/*"
       - run: npm ci --legacy-peer-deps
       - run: npm audit signatures
-      - run: npm run build:clean
+      - run: npm run build
       - run: npm test
       - name: Release
         env:
