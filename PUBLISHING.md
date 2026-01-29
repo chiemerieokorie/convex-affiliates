@@ -49,24 +49,28 @@ git commit -m "test: add unit tests for referral tracking"
 
 ## Setup Requirements
 
-### Trusted Publishing (OIDC)
+### GitHub Secrets
 
-The release workflow uses OIDC trusted publishing — no long-lived NPM_TOKEN needed. Configure the trusted publisher on npmjs.com:
+The release workflow requires these GitHub Actions secrets:
 
-1. Go to https://www.npmjs.com/package/convex-affiliates/access
-2. Add GitHub Actions as a trusted publisher
-3. Set owner: `chiemerieokorie`, repository: `convex-affiliates`, workflow: `release.yml`
+- **`NPM_TOKEN`** — npm automation token for publishing. Generate at https://www.npmjs.com/settings/tokens
+- **`GITHUB_TOKEN`** — automatically provided by GitHub Actions
 
-### Package Registries
+### Package Registry
 
-The package is published to:
-1. **npm** (primary): https://www.npmjs.com/package/convex-affiliates
-2. **GitHub Packages**: https://github.com/chiemerieokorie/convex-affiliates/packages
+Published to **npm**: https://www.npmjs.com/package/convex-affiliates
 
 ## Workflow Files
 
-- `.github/workflows/release.yml` - Runs on push to main, handles releases
-- `.github/workflows/test.yml` - Runs on pull requests, validates changes
+- `.github/workflows/release.yml` — Runs on push to main, handles releases
+- `.github/workflows/test.yml` — Runs on pull requests, validates changes
+
+### CI Constraints
+
+- Both workflows use `npm ci --legacy-peer-deps` (peer dep conflicts require it)
+- Release workflow uses `npm run build` (tsc only) — **not** `build:clean` which runs `convex codegen` and requires `CONVEX_DEPLOYMENT`
+- `prepublishOnly` in package.json must also use `npm run build` (not `build:clean`) since `npm publish` triggers it automatically
+- Generated types (`_generated/`) are committed to the repo so codegen is not needed in CI
 
 ## Manual Release (Emergency Only)
 
@@ -74,7 +78,7 @@ If you need to manually publish (not recommended):
 
 ```bash
 npm login
-npm run build:clean
+npm run build
 npm test
 npm publish --access public
 ```
@@ -92,7 +96,7 @@ If a bad version is published:
 For testing locally before merge:
 
 ```bash
-npm run build:clean
+npm run build
 npm pack
 # Creates convex-affiliates-x.x.x.tgz
 # Install in another project: npm install ./path/to/convex-affiliates-x.x.x.tgz

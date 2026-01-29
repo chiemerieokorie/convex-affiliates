@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Convex Component** - a reusable backend package that implements a comments/affiliates system. The component is published to npm as `convex-affiliates` and demonstrates best practices for building production-ready Convex components.
+This is a **Convex Component** — a reusable backend package that implements an affiliate marketing system. Published to npm as `convex-affiliates`. See `.examples/` for reference implementations of other Convex components (better-auth, stripe, rate-limiter, etc.).
 
 ## Development Commands
 
@@ -23,16 +23,12 @@ npm run lint              # ESLint
 npm run typecheck         # TypeScript checks (root + example + example/convex)
 
 # Build
-npm run build             # Build src/component to dist/
+npm run build             # Clean + tsc (no codegen, used in CI)
 npm run build:codegen     # Generate types + build (use after schema changes)
-npm run build:clean       # Clean dist and rebuild
+npm run build:clean       # Clean + codegen + build (requires CONVEX_DEPLOYMENT)
 
 # Development with tests
 npm run all               # Run dev + test:watch in parallel
-
-# Publishing
-npm run alpha             # Publish alpha version
-npm run release           # Publish patch version
 ```
 
 ## Architecture
@@ -44,11 +40,19 @@ src/
 ├── component/              # Core component logic (runs in Convex)
 │   ├── convex.config.ts    # Component name and configuration
 │   ├── schema.ts           # Component's database tables
-│   └── lib.ts              # Queries, mutations, actions
+│   ├── affiliates.ts       # Affiliate CRUD functions
+│   ├── campaigns.ts        # Campaign management
+│   ├── commissions.ts      # Commission tracking
+│   ├── referrals.ts        # Referral/click tracking
+│   ├── payouts.ts          # Payout processing
+│   ├── analytics.ts        # Dashboard analytics
+│   └── crons.ts            # Scheduled jobs
 ├── client/                 # Client-side API (used by consuming apps)
-│   └── index.ts            # exposeApi(), registerRoutes(), translate()
-└── react/                  # React hooks (optional)
-    └── index.ts
+│   └── index.ts            # createAffiliateApi(), registerRoutes(), etc.
+├── react/                  # React hooks (optional)
+│   └── index.ts            # useTrackReferralOnLoad, useStoredReferral, etc.
+└── bin/                    # CLI scaffolding tool
+    └── init.mts            # npx convex-affiliates init
 ```
 
 ### Example App
@@ -77,7 +81,7 @@ await ctx.runMutation(components.affiliates.lib.add, { ... });
 **HTTP Route Registration**:
 ```typescript
 import { registerRoutes } from "convex-affiliates";
-registerRoutes(http, components.affiliates, { pathPrefix: "/comments" });
+registerRoutes(http, components.affiliates, { pathPrefix: "/affiliates" });
 ```
 
 ## Testing
@@ -89,7 +93,7 @@ npm run test              # Run all tests
 npm run test:watch        # Watch mode for development
 ```
 
-## Convex Best Practices (from .cursor/rules/convex_rules.mdc)
+## Convex Best Practices
 
 - **Always use new function syntax** with `args` and `returns` validators
 - **Use `v.null()`** for null values (not undefined)
@@ -106,13 +110,26 @@ Convex components serialize data at the boundary between host app and component:
 - **IDs become plain `string`** — branded `Id<"tableName">` types are stripped when crossing the component boundary
 - **Client API validators must use `v.string()`** for any ID args/returns, never `v.id("tableName")`
 - **Only use `v.id()` inside `src/component/`** — the internal functions keep branded IDs
+- **Cast at the boundary** — when passing string IDs to internal component functions, use `as any` at the call site
 - **Test from the consumer's perspective** — typecheck the example app or a mock consumer to catch boundary type issues
+
+## CI/CD & Publishing Rules
+
+Publishing is fully automated via `semantic-release` on push to `main`. Key rules:
+
+- **`prepublishOnly` must NOT run codegen** — use `npm run build` (tsc only), not `build:clean`. Codegen requires `CONVEX_DEPLOYMENT` which is unavailable in CI. Generated types are committed to the repo.
+- **Use `npm ci --legacy-peer-deps`** in CI workflows — the lockfile has peer dep conflicts that require `--legacy-peer-deps`
+- **ESLint must ignore `.examples/`** — these contain compiled `dist/` files that produce thousands of lint errors
+- **GitHub secrets required**: `NPM_TOKEN` for npm publishing, `GITHUB_TOKEN` is automatic
+- **Commit messages control releases**: `fix:` → patch, `feat:` → minor, `feat!:` → major, `chore:/ci:/test:` → no release
+
+See `PUBLISHING.md` for full details and `.examples/better-auth` or `.examples/stripe` for reference patterns used by other Convex components.
 
 ## Documentation Maintenance
 
 After making changes that affect the public API, package name, repository URLs, schema, or project structure, **always update the relevant docs**:
 
-- **CLAUDE.md** — architecture, commands, key patterns
+- **CLAUDE.md** — architecture, commands, CI/CD rules, key patterns
 - **README.md** — installation, usage examples, API reference
 - **PUBLISHING.md** — release workflow and configuration
 
