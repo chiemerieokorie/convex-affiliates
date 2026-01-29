@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FunctionReference } from "convex/server";
 
 // =============================================================================
@@ -452,7 +452,10 @@ export function useTrackReferralOnLoad(
  * Reads from the configured storage (localStorage, cookie, or both).
  */
 export function useStoredReferral(config?: AffiliateHooksConfig) {
-  const adapter = createStorageAdapter(config?.storage, config?.cookieOptions);
+  const adapter = useMemo(
+    () => createStorageAdapter(config?.storage, config?.cookieOptions),
+    [config?.storage, config?.cookieOptions]
+  );
 
   const [referral, setReferral] = useState<{
     referralId: string | null;
@@ -466,7 +469,7 @@ export function useStoredReferral(config?: AffiliateHooksConfig) {
     adapter.remove("affiliate_referral_id");
     adapter.remove("affiliate_code");
     setReferral({ referralId: null, code: null });
-  }, []);
+  }, [adapter]);
 
   return { ...referral, clear };
 }
