@@ -255,14 +255,22 @@ If you're not using `@convex-dev/stripe`, use the standalone handler with built-
 // convex/http.ts
 import { httpRouter } from "convex/server";
 import { components } from "./_generated/api";
-import { createStripeWebhookHandler } from "convex-affiliates";
+import { createAffiliateApi } from "convex-affiliates";
 
 const http = httpRouter();
+
+const affiliates = createAffiliateApi(components.affiliates, {
+  auth: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    return identity.subject;
+  },
+});
 
 http.route({
   path: "/webhooks/stripe",
   method: "POST",
-  handler: createStripeWebhookHandler(components.affiliates, {
+  handler: affiliates.createStripeWebhookHandler({
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
   }),
 });
