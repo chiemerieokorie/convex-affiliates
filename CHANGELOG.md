@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.0.0...v1.0.1) (2026-01-29)
+
+### Bug Fixes
+
+* remove codegen from prepublishOnly script ([4e3cc08](https://github.com/chiemerieokorie/convex-affiliates/commit/4e3cc081addf3dcfae96760bdda05e06900d73af))
+
 ## 1.0.0 (2026-01-29)
 
 ### ⚠ BREAKING CHANGES
