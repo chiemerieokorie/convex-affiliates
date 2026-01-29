@@ -1,3 +1,15 @@
+## [2.0.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.1.4...v2.0.0) (2026-01-29)
+
+### ⚠ BREAKING CHANGES
+
+* registerRoutes() and createStripeWebhookHandler() are
+no longer standalone exports. Use them as methods on the object returned
+by createAffiliateApi() instead.
+
+### Features
+
+* move registerRoutes and webhook handler into createAffiliateApi ([a4437f8](https://github.com/chiemerieokorie/convex-affiliates/commit/a4437f81265dc7cc69b53e887e713197c0c903af))
+
 ## [1.1.4](https://github.com/chiemerieokorie/convex-affiliates/compare/v1.1.3...v1.1.4) (2026-01-29)
 
 ### Bug Fixes
