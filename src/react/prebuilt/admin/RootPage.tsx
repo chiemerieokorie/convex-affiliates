@@ -7,6 +7,7 @@ import { OverviewView } from "./OverviewView.js";
 import { AffiliatesView } from "./AffiliatesView.js";
 import { ApprovalsView } from "./ApprovalsView.js";
 import { LeaderboardView } from "./LeaderboardView.js";
+import { CampaignsView } from "./CampaignsView.js";
 import { NotFoundPage } from "./NotFoundPage.js";
 
 // =============================================================================
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { segment: "affiliates", label: "Affiliates" },
   { segment: "approvals", label: "Approvals" },
   { segment: "leaderboard", label: "Leaderboard" },
+  { segment: "campaigns", label: "Campaigns" },
 ];
 
 // =============================================================================
@@ -29,6 +31,7 @@ const segmentTitles: Record<string, string> = {
   affiliates: "Affiliates",
   approvals: "Approvals",
   leaderboard: "Leaderboard",
+  campaigns: "Campaigns",
 };
 
 export function generatePageMetadata(segments?: string[]) {
@@ -85,6 +88,8 @@ function resolveView(segment: string): React.ReactNode | null {
       return <ApprovalsView />;
     case "leaderboard":
       return <LeaderboardView />;
+    case "campaigns":
+      return <CampaignsView />;
     default:
       return null;
   }
