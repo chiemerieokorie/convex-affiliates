@@ -1,8 +1,5 @@
 {
-  "branches": [
-    "main",
-    { "name": "claude/payload-nextjs-prebuilt-ui-4MX8x", "prerelease": "alpha" }
-  ],
+  "branches": ["main"],
   "plugins": [
     ["@semantic-release/commit-analyzer", {
       "preset": "conventionalcommits",

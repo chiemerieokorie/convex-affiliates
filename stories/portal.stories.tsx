@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import React from "react";
-import { PortalWrapper, mockCommissions } from "./helpers";
+import { PortalWrapper } from "./helpers";
 import { RootPage } from "../src/react/prebuilt/portal/RootPage";
 import { NotFoundPage } from "../src/react/prebuilt/portal/NotFoundPage";
 import { DashboardView } from "../src/react/prebuilt/portal/DashboardView";
