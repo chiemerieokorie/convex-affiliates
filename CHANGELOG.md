@@ -1,3 +1,16 @@
+## [2.1.0-alpha.1](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.4...v2.1.0-alpha.1) (2026-02-03)
+
+### Features
+
+* add alpha pre-release channel ([83216ad](https://github.com/chiemerieokorie/convex-affiliates/commit/83216ad5ffad0b9b696d451633128164b0a8cdaf))
+* add prebuilt Tailwind UI views for portal and admin ([781a674](https://github.com/chiemerieokorie/convex-affiliates/commit/781a674abfc1a53466423d5e185196379efd6c7b))
+* add RootLayout exports and CampaignsView for admin ([ae3b62d](https://github.com/chiemerieokorie/convex-affiliates/commit/ae3b62d2548a35dd81b9cf33eb7c1acb9d733678))
+* add Storybook for prebuilt UI development ([0ca83a4](https://github.com/chiemerieokorie/convex-affiliates/commit/0ca83a4cbc38dc078bd936bc21d921f911711514))
+
+### Bug Fixes
+
+* revert releaserc changes and fix unused import lint error ([4f5ad4a](https://github.com/chiemerieokorie/convex-affiliates/commit/4f5ad4af8d40f66780aa47caf60a9d9503132f89))
+
 ## [2.0.4](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.3...v2.0.4) (2026-01-29)
 
 ### Bug Fixes
