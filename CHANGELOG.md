@@ -1,3 +1,9 @@
+## [2.1.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.4...v2.1.0) (2026-02-03)
+
+### Features
+
+* add alpha pre-release channel ([83216ad](https://github.com/chiemerieokorie/convex-affiliates/commit/83216ad5ffad0b9b696d451633128164b0a8cdaf))
+
 ## [2.0.4](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.3...v2.0.4) (2026-01-29)
 
 ### Bug Fixes
