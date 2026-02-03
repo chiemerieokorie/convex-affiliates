@@ -13,11 +13,8 @@
  *
  * export const authClient = createAuthClient({
  *   plugins: [
- *     affiliateClientPlugin({
- *       storage: "both", // localStorage + cookie for SSR support
- *       cookieDurationDays: 30,
- *       paramName: "ref",
- *     }),
+ *     // Zero config - just works!
+ *     affiliateClientPlugin(),
  *   ],
  * });
  * ```
