@@ -711,35 +711,278 @@ function useAttributeOnSignup(userId: string) {
 }
 ```
 
-### Two-Sided Rewards (Referee Discount)
+### Two-Sided Rewards (Affiliate Coupon Codes)
 
-Apply discounts for referred customers during checkout:
+Two-sided rewards let affiliates offer discounts to referred customers (e.g., "Get 10% off with code JOHN20") while earning their commission. This creates a win-win: customers get a discount, affiliates get credit for the sale.
+
+**How it works:**
+1. You configure a discount at the **campaign level** (all affiliates in that campaign offer the same discount)
+2. When a referred customer checks out, you query for their discount
+3. You apply the discount to their Stripe checkout session
+
+#### Step 1: Create a Stripe Coupon (Optional but Recommended)
+
+If you want Stripe to handle the discount calculation and display, create a coupon in Stripe first:
+
+```bash
+# Using Stripe CLI
+stripe coupons create \
+  --percent-off=10 \
+  --duration=once \
+  --id="AFFILIATE_10_PERCENT"
+
+# Or for a fixed amount discount
+stripe coupons create \
+  --amount-off=500 \
+  --currency=usd \
+  --duration=once \
+  --id="AFFILIATE_5_OFF"
+```
+
+Or create via the [Stripe Dashboard](https://dashboard.stripe.com/coupons) → Products → Coupons → Create coupon.
+
+> **Note:** The coupon ID (e.g., `AFFILIATE_10_PERCENT`) is what you'll store in the campaign configuration.
+
+#### Step 2: Configure Campaign with Discount Settings
+
+When creating or updating a campaign, include the discount configuration:
 
 ```typescript
-// In your checkout handler
-import { api } from "../convex/_generated/api";
+// Creating a new campaign with discount
+await ctx.runMutation(api.affiliates.adminCreateCampaign, {
+  name: "Partner Program",
+  slug: "partners",
+  commissionType: "percentage",
+  commissionValue: 20, // Affiliates earn 20% commission
 
-// Get discount for the referred customer
-const discount = await ctx.runQuery(api.affiliates.getRefereeDiscount, {
-  userId: currentUser.id,
-  // Or use referralId from localStorage
+  // Two-sided rewards configuration
+  refereeDiscountType: "percentage",      // "percentage" or "fixed"
+  refereeDiscountValue: 10,               // 10% off for referred customers
+  refereeStripeCouponId: "AFFILIATE_10_PERCENT", // Optional: pre-created Stripe coupon
 });
 
-if (discount) {
-  if (discount.stripeCouponId) {
-    // Use pre-configured Stripe coupon
-    const session = await stripe.checkout.sessions.create({
-      discounts: [{ coupon: discount.stripeCouponId }],
-      // ...
+// Or for a fixed discount
+await ctx.runMutation(api.affiliates.adminCreateCampaign, {
+  name: "Influencer Program",
+  slug: "influencers",
+  commissionType: "fixed",
+  commissionValue: 500, // Affiliates earn $5.00 per sale
+
+  // $5 off for referred customers
+  refereeDiscountType: "fixed",
+  refereeDiscountValue: 500,              // 500 cents = $5.00
+  refereeStripeCouponId: "AFFILIATE_5_OFF",
+});
+```
+
+**Discount fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `refereeDiscountType` | `"percentage"` \| `"fixed"` | How the discount is calculated |
+| `refereeDiscountValue` | `number` | Percentage (0-100) or cents for fixed |
+| `refereeStripeCouponId` | `string` (optional) | Pre-created Stripe coupon ID |
+
+#### Step 3: Apply Discount at Checkout
+
+##### With @convex-dev/stripe (Recommended)
+
+If you're using `@convex-dev/stripe`, here's the complete flow:
+
+```typescript
+// convex/checkout.ts
+import { mutation } from "./_generated/server";
+import { api, components } from "./_generated/api";
+import { v } from "convex/values";
+
+export const createCheckoutSession = mutation({
+  args: {
+    priceId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const userId = identity.subject;
+
+    // 1. Get discount for referred customer
+    const discount = await ctx.runQuery(api.affiliates.getRefereeDiscount, {
+      userId,
     });
-  } else {
-    // Calculate discount manually
-    const discountAmount = discount.discountType === "percentage"
-      ? Math.round((subtotalCents * discount.discountValue) / 100)
-      : discount.discountValue;
-    // Apply to your checkout
-  }
+
+    // 2. Build checkout session config
+    const sessionConfig: Parameters<typeof components.stripe.checkout.createSession>[1] = {
+      line_items: [{ price: args.priceId, quantity: 1 }],
+      mode: "payment",
+      success_url: `${process.env.BASE_URL}/success`,
+      cancel_url: `${process.env.BASE_URL}/cancel`,
+    };
+
+    // 3. Apply discount if available
+    if (discount?.stripeCouponId) {
+      // Use the pre-configured Stripe coupon
+      sessionConfig.discounts = [{ coupon: discount.stripeCouponId }];
+    }
+
+    // 4. Create the checkout session
+    const session = await ctx.runAction(components.stripe.checkout.createSession, sessionConfig);
+
+    return { url: session.url };
+  },
+});
+```
+
+##### Without a Stripe Coupon (Manual Calculation)
+
+If you prefer to calculate discounts manually without a pre-configured Stripe coupon:
+
+```typescript
+// convex/checkout.ts
+export const createCheckoutSession = mutation({
+  args: {
+    priceId: v.string(),
+    subtotalCents: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const userId = identity.subject;
+
+    // 1. Get discount for referred customer
+    const discount = await ctx.runQuery(api.affiliates.getRefereeDiscount, {
+      userId,
+    });
+
+    // 2. Calculate discount amount
+    let discountAmountCents = 0;
+    if (discount) {
+      discountAmountCents = discount.discountType === "percentage"
+        ? Math.round((args.subtotalCents * discount.discountValue) / 100)
+        : discount.discountValue;
+    }
+
+    // 3. Create a one-time coupon in Stripe (if discount applies)
+    let couponId: string | undefined;
+    if (discountAmountCents > 0) {
+      const coupon = await stripe.coupons.create({
+        amount_off: discountAmountCents,
+        currency: "usd",
+        duration: "once",
+        name: `Referral discount from ${discount?.affiliateDisplayName || discount?.affiliateCode}`,
+      });
+      couponId = coupon.id;
+    }
+
+    // 4. Create checkout session with discount
+    const session = await stripe.checkout.sessions.create({
+      line_items: [{ price: args.priceId, quantity: 1 }],
+      mode: "payment",
+      success_url: `${process.env.BASE_URL}/success`,
+      cancel_url: `${process.env.BASE_URL}/cancel`,
+      ...(couponId && { discounts: [{ coupon: couponId }] }),
+    });
+
+    return { url: session.url };
+  },
+});
+```
+
+##### Displaying the Discount to Users
+
+Show users their available discount before checkout:
+
+```tsx
+// components/CheckoutButton.tsx
+import { useQuery } from "convex/react";
+import { api } from "../convex/_generated/api";
+
+export function CheckoutButton({ userId }: { userId: string }) {
+  const discount = useQuery(api.affiliates.getRefereeDiscount, { userId });
+
+  return (
+    <div>
+      {discount && (
+        <div className="discount-banner">
+          {discount.discountType === "percentage"
+            ? `${discount.discountValue}% off`
+            : `$${(discount.discountValue / 100).toFixed(2)} off`}
+          {" "}with code {discount.affiliateCode}!
+        </div>
+      )}
+      <button onClick={handleCheckout}>
+        Proceed to Checkout
+      </button>
+    </div>
+  );
 }
+```
+
+#### getRefereeDiscount Response
+
+The `getRefereeDiscount` query returns:
+
+```typescript
+{
+  discountType: "percentage" | "fixed",
+  discountValue: number,           // Percentage (0-100) or cents
+  stripeCouponId?: string,         // Pre-configured Stripe coupon ID
+  affiliateCode: string,           // e.g., "JOHN20"
+  affiliateDisplayName?: string,   // e.g., "John's Deals"
+}
+// Returns null if no discount is available
+```
+
+You can query by any of these parameters:
+- `userId` - The referred customer's user ID
+- `referralId` - The referral tracking ID from localStorage
+- `affiliateCode` - The affiliate's code directly
+
+#### Troubleshooting Discounts
+
+**Discount returns `null`:**
+
+| Issue | Solution |
+|-------|----------|
+| Affiliate not approved | Ensure affiliate status is `"approved"` via `adminApproveAffiliate` |
+| Campaign inactive | Ensure campaign `isActive` is `true` |
+| No discount configured | Set `refereeDiscountType` and `refereeDiscountValue` on the campaign |
+| Referral expired | Discount expires after `cookieDurationDays` (default: 30 days) |
+| User not attributed | Ensure `attributeSignup` was called after the user signed up |
+
+**Stripe coupon not applying:**
+
+| Issue | Solution |
+|-------|----------|
+| Invalid coupon ID | Verify the coupon exists in Stripe Dashboard → Products → Coupons |
+| Coupon expired | Check the coupon's `redeem_by` date in Stripe |
+| Coupon restrictions | Check if the coupon has product/price restrictions in Stripe |
+| Wrong mode | Ensure coupon `duration` matches checkout mode (one-time vs subscription) |
+
+**Debug checklist:**
+
+```typescript
+// 1. Check if user has a referral
+const referral = await ctx.runQuery(api.affiliates.getRefereeDiscount, { userId });
+console.log("Referral discount:", referral);
+
+// 2. If null, check the user's referral directly
+const referrals = await ctx.runQuery(components.affiliates.referrals.listByUser, { userId });
+console.log("User referrals:", referrals);
+
+// 3. Check the affiliate's status
+const affiliate = await ctx.runQuery(components.affiliates.affiliates.getByCode, {
+  code: "AFFILIATE_CODE"
+});
+console.log("Affiliate:", affiliate?.status);
+
+// 4. Check the campaign's discount config
+const campaign = await ctx.runQuery(components.affiliates.campaigns.get, {
+  campaignId: affiliate?.campaignId
+});
+console.log("Campaign discount:", {
+  type: campaign?.refereeDiscountType,
+  value: campaign?.refereeDiscountValue,
+  couponId: campaign?.refereeStripeCouponId,
+});
 ```
 
 ### Batch Admin Operations
