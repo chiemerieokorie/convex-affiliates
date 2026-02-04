@@ -267,6 +267,7 @@ export const affiliateClientPlugin = (
         const cookies = parseCookies(document.cookie);
         referralId = referralId ?? cookies[options.referralIdCookieName];
         affiliateCode = affiliateCode ?? cookies[options.affiliateCodeCookieName];
+        subId = subId ?? cookies["affiliate_sub_id"];
       }
 
       if (!referralId && !affiliateCode) {
@@ -315,10 +316,14 @@ export const affiliateClientPlugin = (
         const cookieOptions = `path=/; max-age=${maxAge}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
 
         if (data.referralId) {
-          document.cookie = `${options.referralIdCookieName}=${data.referralId}; ${cookieOptions}`;
+          // URI-encode to handle special characters
+          document.cookie = `${options.referralIdCookieName}=${encodeURIComponent(data.referralId)}; ${cookieOptions}`;
         }
         if (data.affiliateCode) {
-          document.cookie = `${options.affiliateCodeCookieName}=${data.affiliateCode}; ${cookieOptions}`;
+          document.cookie = `${options.affiliateCodeCookieName}=${encodeURIComponent(data.affiliateCode)}; ${cookieOptions}`;
+        }
+        if (data.subId) {
+          document.cookie = `affiliate_sub_id=${encodeURIComponent(data.subId)}; ${cookieOptions}`;
         }
       }
     },
@@ -345,6 +350,7 @@ export const affiliateClientPlugin = (
       if (options.storage === "cookie" || options.storage === "both") {
         document.cookie = `${options.referralIdCookieName}=; path=/; max-age=0`;
         document.cookie = `${options.affiliateCodeCookieName}=; path=/; max-age=0`;
+        document.cookie = `affiliate_sub_id=; path=/; max-age=0`;
       }
 
       options.onReferralCleared?.();

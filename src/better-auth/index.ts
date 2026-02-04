@@ -182,12 +182,27 @@ export function affiliatePlugin(
 
             // Extract user ID from response
             const responseObj = returned as Record<string, unknown>;
-            const user = responseObj.user as { id?: string } | undefined;
+            const user = responseObj.user as {
+              id?: string;
+              createdAt?: Date | string | number;
+            } | undefined;
             if (!user?.id) {
               return;
             }
 
             const userId = user.id;
+
+            // For OAuth sign-ins, check if this is actually a new user
+            // by comparing createdAt to current time (within 10 seconds = new user)
+            if (user.createdAt) {
+              const createdAt = new Date(user.createdAt).getTime();
+              const now = Date.now();
+              const isNewUser = now - createdAt < 10000; // 10 seconds
+              if (!isNewUser) {
+                // Existing user signing in via OAuth, skip attribution
+                return;
+              }
+            }
 
             // Extract referral data from request body
             const body = context.body ?? context.context?.body;
