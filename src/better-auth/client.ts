@@ -433,7 +433,7 @@ export const affiliateClientPlugin = (
             }
 
             // Parse existing body
-            let body: Record<string, unknown> =
+            const body: Record<string, unknown> =
               context.body && typeof context.body === "object"
                 ? (context.body as Record<string, unknown>)
                 : {};
