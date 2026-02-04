@@ -172,6 +172,10 @@ export interface CheckoutParams {
   successUrl: string;
   cancelUrl: string;
   metadata?: Record<string, string>;
+  /** Optional referral ID (from localStorage/cookie tracking) */
+  referralId?: string;
+  /** Optional affiliate code (fallback if no referralId) */
+  affiliateCode?: string;
   [key: string]: unknown;
 }
 
@@ -367,27 +371,34 @@ export async function enrichCheckout(
   const identity = await ctx.auth.getUserIdentity();
   const userId = identity?.subject;
 
+  // Extract affiliate params (don't include in final output)
+  const { referralId, affiliateCode, ...baseParams } = params;
+
   // Start with base params
   const enriched: EnrichedCheckoutParams = {
-    ...params,
+    ...baseParams,
     metadata: { ...params.metadata },
   };
 
-  if (!userId) {
-    return enriched;
+  // Set client_reference_id for webhook attribution (userId or referralId)
+  if (userId) {
+    enriched.client_reference_id = userId;
+  } else if (referralId) {
+    enriched.client_reference_id = referralId;
   }
 
-  // Set client_reference_id for webhook attribution
-  enriched.client_reference_id = userId;
-
-  // Look up user's referral for discount
+  // Look up referral for discount - try multiple methods
   try {
     const discount = await ctx.runQuery<{
       stripeCouponId?: string;
       affiliateCode?: string;
       discountType?: string;
       discountValue?: number;
-    } | null>(component.referrals.getRefereeDiscount, { userId });
+    } | null>(component.referrals.getRefereeDiscount, {
+      userId: userId ?? undefined,
+      referralId: referralId ?? undefined,
+      affiliateCode: affiliateCode ?? undefined,
+    });
 
     if (discount) {
       // Add affiliate code to metadata
@@ -399,10 +410,18 @@ export async function enrichCheckout(
       if (discount.stripeCouponId) {
         enriched.discounts = [{ coupon: discount.stripeCouponId }];
       }
+    } else if (affiliateCode) {
+      // No discount found but affiliate code was provided - still add to metadata
+      enriched.metadata.affiliate_code = affiliateCode;
     }
   } catch (error) {
     // Silently continue if discount lookup fails
     console.error("[convex-affiliates] Error looking up discount:", error);
+
+    // Still add affiliate code to metadata if provided
+    if (affiliateCode) {
+      enriched.metadata.affiliate_code = affiliateCode;
+    }
   }
 
   return enriched;

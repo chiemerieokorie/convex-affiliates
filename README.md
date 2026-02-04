@@ -410,6 +410,7 @@ Use `enrichCheckout` to automatically add affiliate data to checkout sessions. I
 ```typescript
 // convex/payments.ts
 import { action } from "./_generated/server";
+import { v } from "convex/values";
 import { enrichCheckout } from "convex-affiliates/stripe";
 import { components } from "./_generated/api";
 import Stripe from "stripe";
@@ -449,20 +450,36 @@ export const createCheckout = action({
 For client-side Stripe integrations (Stripe.js), use the client utilities:
 
 ```typescript
-import { getStoredReferral, enrichClientCheckout } from "convex-affiliates/stripe/client";
+import {
+  getStoredReferral,
+  storeReferral,
+  hasStoredReferral,
+  clearStoredReferral,
+  enrichClientCheckout
+} from "convex-affiliates/stripe/client";
 
 // Check if user was referred
-const referral = getStoredReferral();
-if (referral?.affiliateCode) {
-  console.log(`Referred by: ${referral.affiliateCode}`);
+if (hasStoredReferral()) {
+  const referral = getStoredReferral();
+  console.log(`Referred by: ${referral?.affiliateCode}`);
+}
+
+// Manually store referral (if not using Better Auth client plugin)
+const params = new URLSearchParams(window.location.search);
+const code = params.get("ref");
+if (code) {
+  storeReferral({ affiliateCode: code });
 }
 
 // Enrich checkout params with stored referral data
-const params = enrichClientCheckout({
+const checkoutParams = enrichClientCheckout({
   successUrl: window.location.origin + "/success",
   cancelUrl: window.location.origin + "/cancel",
 });
-// params now includes metadata.affiliate_code and client_reference_id
+// checkoutParams now includes metadata.affiliate_code and client_reference_id
+
+// Clear after purchase
+clearStoredReferral();
 ```
 
 ### Complete Flow

@@ -160,6 +160,63 @@ export function hasStoredReferral(config: StorageConfig = {}): boolean {
 }
 
 /**
+ * Store referral data manually.
+ *
+ * @param data - Referral data to store
+ * @param config - Optional storage configuration
+ *
+ * @example
+ * ```typescript
+ * // Store referral from URL params
+ * const params = new URLSearchParams(window.location.search);
+ * const code = params.get("ref");
+ * if (code) {
+ *   storeReferral({ affiliateCode: code });
+ * }
+ * ```
+ */
+export function storeReferral(
+  data: Partial<StoredReferral>,
+  config: StorageConfig = {}
+): void {
+  if (typeof window === "undefined") return;
+
+  const opts = { ...DEFAULT_CONFIG, ...config };
+  const now = Date.now();
+
+  // Store in localStorage
+  try {
+    if (data.referralId) {
+      localStorage.setItem(opts.referralIdKey, data.referralId);
+    }
+    if (data.affiliateCode) {
+      localStorage.setItem(opts.affiliateCodeKey, data.affiliateCode);
+    }
+    if (data.subId) {
+      localStorage.setItem("affiliate_sub_id", data.subId);
+    }
+    localStorage.setItem("affiliate_detected_at", now.toString());
+  } catch {
+    // localStorage not available
+  }
+
+  // Also store in cookies for cross-page access
+  const maxAge = 30 * 24 * 60 * 60; // 30 days
+  const isSecure = window.location.protocol === "https:";
+  const cookieOptions = `path=/; max-age=${maxAge}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+
+  if (data.referralId) {
+    document.cookie = `${opts.referralIdCookieName}=${encodeURIComponent(data.referralId)}; ${cookieOptions}`;
+  }
+  if (data.affiliateCode) {
+    document.cookie = `${opts.affiliateCodeCookieName}=${encodeURIComponent(data.affiliateCode)}; ${cookieOptions}`;
+  }
+  if (data.subId) {
+    document.cookie = `affiliate_sub_id=${encodeURIComponent(data.subId)}; ${cookieOptions}`;
+  }
+}
+
+/**
  * Clear stored referral data.
  *
  * @param config - Optional storage configuration
