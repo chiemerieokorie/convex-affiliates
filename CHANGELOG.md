@@ -1,3 +1,17 @@
+## [2.3.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.2.0...v2.3.0) (2026-02-04)
+
+### Features
+
+* add Stripe example code and re-export types from main package ([e012a09](https://github.com/chiemerieokorie/convex-affiliates/commit/e012a096fd16626994d1165a072000c8ece48dbd))
+* add Stripe plugin with withAffiliates wrapper ([08a022a](https://github.com/chiemerieokorie/convex-affiliates/commit/08a022a6e4a02aad94a429980173646a27bbd79b))
+* enhance Stripe plugin with tests and storeReferral ([e95f7a9](https://github.com/chiemerieokorie/convex-affiliates/commit/e95f7a9d95817c95ff6d1eb77f9b5d38ab71250c))
+
+### Bug Fixes
+
+* resolve typecheck errors in Stripe plugin and example app ([5884af9](https://github.com/chiemerieokorie/convex-affiliates/commit/5884af931d63e496a26488f92b2b6f93b490940f))
+* return userId from getAffiliateMetadata for client_reference_id ([15da6fb](https://github.com/chiemerieokorie/convex-affiliates/commit/15da6fb386a560ae029517fe648a6528f4d729db))
+* use manual mocks for client tests instead of jsdom ([014cccc](https://github.com/chiemerieokorie/convex-affiliates/commit/014cccc0d58716045487b955ea05a001abdc541a))
+
 ## [2.2.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.1.0...v2.2.0) (2026-02-04)
 
 ### Features
