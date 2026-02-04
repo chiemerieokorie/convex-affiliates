@@ -114,19 +114,32 @@ export interface AffiliateClientPluginConfig {
   clearOnSignup?: boolean;
 
   /**
-   * Optional callback to track clicks with your backend.
-   * Called when a referral is detected from URL params.
+   * Automatic click tracking function.
+   * When provided, clicks are automatically tracked when a referral is detected.
+   * Pass your Convex trackClick mutation here.
    *
    * @example
    * ```typescript
-   * onReferralDetected: async (code, subId) => {
-   *   const { referralId } = await trackClick({
-   *     affiliateCode: code,
-   *     landingPage: window.location.pathname,
-   *   });
-   *   return referralId; // Will be stored
-   * }
+   * import { ConvexHttpClient } from "convex/browser";
+   * import { api } from "../convex/_generated/api";
+   *
+   * const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+   *
+   * affiliateClientPlugin({
+   *   trackClick: (args) => convex.mutation(api.affiliates.trackClick, args),
+   * })
    * ```
+   */
+  trackClick?: (args: {
+    affiliateCode: string;
+    landingPage: string;
+    subId?: string;
+  }) => Promise<{ referralId?: string } | null | undefined | void>;
+
+  /**
+   * @deprecated Use `trackClick` instead for simpler API.
+   * Optional callback to track clicks with your backend.
+   * Called when a referral is detected from URL params.
    */
   onReferralDetected?: (
     affiliateCode: string,
@@ -210,6 +223,7 @@ export const affiliateClientPlugin = (
     referralCodeFieldName: config.referralCodeFieldName ?? "referralCode",
     autoTrack: config.autoTrack ?? true,
     clearOnSignup: config.clearOnSignup ?? true,
+    trackClick: config.trackClick,
     onReferralDetected: config.onReferralDetected,
     onReferralCleared: config.onReferralCleared,
   };
@@ -356,8 +370,26 @@ export const affiliateClientPlugin = (
         // Store the affiliate code
         storage.set({ affiliateCode: code, subId });
 
-        // Call the tracking callback if provided
-        if (options.onReferralDetected) {
+        // Call trackClick if provided (preferred, simpler API)
+        if (options.trackClick) {
+          try {
+            const result = await options.trackClick({
+              affiliateCode: code,
+              landingPage: window.location.href,
+              subId,
+            });
+            if (result?.referralId) {
+              storage.set({ referralId: result.referralId });
+            }
+          } catch (error) {
+            console.error(
+              "[convex-affiliates] Error tracking click:",
+              error
+            );
+          }
+        }
+        // Fall back to deprecated onReferralDetected if trackClick not provided
+        else if (options.onReferralDetected) {
           try {
             const referralId = await options.onReferralDetected(code, subId);
             if (referralId) {
@@ -504,7 +536,7 @@ export const affiliateClientPlugin = (
 
         /**
          * Track a referral click manually.
-         * Stores the code and optionally calls onReferralDetected.
+         * Stores the code and calls trackClick or onReferralDetected if provided.
          *
          * @example
          * ```typescript
@@ -518,7 +550,27 @@ export const affiliateClientPlugin = (
         ): Promise<string | undefined> => {
           storage.set({ affiliateCode, subId });
 
-          if (options.onReferralDetected) {
+          // Use trackClick if provided (preferred API)
+          if (options.trackClick) {
+            try {
+              const result = await options.trackClick({
+                affiliateCode,
+                landingPage: isBrowser() ? window.location.href : "",
+                subId,
+              });
+              if (result?.referralId) {
+                storage.set({ referralId: result.referralId });
+                return result.referralId;
+              }
+            } catch (error) {
+              console.error(
+                "[convex-affiliates] Error tracking click:",
+                error
+              );
+            }
+          }
+          // Fall back to deprecated onReferralDetected
+          else if (options.onReferralDetected) {
             try {
               const referralId = await options.onReferralDetected(
                 affiliateCode,

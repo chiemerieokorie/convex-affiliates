@@ -298,6 +298,11 @@ affiliatePlugin(ctx, components.affiliates, {
 ### Client Plugin Options
 
 ```typescript
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../convex/_generated/api";
+
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
 affiliateClientPlugin({
   // All options have sensible defaults
   storage: "both",           // "localStorage" | "cookie" | "both"
@@ -307,16 +312,16 @@ affiliateClientPlugin({
   autoTrack: true,           // Auto-detect from URL
   clearOnSignup: true,       // Clear after successful signup
 
-  // Track clicks with your backend (optional)
-  onReferralDetected: async (code, subId) => {
-    const result = await convex.mutation(api.affiliates.trackClick, {
-      affiliateCode: code,
-      landingPage: window.location.pathname,
-    });
-    return result?.referralId;
-  },
+  // Automatic click tracking (recommended)
+  // Tracks clicks when a referral is detected from URL
+  trackClick: (args) => convex.mutation(api.affiliates.trackClick, args),
 });
 ```
+
+The `trackClick` option automatically tracks referral clicks when detected from URL parameters. The mutation receives:
+- `affiliateCode`: The affiliate code from the URL
+- `landingPage`: The full URL where the visitor landed
+- `subId`: Optional sub-tracking ID (if `?sub=...` is present)
 
 ### Client Plugin Actions
 
