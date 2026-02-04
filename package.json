@@ -69,6 +69,14 @@
       "types": "./dist/better-auth/client.d.ts",
       "default": "./dist/better-auth/client.js"
     },
+    "./stripe": {
+      "types": "./dist/stripe/index.d.ts",
+      "default": "./dist/stripe/index.js"
+    },
+    "./stripe/client": {
+      "types": "./dist/stripe/client.d.ts",
+      "default": "./dist/stripe/client.js"
+    },
     "./test": "./src/test.ts",
     "./_generated/component.js": {
       "types": "./dist/component/_generated/component.d.ts"

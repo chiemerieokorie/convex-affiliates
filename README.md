@@ -341,32 +341,161 @@ await authClient.affiliate.trackReferral("PARTNER20");
 authClient.affiliate.clearReferral();
 ```
 
-### Stripe Webhook Integration
+## Stripe Plugin
 
-#### With @convex-dev/stripe (Recommended)
+For projects using [@convex-dev/stripe](https://www.convex.dev/components/stripe), we provide a plugin that automatically handles affiliate tracking for payments.
 
-If you're using `@convex-dev/stripe`, use `getAffiliateStripeHandlers` to get type-safe handlers:
-
-```typescript
-// convex/stripeHandlers.ts
-import { getAffiliateStripeHandlers } from "convex-affiliates";
-import { components } from "./_generated/api";
-
-// Get affiliate handlers for invoice.paid, charge.refunded, checkout.session.completed
-export const affiliateHandlers = getAffiliateStripeHandlers(components.affiliates);
-```
-
-Then use them in your Stripe webhook setup. You can combine with your own handlers as needed.
-
-#### Standalone Webhook Handler
-
-If you're not using `@convex-dev/stripe`, use the standalone handler with built-in signature verification:
+### Quick Start
 
 ```typescript
 // convex/http.ts
 import { httpRouter } from "convex/server";
+import { registerRoutes } from "@convex-dev/stripe";
+import { withAffiliates } from "convex-affiliates/stripe";
 import { components } from "./_generated/api";
+
+const http = httpRouter();
+
+// One line - that's it!
+registerRoutes(http, components.stripe, withAffiliates(components.affiliates));
+
+export default http;
+```
+
+That's it! The plugin automatically handles:
+- `invoice.paid` → Creates commission for the affiliate
+- `charge.refunded` → Reverses commission on refund
+- `checkout.session.completed` → Links Stripe customer to affiliate
+
+### With Your Own Event Handlers
+
+If you need custom logic alongside affiliate tracking, both handlers run (affiliate first, then yours):
+
+```typescript
+registerRoutes(http, components.stripe, withAffiliates(components.affiliates, {
+  events: {
+    // Your handler runs AFTER affiliate commission is created
+    "invoice.paid": async (ctx, event) => {
+      await sendSlackNotification(event);
+    },
+  },
+}));
+```
+
+### With Callbacks
+
+Get notified when affiliate events occur:
+
+```typescript
+registerRoutes(http, components.stripe, withAffiliates(components.affiliates, {
+  onCommissionCreated: async (data) => {
+    // data: { commissionId, affiliateId, affiliateCode, amountCents, currency }
+    await notifyAffiliate(data.affiliateId, `You earned $${data.amountCents / 100}!`);
+  },
+  onCommissionReversed: async (data) => {
+    // data: { commissionId, affiliateId, amountCents, reason }
+    await notifyAffiliate(data.affiliateId, "A commission was reversed.");
+  },
+  onCustomerLinked: async (data) => {
+    // data: { stripeCustomerId, userId, affiliateCode }
+    console.log(`Customer ${data.stripeCustomerId} linked to affiliate`);
+  },
+}));
+```
+
+### Checkout with Affiliate Data
+
+Use `enrichCheckout` to automatically add affiliate data to checkout sessions. It gets the user from the auth context and looks up their referral:
+
+```typescript
+// convex/payments.ts
+import { action } from "./_generated/server";
+import { enrichCheckout } from "convex-affiliates/stripe";
+import { components } from "./_generated/api";
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+export const createCheckout = action({
+  args: { priceId: v.string() },
+  handler: async (ctx, { priceId }) => {
+    // Automatically adds:
+    // - client_reference_id (userId for attribution)
+    // - metadata.affiliate_code
+    // - discounts[] (if campaign has coupon configured)
+    const params = await enrichCheckout(ctx, components.affiliates, {
+      priceId,
+      successUrl: `${process.env.SITE_URL}/success`,
+      cancelUrl: `${process.env.SITE_URL}/cancel`,
+    });
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: params.priceId, quantity: 1 }],
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      client_reference_id: params.client_reference_id,
+      metadata: params.metadata,
+      discounts: params.discounts,
+    });
+
+    return session.url;
+  },
+});
+```
+
+### Client-Side Utilities
+
+For client-side Stripe integrations (Stripe.js), use the client utilities:
+
+```typescript
+import { getStoredReferral, enrichClientCheckout } from "convex-affiliates/stripe/client";
+
+// Check if user was referred
+const referral = getStoredReferral();
+if (referral?.affiliateCode) {
+  console.log(`Referred by: ${referral.affiliateCode}`);
+}
+
+// Enrich checkout params with stored referral data
+const params = enrichClientCheckout({
+  successUrl: window.location.origin + "/success",
+  cancelUrl: window.location.origin + "/cancel",
+});
+// params now includes metadata.affiliate_code and client_reference_id
+```
+
+### Complete Flow
+
+1. **User clicks affiliate link** → `?ref=CODE` in URL
+2. **Better Auth client plugin** stores the code (or use `trackClick` mutation)
+3. **User signs up** → Better Auth plugin calls `attributeSignup`
+4. **User checkouts** → `enrichCheckout` adds affiliate data to session
+5. **Payment succeeds** → `withAffiliates` webhook creates commission
+6. **Refund happens** → `withAffiliates` webhook reverses commission
+
+### Legacy: Standalone Handlers
+
+If you're not using `@convex-dev/stripe`, you can still use the standalone handlers:
+
+```typescript
+import { getAffiliateStripeHandlers } from "convex-affiliates";
+
+// Get handlers for manual integration
+const handlers = getAffiliateStripeHandlers(components.affiliates, {
+  hooks: {
+    "commission.created": async (data) => { /* ... */ },
+  },
+});
+```
+
+Or use the standalone webhook handler with built-in signature verification:
+
+```typescript
+// convex/http.ts
+import { httpRouter } from "convex/server";
 import { createAffiliateApi } from "convex-affiliates";
+import { components } from "./_generated/api";
 
 const http = httpRouter();
 
@@ -388,10 +517,6 @@ http.route({
 
 export default http;
 ```
-
-Set `STRIPE_WEBHOOK_SECRET` in your Convex environment variables.
-
-Both approaches handle `invoice.paid`, `charge.refunded`, and `checkout.session.completed` events automatically
 
 ### Recording Payouts
 
