@@ -1,3 +1,17 @@
+## [2.2.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.1.0...v2.2.0) (2026-02-04)
+
+### Features
+
+* add Better Auth plugin for automatic affiliate attribution ([e2b6e32](https://github.com/chiemerieokorie/convex-affiliates/commit/e2b6e3233f6b8292fd613caaab13953a004007a4))
+* add trackClick option for automatic click tracking ([63664d7](https://github.com/chiemerieokorie/convex-affiliates/commit/63664d7e1690855e5d390d49bb3100bdbe0884d7))
+
+### Bug Fixes
+
+* multiple bugs in Better Auth plugin ([59e793c](https://github.com/chiemerieokorie/convex-affiliates/commit/59e793c9dd1cb4a4ff576f76695bf0183a5b8592))
+* multiple bugs in Better Auth plugin ([952bf35](https://github.com/chiemerieokorie/convex-affiliates/commit/952bf35ad883120b9ff535f7c9aff623cbdc0554))
+* multiple bugs in Better Auth plugin ([e05041c](https://github.com/chiemerieokorie/convex-affiliates/commit/e05041c654a5ebfe2e79ff10b49c42d01d395c14))
+* use const for body variable in client plugin ([5178822](https://github.com/chiemerieokorie/convex-affiliates/commit/5178822c76d2d52ebf1a90f06e97172c9b08c057))
+
 ## [2.1.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.0.4...v2.1.0) (2026-02-03)
 
 ### Features
