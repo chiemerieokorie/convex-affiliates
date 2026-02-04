@@ -23,8 +23,8 @@ http.route({
 // =============================================================================
 // Option 2: With @convex-dev/stripe (recommended for new projects)
 // =============================================================================
-// Uncomment the following to use AffiliateStripe with @convex-dev/stripe.
-// This provides a cleaner integration with automatic checkout enrichment.
+// Uncomment the following to use withAffiliates with @convex-dev/stripe.
+// This provides automatic commission tracking through Stripe webhooks.
 //
 // Prerequisites:
 // 1. npm install @convex-dev/stripe
@@ -33,11 +33,11 @@ http.route({
 //    app.use(stripe);
 //
 // import { registerRoutes } from "@convex-dev/stripe";
-// import { stripe } from "./stripe.js";
+// import { withAffiliates } from "convex-affiliates/stripe";
 // import { components } from "./_generated/api.js";
 //
 // // This replaces the manual webhook route above
-// registerRoutes(http, components.stripe, stripe.getRouteOptions());
+// registerRoutes(http, components.stripe, withAffiliates(components.affiliates));
 //
 // See stripe.ts and payments.ts for the full setup.
 
