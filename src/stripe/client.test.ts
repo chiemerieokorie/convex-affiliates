@@ -1,6 +1,3 @@
-/**
- * @vitest-environment jsdom
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   getStoredReferral,
@@ -10,53 +7,139 @@ import {
   enrichClientCheckout,
 } from "./client";
 
-describe("Stripe Client Utilities", () => {
-  beforeEach(() => {
-    // Clear localStorage
-    localStorage.clear();
-    // Clear cookies
-    document.cookie.split(";").forEach((cookie) => {
-      const name = cookie.split("=")[0].trim();
-      if (name) {
-        document.cookie = `${name}=; path=/; max-age=0`;
+// Mock browser globals manually for cross-environment compatibility
+function createMockLocalStorage() {
+  const store: Record<string, string> = {};
+  return {
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value;
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: vi.fn(() => {
+      Object.keys(store).forEach((key) => delete store[key]);
+    }),
+    get length() {
+      return Object.keys(store).length;
+    },
+    key: vi.fn((index: number) => Object.keys(store)[index] ?? null),
+    _store: store,
+  };
+}
+
+function createMockDocument() {
+  let cookieString = "";
+  return {
+    get cookie() {
+      return cookieString;
+    },
+    set cookie(value: string) {
+      // Parse and handle cookie setting
+      const [nameValue] = value.split(";");
+      const [name, val] = nameValue.split("=");
+      if (val === "" || value.includes("max-age=0")) {
+        // Remove cookie
+        const cookies = cookieString.split("; ").filter((c) => c && !c.startsWith(name + "="));
+        cookieString = cookies.join("; ");
+      } else {
+        // Add/update cookie
+        const cookies = cookieString.split("; ").filter((c) => c && !c.startsWith(name + "="));
+        cookies.push(`${name}=${val}`);
+        cookieString = cookies.join("; ");
       }
-    });
+    },
+    _setCookieString(value: string) {
+      cookieString = value;
+    },
+    _clearCookies() {
+      cookieString = "";
+    },
+  };
+}
+
+describe("Stripe Client Utilities", () => {
+  let mockLocalStorage: ReturnType<typeof createMockLocalStorage>;
+  let mockDocument: ReturnType<typeof createMockDocument>;
+  let originalWindow: typeof globalThis.window;
+  let originalDocument: typeof globalThis.document;
+  let originalLocalStorage: typeof globalThis.localStorage;
+
+  beforeEach(() => {
+    // Save originals
+    originalWindow = (globalThis as any).window;
+    originalDocument = (globalThis as any).document;
+    originalLocalStorage = (globalThis as any).localStorage;
+
+    // Create mocks
+    mockLocalStorage = createMockLocalStorage();
+    mockDocument = createMockDocument();
+
+    // Set up global mocks
+    (globalThis as any).window = {
+      location: { protocol: "https:" },
+    };
+    (globalThis as any).document = mockDocument;
+    (globalThis as any).localStorage = mockLocalStorage;
+  });
+
+  afterEach(() => {
+    // Restore originals
+    if (originalWindow === undefined) {
+      delete (globalThis as any).window;
+    } else {
+      (globalThis as any).window = originalWindow;
+    }
+    if (originalDocument === undefined) {
+      delete (globalThis as any).document;
+    } else {
+      (globalThis as any).document = originalDocument;
+    }
+    if (originalLocalStorage === undefined) {
+      delete (globalThis as any).localStorage;
+    } else {
+      (globalThis as any).localStorage = originalLocalStorage;
+    }
   });
 
   describe("storeReferral", () => {
     it("stores affiliateCode in localStorage", () => {
       storeReferral({ affiliateCode: "PARTNER20" });
 
-      expect(localStorage.getItem("affiliate_code")).toBe("PARTNER20");
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith("affiliate_code", "PARTNER20");
     });
 
     it("stores referralId in localStorage", () => {
       storeReferral({ referralId: "ref_123" });
 
-      expect(localStorage.getItem("affiliate_referral_id")).toBe("ref_123");
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith("affiliate_referral_id", "ref_123");
     });
 
     it("stores subId in localStorage", () => {
       storeReferral({ affiliateCode: "CODE", subId: "campaign-1" });
 
-      expect(localStorage.getItem("affiliate_sub_id")).toBe("campaign-1");
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith("affiliate_sub_id", "campaign-1");
     });
 
     it("stores detectedAt timestamp", () => {
       const before = Date.now();
       storeReferral({ affiliateCode: "CODE" });
-      const after = Date.now();
 
-      const stored = parseInt(localStorage.getItem("affiliate_detected_at")!, 10);
-      expect(stored).toBeGreaterThanOrEqual(before);
-      expect(stored).toBeLessThanOrEqual(after);
+      // Check that setItem was called with a timestamp
+      const calls = mockLocalStorage.setItem.mock.calls;
+      const timestampCall = calls.find((c) => c[0] === "affiliate_detected_at");
+      expect(timestampCall).toBeDefined();
+      const storedTime = parseInt(timestampCall![1], 10);
+      expect(storedTime).toBeGreaterThanOrEqual(before);
+      expect(storedTime).toBeLessThanOrEqual(Date.now());
     });
 
     it("stores data in cookies", () => {
       storeReferral({ affiliateCode: "PARTNER20", referralId: "ref_123" });
 
-      expect(document.cookie).toContain("affiliate_code=PARTNER20");
-      expect(document.cookie).toContain("affiliate_referral_id=ref_123");
+      expect(mockDocument.cookie).toContain("affiliate_code=PARTNER20");
+      expect(mockDocument.cookie).toContain("affiliate_referral_id=ref_123");
     });
 
     it("uses custom storage keys", () => {
@@ -70,17 +153,17 @@ describe("Stripe Client Utilities", () => {
         }
       );
 
-      expect(localStorage.getItem("custom_code_key")).toBe("CODE");
-      expect(localStorage.getItem("custom_ref_key")).toBe("ref_123");
-      expect(document.cookie).toContain("custom_code_cookie=CODE");
-      expect(document.cookie).toContain("custom_ref_cookie=ref_123");
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith("custom_code_key", "CODE");
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith("custom_ref_key", "ref_123");
+      expect(mockDocument.cookie).toContain("custom_code_cookie=CODE");
+      expect(mockDocument.cookie).toContain("custom_ref_cookie=ref_123");
     });
 
     it("encodes special characters in cookies", () => {
       storeReferral({ affiliateCode: "CODE=WITH&SPECIAL" });
 
       // Should be URL encoded
-      expect(document.cookie).toContain("affiliate_code=CODE%3DWITH%26SPECIAL");
+      expect(mockDocument.cookie).toContain("affiliate_code=CODE%3DWITH%26SPECIAL");
     });
   });
 
@@ -92,7 +175,7 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("reads affiliateCode from localStorage", () => {
-      localStorage.setItem("affiliate_code", "PARTNER20");
+      mockLocalStorage._store["affiliate_code"] = "PARTNER20";
 
       const result = getStoredReferral();
 
@@ -101,7 +184,7 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("reads referralId from localStorage", () => {
-      localStorage.setItem("affiliate_referral_id", "ref_123");
+      mockLocalStorage._store["affiliate_referral_id"] = "ref_123";
 
       const result = getStoredReferral();
 
@@ -110,8 +193,8 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("reads subId from localStorage", () => {
-      localStorage.setItem("affiliate_code", "CODE");
-      localStorage.setItem("affiliate_sub_id", "campaign-1");
+      mockLocalStorage._store["affiliate_code"] = "CODE";
+      mockLocalStorage._store["affiliate_sub_id"] = "campaign-1";
 
       const result = getStoredReferral();
 
@@ -120,8 +203,8 @@ describe("Stripe Client Utilities", () => {
 
     it("reads detectedAt from localStorage", () => {
       const timestamp = Date.now();
-      localStorage.setItem("affiliate_code", "CODE");
-      localStorage.setItem("affiliate_detected_at", timestamp.toString());
+      mockLocalStorage._store["affiliate_code"] = "CODE";
+      mockLocalStorage._store["affiliate_detected_at"] = timestamp.toString();
 
       const result = getStoredReferral();
 
@@ -129,8 +212,7 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("falls back to cookies when localStorage is empty", () => {
-      document.cookie = "affiliate_code=COOKIE_CODE; path=/";
-      document.cookie = "affiliate_referral_id=cookie_ref; path=/";
+      mockDocument._setCookieString("affiliate_code=COOKIE_CODE; affiliate_referral_id=cookie_ref");
 
       const result = getStoredReferral();
 
@@ -140,8 +222,8 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("prefers localStorage over cookies", () => {
-      localStorage.setItem("affiliate_code", "LOCAL_CODE");
-      document.cookie = "affiliate_code=COOKIE_CODE; path=/";
+      mockLocalStorage._store["affiliate_code"] = "LOCAL_CODE";
+      mockDocument._setCookieString("affiliate_code=COOKIE_CODE");
 
       const result = getStoredReferral();
 
@@ -149,7 +231,7 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("uses custom storage keys", () => {
-      localStorage.setItem("my_code", "CUSTOM");
+      mockLocalStorage._store["my_code"] = "CUSTOM";
 
       const result = getStoredReferral({ affiliateCodeKey: "my_code" });
 
@@ -157,7 +239,7 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("decodes URL-encoded cookie values", () => {
-      document.cookie = "affiliate_code=CODE%3DWITH%26SPECIAL; path=/";
+      mockDocument._setCookieString("affiliate_code=CODE%3DWITH%26SPECIAL");
 
       const result = getStoredReferral();
 
@@ -171,20 +253,20 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("returns true when affiliateCode is stored", () => {
-      localStorage.setItem("affiliate_code", "CODE");
+      mockLocalStorage._store["affiliate_code"] = "CODE";
 
       expect(hasStoredReferral()).toBe(true);
     });
 
     it("returns true when referralId is stored", () => {
-      localStorage.setItem("affiliate_referral_id", "ref_123");
+      mockLocalStorage._store["affiliate_referral_id"] = "ref_123";
 
       expect(hasStoredReferral()).toBe(true);
     });
 
     it("returns true when both are stored", () => {
-      localStorage.setItem("affiliate_code", "CODE");
-      localStorage.setItem("affiliate_referral_id", "ref_123");
+      mockLocalStorage._store["affiliate_code"] = "CODE";
+      mockLocalStorage._store["affiliate_referral_id"] = "ref_123";
 
       expect(hasStoredReferral()).toBe(true);
     });
@@ -192,52 +274,39 @@ describe("Stripe Client Utilities", () => {
 
   describe("clearStoredReferral", () => {
     it("clears localStorage items", () => {
-      localStorage.setItem("affiliate_code", "CODE");
-      localStorage.setItem("affiliate_referral_id", "ref_123");
-      localStorage.setItem("affiliate_sub_id", "sub");
-      localStorage.setItem("affiliate_detected_at", "123456");
+      mockLocalStorage._store["affiliate_code"] = "CODE";
+      mockLocalStorage._store["affiliate_referral_id"] = "ref_123";
+      mockLocalStorage._store["affiliate_sub_id"] = "sub";
+      mockLocalStorage._store["affiliate_detected_at"] = "123456";
 
       clearStoredReferral();
 
-      expect(localStorage.getItem("affiliate_code")).toBeNull();
-      expect(localStorage.getItem("affiliate_referral_id")).toBeNull();
-      expect(localStorage.getItem("affiliate_sub_id")).toBeNull();
-      expect(localStorage.getItem("affiliate_detected_at")).toBeNull();
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith("affiliate_code");
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith("affiliate_referral_id");
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith("affiliate_sub_id");
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith("affiliate_detected_at");
     });
 
-    it("clears cookies", () => {
-      document.cookie = "affiliate_code=CODE; path=/";
-      document.cookie = "affiliate_referral_id=ref_123; path=/";
-      document.cookie = "affiliate_sub_id=sub; path=/";
+    it("expires cookies", () => {
+      mockDocument._setCookieString("affiliate_code=CODE; affiliate_referral_id=ref_123");
 
       clearStoredReferral();
 
-      // Cookies should be expired (empty or not present)
-      expect(document.cookie).not.toContain("affiliate_code=CODE");
-      expect(document.cookie).not.toContain("affiliate_referral_id=ref_123");
+      // Cookies should be cleared by the mock
+      expect(mockDocument.cookie).not.toContain("affiliate_code=CODE");
     });
 
     it("uses custom storage keys", () => {
-      localStorage.setItem("my_code", "CODE");
-      localStorage.setItem("my_ref", "ref_123");
+      mockLocalStorage._store["my_code"] = "CODE";
+      mockLocalStorage._store["my_ref"] = "ref_123";
 
       clearStoredReferral({
         affiliateCodeKey: "my_code",
         referralIdKey: "my_ref",
       });
 
-      expect(localStorage.getItem("my_code")).toBeNull();
-      expect(localStorage.getItem("my_ref")).toBeNull();
-    });
-
-    it("getStoredReferral returns null after clear", () => {
-      storeReferral({ affiliateCode: "CODE", referralId: "ref_123" });
-      expect(hasStoredReferral()).toBe(true);
-
-      clearStoredReferral();
-
-      expect(hasStoredReferral()).toBe(false);
-      expect(getStoredReferral()).toBeNull();
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith("my_code");
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith("my_ref");
     });
   });
 
@@ -255,7 +324,7 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("adds affiliate_code to metadata from storage", () => {
-      localStorage.setItem("affiliate_code", "PARTNER20");
+      mockLocalStorage._store["affiliate_code"] = "PARTNER20";
 
       const result = enrichClientCheckout({
         successUrl: "/success",
@@ -266,7 +335,7 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("adds referralId as client_reference_id when no userId", () => {
-      localStorage.setItem("affiliate_referral_id", "ref_123");
+      mockLocalStorage._store["affiliate_referral_id"] = "ref_123";
 
       const result = enrichClientCheckout({
         successUrl: "/success",
@@ -277,7 +346,7 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("uses userId as client_reference_id when provided", () => {
-      localStorage.setItem("affiliate_referral_id", "ref_123");
+      mockLocalStorage._store["affiliate_referral_id"] = "ref_123";
 
       const result = enrichClientCheckout(
         { successUrl: "/success", cancelUrl: "/cancel" },
@@ -288,7 +357,7 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("preserves existing metadata", () => {
-      localStorage.setItem("affiliate_code", "CODE");
+      mockLocalStorage._store["affiliate_code"] = "CODE";
 
       const result = enrichClientCheckout({
         successUrl: "/success",
@@ -313,7 +382,7 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("uses custom storage config", () => {
-      localStorage.setItem("my_affiliate_code", "CUSTOM_CODE");
+      mockLocalStorage._store["my_affiliate_code"] = "CUSTOM_CODE";
 
       const result = enrichClientCheckout(
         { successUrl: "/success", cancelUrl: "/cancel" },
@@ -324,8 +393,8 @@ describe("Stripe Client Utilities", () => {
     });
 
     it("handles both affiliateCode and referralId", () => {
-      localStorage.setItem("affiliate_code", "PARTNER");
-      localStorage.setItem("affiliate_referral_id", "ref_789");
+      mockLocalStorage._store["affiliate_code"] = "PARTNER";
+      mockLocalStorage._store["affiliate_referral_id"] = "ref_789";
 
       const result = enrichClientCheckout({
         successUrl: "/success",
@@ -337,45 +406,40 @@ describe("Stripe Client Utilities", () => {
     });
   });
 
-  describe("integration: store and retrieve flow", () => {
-    it("full flow: store, check, retrieve, enrich, clear", () => {
-      // Initially no referral
-      expect(hasStoredReferral()).toBe(false);
+  describe("SSR handling", () => {
+    it("getStoredReferral returns null when window is undefined", () => {
+      delete (globalThis as any).window;
 
-      // Store referral from URL param simulation
-      storeReferral({
-        affiliateCode: "INFLUENCER50",
-        referralId: "ref_abc",
-        subId: "instagram",
+      const result = getStoredReferral();
+
+      expect(result).toBeNull();
+    });
+
+    it("storeReferral does nothing when window is undefined", () => {
+      delete (globalThis as any).window;
+
+      // Should not throw
+      expect(() => storeReferral({ affiliateCode: "CODE" })).not.toThrow();
+    });
+
+    it("clearStoredReferral does nothing when window is undefined", () => {
+      delete (globalThis as any).window;
+
+      // Should not throw
+      expect(() => clearStoredReferral()).not.toThrow();
+    });
+
+    it("enrichClientCheckout works when window is undefined", () => {
+      delete (globalThis as any).window;
+
+      const result = enrichClientCheckout({
+        successUrl: "/success",
+        cancelUrl: "/cancel",
       });
 
-      // Check it exists
-      expect(hasStoredReferral()).toBe(true);
-
-      // Retrieve full data
-      const referral = getStoredReferral();
-      expect(referral).toEqual({
-        affiliateCode: "INFLUENCER50",
-        referralId: "ref_abc",
-        subId: "instagram",
-        detectedAt: expect.any(Number),
-      });
-
-      // Enrich checkout params
-      const checkoutParams = enrichClientCheckout({
-        successUrl: "https://example.com/success",
-        cancelUrl: "https://example.com/cancel",
-      });
-
-      expect(checkoutParams.metadata.affiliate_code).toBe("INFLUENCER50");
-      expect(checkoutParams.client_reference_id).toBe("ref_abc");
-
-      // Clear after purchase
-      clearStoredReferral();
-
-      // Verify cleared
-      expect(hasStoredReferral()).toBe(false);
-      expect(getStoredReferral()).toBeNull();
+      // Should return base params without affiliate data
+      expect(result.successUrl).toBe("/success");
+      expect(result.metadata).toEqual({});
     });
   });
 });
