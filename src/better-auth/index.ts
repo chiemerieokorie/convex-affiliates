@@ -228,6 +228,7 @@ export function affiliatePlugin(
                 const referral = await ctx.runQuery<{
                   _id: string;
                   status: string;
+                  affiliateCode?: string;
                 } | null>(component.referrals.getByReferralId, { referralId });
 
                 if (referral && referral.status === "clicked") {
@@ -236,6 +237,7 @@ export function affiliatePlugin(
                     userId,
                   });
                   attributed = true;
+                  affiliateCode = referral.affiliateCode;
                 }
               }
 
@@ -280,7 +282,14 @@ function parseCookies(cookieHeader: string): Record<string, string> {
   cookieHeader.split(";").forEach((cookie) => {
     const [name, ...valueParts] = cookie.trim().split("=");
     if (name) {
-      cookies[name] = valueParts.join("=");
+      const value = valueParts.join("=");
+      // Decode URI-encoded values (handles special characters in affiliate codes)
+      try {
+        cookies[name] = decodeURIComponent(value);
+      } catch {
+        // If decoding fails, use the raw value
+        cookies[name] = value;
+      }
     }
   });
   return cookies;

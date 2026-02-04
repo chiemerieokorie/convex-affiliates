@@ -608,7 +608,14 @@ function parseCookies(cookieString: string): Record<string, string> {
   cookieString.split(";").forEach((cookie) => {
     const [name, ...valueParts] = cookie.trim().split("=");
     if (name) {
-      cookies[name] = valueParts.join("=");
+      const value = valueParts.join("=");
+      // Decode URI-encoded values (handles special characters in affiliate codes)
+      try {
+        cookies[name] = decodeURIComponent(value);
+      } catch {
+        // If decoding fails, use the raw value
+        cookies[name] = value;
+      }
     }
   });
 
