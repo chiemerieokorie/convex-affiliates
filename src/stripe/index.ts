@@ -74,15 +74,18 @@
 // =============================================================================
 
 /**
- * Convex context with mutation/query capabilities
+ * Convex context with mutation/query capabilities.
+ * Uses permissive types to accept any Convex context.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface ConvexCtx {
-  runQuery: <T>(query: unknown, args?: unknown) => Promise<T>;
-  runMutation: <T>(mutation: unknown, args?: unknown) => Promise<T>;
+  runQuery: (query: any, args?: any) => Promise<any>;
+  runMutation: (mutation: any, args?: any) => Promise<any>;
 }
 
 /**
- * Convex action context with auth
+ * Convex action context with auth.
+ * Uses permissive types to accept any Convex action context.
  */
 interface ConvexActionCtx extends ConvexCtx {
   auth: {
@@ -257,12 +260,7 @@ export function withAffiliates(
   const affiliateEvents: Record<string, StripeEventHandler> = {
     "invoice.paid": async (ctx, event) => {
       const invoice = event.data.object;
-      const result = await ctx.runMutation<{
-        commissionId?: string;
-        affiliateId?: string;
-        affiliateCode?: string;
-        commissionAmountCents?: number;
-      } | null>(component.commissions.createFromInvoice, {
+      const result = (await ctx.runMutation(component.commissions.createFromInvoice, {
         stripeInvoiceId: invoice.id,
         stripeCustomerId: invoice.customer,
         stripeChargeId: invoice.charge ?? undefined,
@@ -273,7 +271,12 @@ export function withAffiliates(
         amountPaidCents: invoice.amount_paid,
         currency: invoice.currency,
         affiliateCode: (invoice.metadata as Record<string, string>)?.affiliate_code,
-      });
+      })) as {
+        commissionId?: string;
+        affiliateId?: string;
+        affiliateCode?: string;
+        commissionAmountCents?: number;
+      } | null;
 
       if (result?.commissionId && onCommissionCreated) {
         await safeCall(onCommissionCreated, {
@@ -288,16 +291,16 @@ export function withAffiliates(
 
     "charge.refunded": async (ctx, event) => {
       const charge = event.data.object;
-      const result = await ctx.runMutation<{
-        commissionId?: string;
-        affiliateId?: string;
-        commissionAmountCents?: number;
-      } | null>(component.commissions.reverseByCharge, {
+      const result = (await ctx.runMutation(component.commissions.reverseByCharge, {
         stripeChargeId: charge.id,
         reason:
           (charge.refunds as { data?: Array<{ reason?: string }> })?.data?.[0]?.reason ??
           "Charge refunded",
-      });
+      })) as {
+        commissionId?: string;
+        affiliateId?: string;
+        commissionAmountCents?: number;
+      } | null;
 
       if (result?.commissionId && onCommissionReversed) {
         await safeCall(onCommissionReversed, {
@@ -403,16 +406,16 @@ export async function enrichCheckout(
 
   // Look up referral for discount - try multiple methods
   try {
-    const discount = await ctx.runQuery<{
+    const discount = (await ctx.runQuery(component.referrals.getRefereeDiscount, {
+      userId: userId ?? undefined,
+      referralId: referralId ?? undefined,
+      affiliateCode: affiliateCode ?? undefined,
+    })) as {
       stripeCouponId?: string;
       affiliateCode?: string;
       discountType?: string;
       discountValue?: number;
-    } | null>(component.referrals.getRefereeDiscount, {
-      userId: userId ?? undefined,
-      referralId: referralId ?? undefined,
-      affiliateCode: affiliateCode ?? undefined,
-    });
+    } | null;
 
     if (discount) {
       // Add affiliate code to metadata

@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initConvexTest } from "./setup.test";
-import { api, components } from "./_generated/api";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import { api as anyApi, components } from "./_generated/api";
+
+// Bypass FilterApi typing issue for tests
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const api = anyApi as any;
 
 describe("affiliate example", () => {
   beforeEach(async () => {
