@@ -133,6 +133,10 @@ export default http;
 
 ## Step 5: Create Payment Actions
 
+**IMPORTANT**: For commission tracking to work, you must pass `client_reference_id` to Stripe.
+This links the Stripe customer to the user's referral. The `@convex-dev/stripe` component
+doesn't support `client_reference_id`, so you need to use the Stripe SDK directly.
+
 ### `convex/payments.ts`
 
 ```typescript
@@ -140,10 +144,10 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { components } from "./_generated/api";
 import { getAffiliateMetadata } from "convex-affiliates/stripe";
-import StripeSubscriptions from "@convex-dev/stripe";
+import Stripe from "stripe";
 
-// Initialize Stripe component
-const stripe = new StripeSubscriptions(components.stripe);
+// Use Stripe SDK directly for full control
+const stripeSDK = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 /**
  * Create a checkout session with automatic affiliate tracking
@@ -153,19 +157,21 @@ export const createCheckout = action({
     priceId: v.string(),
   },
   handler: async (ctx, { priceId }) => {
-    // Get affiliate metadata for the authenticated user
-    // This looks up the user's referral and returns { affiliate_code?: string }
-    const affiliateData = await getAffiliateMetadata(ctx, components.affiliates);
+    // Get affiliate metadata: { userId, affiliate_code? }
+    // - userId: Pass as client_reference_id (REQUIRED for commission tracking)
+    // - affiliate_code: Pass in metadata (for attribution)
+    const { userId, ...metadata } = await getAffiliateMetadata(ctx, components.affiliates);
 
-    // Create checkout session with @convex-dev/stripe
-    return stripe.createCheckoutSession(ctx, {
-      priceId,
+    const session = await stripeSDK.checkout.sessions.create({
       mode: "subscription",
-      successUrl: `${process.env.BASE_URL}/success`,
-      cancelUrl: `${process.env.BASE_URL}/cancel`,
-      // Include affiliate metadata - this is all that's needed!
-      metadata: affiliateData,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${process.env.BASE_URL}/success`,
+      cancel_url: `${process.env.BASE_URL}/cancel`,
+      client_reference_id: userId, // REQUIRED for commission tracking!
+      metadata, // { affiliate_code?: string }
     });
+
+    return { sessionId: session.id, url: session.url };
   },
 });
 
@@ -178,20 +184,23 @@ export const createCheckoutWithPlan = action({
     plan: v.string(),
   },
   handler: async (ctx, { priceId, plan }) => {
-    const affiliateData = await getAffiliateMetadata(ctx, components.affiliates);
+    const { userId, ...affiliateMetadata } = await getAffiliateMetadata(ctx, components.affiliates);
 
-    return stripe.createCheckoutSession(ctx, {
-      priceId,
+    const session = await stripeSDK.checkout.sessions.create({
       mode: "subscription",
-      successUrl: `${process.env.BASE_URL}/success`,
-      cancelUrl: `${process.env.BASE_URL}/cancel`,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${process.env.BASE_URL}/success`,
+      cancel_url: `${process.env.BASE_URL}/cancel`,
+      client_reference_id: userId, // REQUIRED for commission tracking!
       // Merge affiliate data with your own metadata
       metadata: {
-        ...affiliateData,
+        ...affiliateMetadata,
         plan,
         source: "pricing-page",
       },
     });
+
+    return { sessionId: session.id, url: session.url };
   },
 });
 ```
@@ -235,9 +244,6 @@ The Better Auth client plugin automatically captures referrals from URLs:
 
 ```tsx
 // src/App.tsx
-import { useEffect } from "react";
-import { authClient } from "./lib/auth-client";
-
 function App() {
   // When user visits example.com?ref=PARTNER20
   // The affiliate client plugin automatically:
@@ -271,15 +277,17 @@ function App() {
 3. User clicks "Subscribe"
    └─> createCheckout action:
        - Calls getAffiliateMetadata(ctx, components.affiliates)
-       - Returns { affiliate_code: "PARTNER20" }
-       - Passes to stripe.createCheckoutSession({ metadata: affiliateData })
+       - Returns { userId: "user_123", affiliate_code: "PARTNER20" }
+       - Uses Stripe SDK with client_reference_id: userId and metadata
 
 4. User completes payment
    └─> Stripe sends webhook
 
 5. Webhook: checkout.session.completed
    └─> withAffiliates handler:
-       - Links Stripe customer to affiliate (via metadata.affiliate_code)
+       - Links Stripe customer to affiliate via:
+         - client_reference_id (userId) - for user lookup
+         - metadata.affiliate_code - for attribution
 
 6. Webhook: invoice.paid
    └─> withAffiliates handler:
@@ -423,6 +431,7 @@ withAffiliates(components.affiliates, {
 |----------|-------------|
 | `storeReferral(data)` | Manually store referral data |
 | `getStoredReferral()` | Get stored referral data |
+| `hasStoredReferral()` | Check if referral data exists |
 | `clearStoredReferral()` | Clear stored referral data |
 
 ### Webhook Events Handled

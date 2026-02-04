@@ -3,6 +3,11 @@
  *
  * This file demonstrates how to create checkout sessions that automatically
  * include affiliate attribution data for commission tracking.
+ *
+ * IMPORTANT: For commission tracking to work, you must pass `client_reference_id`
+ * to Stripe. This links the Stripe customer to the user's referral. Since
+ * @convex-dev/stripe doesn't support `client_reference_id`, we use the Stripe
+ * SDK directly.
  */
 
 import { action } from "./_generated/server.js";
@@ -10,9 +15,9 @@ import { v } from "convex/values";
 import { components } from "./_generated/api.js";
 import { getAffiliateMetadata } from "convex-affiliates/stripe";
 
-// Note: In a real app, you would import and instantiate the Stripe component:
-// import StripeSubscriptions from "@convex-dev/stripe";
-// const stripe = new StripeSubscriptions(components.stripe);
+// Note: In a real app, you would import and instantiate the Stripe SDK:
+// import Stripe from "stripe";
+// const stripeSDK = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 /**
  * Create a Stripe checkout session with automatic affiliate data.
@@ -20,7 +25,9 @@ import { getAffiliateMetadata } from "convex-affiliates/stripe";
  * The getAffiliateMetadata function:
  * - Gets the user ID from auth context
  * - Looks up the user's referral
- * - Returns { affiliate_code: string } if user was referred
+ * - Returns { userId, affiliate_code? }
+ *   - userId: Pass as client_reference_id (REQUIRED for commission tracking)
+ *   - affiliate_code: Pass in metadata (for attribution)
  *
  * @example
  * ```tsx
@@ -38,23 +45,27 @@ export const createCheckout = action({
     priceId: v.string(),
   },
   handler: async (ctx, { priceId }) => {
-    // Get affiliate metadata for the current user
-    const affiliateData = await getAffiliateMetadata(ctx, components.affiliates);
+    // Get affiliate metadata: { userId, affiliate_code? }
+    const { userId, ...metadata } = await getAffiliateMetadata(ctx, components.affiliates);
 
-    // In a real app, you would use @convex-dev/stripe:
+    // In a real app, you would use the Stripe SDK:
     //
-    // return stripe.createCheckoutSession(ctx, {
-    //   priceId,
+    // const session = await stripeSDK.checkout.sessions.create({
     //   mode: "subscription",
-    //   successUrl: `${process.env.BASE_URL}/success`,
-    //   cancelUrl: `${process.env.BASE_URL}/cancel`,
-    //   metadata: affiliateData, // { affiliate_code?: string }
+    //   line_items: [{ price: priceId, quantity: 1 }],
+    //   success_url: `${process.env.BASE_URL}/success`,
+    //   cancel_url: `${process.env.BASE_URL}/cancel`,
+    //   client_reference_id: userId, // REQUIRED for commission tracking!
+    //   metadata, // { affiliate_code?: string }
     // });
+    //
+    // return { sessionId: session.id, url: session.url };
 
     // For this example, we just log and return mock data
     console.log("[Payments] Checkout with affiliate data:", {
       priceId,
-      affiliateData,
+      userId,
+      metadata,
     });
 
     return {
@@ -75,28 +86,32 @@ export const createCheckoutWithMetadata = action({
     plan: v.string(),
   },
   handler: async (ctx, { priceId, plan }) => {
-    // Get affiliate metadata for the current user
-    const affiliateData = await getAffiliateMetadata(ctx, components.affiliates);
+    // Get affiliate metadata: { userId, affiliate_code? }
+    const { userId, ...affiliateMetadata } = await getAffiliateMetadata(ctx, components.affiliates);
 
-    // Merge with your own metadata
+    // Merge affiliate data with your own metadata
     const metadata = {
-      ...affiliateData,
+      ...affiliateMetadata,
       plan,
       source: "pricing-page",
     };
 
     // In a real app:
     //
-    // return stripe.createCheckoutSession(ctx, {
-    //   priceId,
+    // const session = await stripeSDK.checkout.sessions.create({
     //   mode: "subscription",
-    //   successUrl: `${process.env.BASE_URL}/success`,
-    //   cancelUrl: `${process.env.BASE_URL}/cancel`,
+    //   line_items: [{ price: priceId, quantity: 1 }],
+    //   success_url: `${process.env.BASE_URL}/success`,
+    //   cancel_url: `${process.env.BASE_URL}/cancel`,
+    //   client_reference_id: userId, // REQUIRED for commission tracking!
     //   metadata,
     // });
+    //
+    // return { sessionId: session.id, url: session.url };
 
     console.log("[Payments] Checkout with merged metadata:", {
       priceId,
+      userId,
       metadata,
     });
 

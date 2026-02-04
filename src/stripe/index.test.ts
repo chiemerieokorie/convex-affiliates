@@ -260,7 +260,7 @@ describe("Stripe Plugin", () => {
       expect(mockCtx.runQuery).not.toHaveBeenCalled();
     });
 
-    it("returns affiliate_code when user has a referral", async () => {
+    it("returns userId and affiliate_code when user has a referral", async () => {
       const mockCtx = {
         auth: {
           getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
@@ -273,14 +273,14 @@ describe("Stripe Plugin", () => {
 
       const result = await getAffiliateMetadata(mockCtx, mockComponent);
 
-      expect(result).toEqual({ affiliate_code: "PARTNER" });
+      expect(result).toEqual({ userId: "user_123", affiliate_code: "PARTNER" });
       expect(mockCtx.runQuery).toHaveBeenCalledWith(
         mockComponent.referrals.getRefereeDiscount,
         { userId: "user_123" }
       );
     });
 
-    it("returns empty object when user has no referral", async () => {
+    it("returns only userId when user has no referral", async () => {
       const mockCtx = {
         auth: {
           getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
@@ -291,10 +291,10 @@ describe("Stripe Plugin", () => {
 
       const result = await getAffiliateMetadata(mockCtx, mockComponent);
 
-      expect(result).toEqual({});
+      expect(result).toEqual({ userId: "user_123" });
     });
 
-    it("returns empty object when referral has no affiliateCode", async () => {
+    it("returns only userId when referral has no affiliateCode", async () => {
       const mockCtx = {
         auth: {
           getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
@@ -308,10 +308,10 @@ describe("Stripe Plugin", () => {
 
       const result = await getAffiliateMetadata(mockCtx, mockComponent);
 
-      expect(result).toEqual({});
+      expect(result).toEqual({ userId: "user_123" });
     });
 
-    it("handles query errors gracefully", async () => {
+    it("returns userId even when query errors", async () => {
       const mockCtx = {
         auth: {
           getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
@@ -320,10 +320,10 @@ describe("Stripe Plugin", () => {
         runMutation: vi.fn(),
       };
 
-      // Should not throw
+      // Should not throw, and should still return userId
       const result = await getAffiliateMetadata(mockCtx, mockComponent);
 
-      expect(result).toEqual({});
+      expect(result).toEqual({ userId: "user_123" });
     });
   });
 });

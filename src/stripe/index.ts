@@ -2,9 +2,9 @@
  * Stripe Plugin for Convex Affiliates
  *
  * Automatically tracks affiliate commissions from Stripe payments.
- * Works with @convex-dev/stripe component.
+ * Works with @convex-dev/stripe component for webhooks.
  *
- * ## Quick Start
+ * ## Quick Start - Webhooks
  *
  * ```typescript
  * // convex/http.ts
@@ -18,29 +18,38 @@
  * export default http;
  * ```
  *
- * ## With Checkout (using @convex-dev/stripe)
+ * ## Checkout with Affiliate Tracking
+ *
+ * IMPORTANT: You must use the Stripe SDK directly and pass `client_reference_id`
+ * for commission tracking to work. The `userId` links the Stripe customer to
+ * the user's referral in the webhooks.
  *
  * ```typescript
  * // convex/payments.ts
  * import { action } from "./_generated/server";
  * import { v } from "convex/values";
  * import { getAffiliateMetadata } from "convex-affiliates/stripe";
- * import { stripe } from "./stripe";
+ * import { components } from "./_generated/api";
+ * import Stripe from "stripe";
+ *
+ * const stripeSDK = new Stripe(process.env.STRIPE_SECRET_KEY!);
  *
  * export const createCheckout = action({
  *   args: { priceId: v.string() },
  *   handler: async (ctx, { priceId }) => {
- *     // Get affiliate metadata for the current user
- *     const affiliateData = await getAffiliateMetadata(ctx, components.affiliates);
+ *     // Get affiliate data: { userId, affiliate_code? }
+ *     const { userId, ...metadata } = await getAffiliateMetadata(ctx, components.affiliates);
  *
- *     // Pass to @convex-dev/stripe's checkout
- *     return stripe.createCheckoutSession(ctx, {
- *       priceId,
+ *     const session = await stripeSDK.checkout.sessions.create({
  *       mode: "subscription",
- *       successUrl: "/success",
- *       cancelUrl: "/cancel",
- *       metadata: affiliateData, // { affiliate_code?: string }
+ *       line_items: [{ price: priceId, quantity: 1 }],
+ *       success_url: `${process.env.BASE_URL}/success`,
+ *       cancel_url: `${process.env.BASE_URL}/cancel`,
+ *       client_reference_id: userId, // REQUIRED for commission tracking!
+ *       metadata, // { affiliate_code?: string }
  *     });
+ *
+ *     return session.url;
  *   },
  * });
  * ```
@@ -165,11 +174,17 @@ export interface WithAffiliatesOptions extends StripeRegisterOptions {
 }
 
 /**
- * Affiliate metadata to include in Stripe checkout
+ * Affiliate metadata to include in Stripe checkout.
+ *
+ * IMPORTANT: For commission tracking to work, you must pass `userId` as
+ * `client_reference_id` when creating the Stripe checkout session.
+ * This links the Stripe customer to the user's referral.
  */
 export interface AffiliateMetadata {
-  /** The affiliate code for attribution */
+  /** The affiliate code for attribution (pass to metadata) */
   affiliate_code?: string;
+  /** The user ID for attribution (pass to client_reference_id) */
+  userId?: string;
 }
 
 // =============================================================================
@@ -309,31 +324,39 @@ export function withAffiliates(
 /**
  * Get affiliate metadata for the current user to include in Stripe checkout.
  *
- * Looks up the user's referral and returns the affiliate code to include
- * in checkout metadata. This enables commission tracking when the payment
- * webhook fires.
+ * Returns:
+ * - `userId` - Pass as `client_reference_id` (REQUIRED for commission tracking)
+ * - `affiliate_code` - Pass in `metadata` (if user was referred)
+ *
+ * IMPORTANT: You must pass `userId` as `client_reference_id` when creating
+ * the Stripe checkout session. This is required for the webhook to link
+ * the Stripe customer to the user's referral and create commissions.
  *
  * @param ctx - Convex action context (must have authenticated user)
  * @param component - The affiliates component (components.affiliates)
- * @returns Metadata object with affiliate_code (if user was referred)
+ * @returns Object with userId and affiliate_code (if user was referred)
  *
  * @example
  * ```typescript
- * // convex/payments.ts
- * import { getAffiliateMetadata } from "convex-affiliates/stripe";
+ * // Using Stripe SDK directly (recommended for full control)
+ * import Stripe from "stripe";
+ * const stripeSDK = new Stripe(process.env.STRIPE_SECRET_KEY!);
  *
  * export const createCheckout = action({
  *   args: { priceId: v.string() },
  *   handler: async (ctx, { priceId }) => {
- *     const affiliateData = await getAffiliateMetadata(ctx, components.affiliates);
+ *     const { userId, ...metadata } = await getAffiliateMetadata(ctx, components.affiliates);
  *
- *     return stripe.createCheckoutSession(ctx, {
- *       priceId,
+ *     const session = await stripeSDK.checkout.sessions.create({
  *       mode: "subscription",
- *       successUrl: "/success",
- *       cancelUrl: "/cancel",
- *       metadata: affiliateData,
+ *       line_items: [{ price: priceId, quantity: 1 }],
+ *       success_url: `${process.env.BASE_URL}/success`,
+ *       cancel_url: `${process.env.BASE_URL}/cancel`,
+ *       client_reference_id: userId, // REQUIRED for commission tracking!
+ *       metadata, // { affiliate_code?: string }
  *     });
+ *
+ *     return session.url;
  *   },
  * });
  * ```
@@ -341,15 +364,16 @@ export function withAffiliates(
  * @example
  * ```typescript
  * // Merging with other metadata
- * const affiliateData = await getAffiliateMetadata(ctx, components.affiliates);
+ * const { userId, ...affiliateMetadata } = await getAffiliateMetadata(ctx, components.affiliates);
  *
- * return stripe.createCheckoutSession(ctx, {
- *   priceId,
+ * const session = await stripeSDK.checkout.sessions.create({
  *   mode: "subscription",
- *   successUrl: "/success",
- *   cancelUrl: "/cancel",
+ *   line_items: [{ price: priceId, quantity: 1 }],
+ *   success_url: "/success",
+ *   cancel_url: "/cancel",
+ *   client_reference_id: userId,
  *   metadata: {
- *     ...affiliateData,
+ *     ...affiliateMetadata,
  *     plan: "pro",
  *     source: "landing-page",
  *   },
@@ -376,14 +400,16 @@ export async function getAffiliateMetadata(
     } | null;
 
     if (discount?.affiliateCode) {
-      return { affiliate_code: discount.affiliateCode };
+      return { userId, affiliate_code: discount.affiliateCode };
     }
   } catch (error) {
     // Silently continue if lookup fails
     console.error("[convex-affiliates] Error looking up affiliate:", error);
   }
 
-  return {};
+  // Always return userId even if no affiliate code found
+  // This ensures client_reference_id is set for future attribution
+  return { userId };
 }
 
 // =============================================================================
