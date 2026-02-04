@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { withAffiliates, enrichCheckout, AffiliateStripe, createAffiliateStripe } from "./index";
+import { describe, it, expect, vi } from "vitest";
+import { withAffiliates, getAffiliateMetadata } from "./index";
 
 describe("Stripe Plugin", () => {
   describe("withAffiliates", () => {
@@ -232,7 +232,7 @@ describe("Stripe Plugin", () => {
     });
   });
 
-  describe("enrichCheckout", () => {
+  describe("getAffiliateMetadata", () => {
     const mockComponent = {
       commissions: {
         createFromInvoice: "commissions.createFromInvoice",
@@ -245,7 +245,7 @@ describe("Stripe Plugin", () => {
       },
     };
 
-    it("returns base params when no user is authenticated", async () => {
+    it("returns empty object when no user is authenticated", async () => {
       const mockCtx = {
         auth: {
           getUserIdentity: vi.fn().mockResolvedValue(null),
@@ -254,156 +254,61 @@ describe("Stripe Plugin", () => {
         runMutation: vi.fn(),
       };
 
-      const result = await enrichCheckout(mockCtx, mockComponent, {
-        priceId: "price_123",
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-      });
+      const result = await getAffiliateMetadata(mockCtx, mockComponent);
 
-      expect(result.priceId).toBe("price_123");
-      expect(result.successUrl).toBe("/success");
-      expect(result.cancelUrl).toBe("/cancel");
-      expect(result.client_reference_id).toBeUndefined();
-      expect(result.metadata).toEqual({});
+      expect(result).toEqual({});
+      expect(mockCtx.runQuery).not.toHaveBeenCalled();
     });
 
-    it("adds client_reference_id when user is authenticated", async () => {
-      const mockCtx = {
-        auth: {
-          getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
-        },
-        runQuery: vi.fn().mockResolvedValue(null),
-        runMutation: vi.fn(),
-      };
-
-      const result = await enrichCheckout(mockCtx, mockComponent, {
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-      });
-
-      expect(result.client_reference_id).toBe("user_123");
-    });
-
-    it("uses referralId as client_reference_id when no user is authenticated", async () => {
-      const mockCtx = {
-        auth: {
-          getUserIdentity: vi.fn().mockResolvedValue(null),
-        },
-        runQuery: vi.fn().mockResolvedValue(null),
-        runMutation: vi.fn(),
-      };
-
-      const result = await enrichCheckout(mockCtx, mockComponent, {
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-        referralId: "ref_123",
-      });
-
-      expect(result.client_reference_id).toBe("ref_123");
-    });
-
-    it("adds affiliate_code to metadata when discount is found", async () => {
+    it("returns affiliate_code when user has a referral", async () => {
       const mockCtx = {
         auth: {
           getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
         },
         runQuery: vi.fn().mockResolvedValue({
-          affiliateCode: "CODE",
+          affiliateCode: "PARTNER",
+        }),
+        runMutation: vi.fn(),
+      };
+
+      const result = await getAffiliateMetadata(mockCtx, mockComponent);
+
+      expect(result).toEqual({ affiliate_code: "PARTNER" });
+      expect(mockCtx.runQuery).toHaveBeenCalledWith(
+        mockComponent.referrals.getRefereeDiscount,
+        { userId: "user_123" }
+      );
+    });
+
+    it("returns empty object when user has no referral", async () => {
+      const mockCtx = {
+        auth: {
+          getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+        },
+        runQuery: vi.fn().mockResolvedValue(null),
+        runMutation: vi.fn(),
+      };
+
+      const result = await getAffiliateMetadata(mockCtx, mockComponent);
+
+      expect(result).toEqual({});
+    });
+
+    it("returns empty object when referral has no affiliateCode", async () => {
+      const mockCtx = {
+        auth: {
+          getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+        },
+        runQuery: vi.fn().mockResolvedValue({
           discountType: "percentage",
           discountValue: 10,
         }),
         runMutation: vi.fn(),
       };
 
-      const result = await enrichCheckout(mockCtx, mockComponent, {
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-      });
+      const result = await getAffiliateMetadata(mockCtx, mockComponent);
 
-      expect(result.metadata.affiliate_code).toBe("CODE");
-    });
-
-    it("adds discounts when stripeCouponId is present", async () => {
-      const mockCtx = {
-        auth: {
-          getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
-        },
-        runQuery: vi.fn().mockResolvedValue({
-          affiliateCode: "CODE",
-          stripeCouponId: "coupon_123",
-          discountType: "percentage",
-          discountValue: 10,
-        }),
-        runMutation: vi.fn(),
-      };
-
-      const result = await enrichCheckout(mockCtx, mockComponent, {
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-      });
-
-      expect(result.discounts).toEqual([{ coupon: "coupon_123" }]);
-    });
-
-    it("adds affiliate_code to metadata even when no discount is found", async () => {
-      const mockCtx = {
-        auth: {
-          getUserIdentity: vi.fn().mockResolvedValue(null),
-        },
-        runQuery: vi.fn().mockResolvedValue(null),
-        runMutation: vi.fn(),
-      };
-
-      const result = await enrichCheckout(mockCtx, mockComponent, {
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-        affiliateCode: "CODE",
-      });
-
-      expect(result.metadata.affiliate_code).toBe("CODE");
-    });
-
-    it("preserves existing metadata", async () => {
-      const mockCtx = {
-        auth: {
-          getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
-        },
-        runQuery: vi.fn().mockResolvedValue({
-          affiliateCode: "CODE",
-        }),
-        runMutation: vi.fn(),
-      };
-
-      const result = await enrichCheckout(mockCtx, mockComponent, {
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-        metadata: { custom_field: "value" },
-      });
-
-      expect(result.metadata.custom_field).toBe("value");
-      expect(result.metadata.affiliate_code).toBe("CODE");
-    });
-
-    it("does not include referralId and affiliateCode in output params", async () => {
-      const mockCtx = {
-        auth: {
-          getUserIdentity: vi.fn().mockResolvedValue(null),
-        },
-        runQuery: vi.fn().mockResolvedValue(null),
-        runMutation: vi.fn(),
-      };
-
-      const result = await enrichCheckout(mockCtx, mockComponent, {
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-        referralId: "ref_123",
-        affiliateCode: "CODE",
-      });
-
-      // These should be processed but not in the output
-      expect((result as Record<string, unknown>).referralId).toBeUndefined();
-      // affiliateCode should be in metadata, not as a top-level param
-      expect(result.metadata.affiliate_code).toBe("CODE");
+      expect(result).toEqual({});
     });
 
     it("handles query errors gracefully", async () => {
@@ -416,167 +321,9 @@ describe("Stripe Plugin", () => {
       };
 
       // Should not throw
-      const result = await enrichCheckout(mockCtx, mockComponent, {
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-        affiliateCode: "CODE",
-      });
+      const result = await getAffiliateMetadata(mockCtx, mockComponent);
 
-      // Should still set client_reference_id
-      expect(result.client_reference_id).toBe("user_123");
-      // Should still add affiliate code from params
-      expect(result.metadata.affiliate_code).toBe("CODE");
-    });
-  });
-
-  describe("AffiliateStripe", () => {
-    const mockStripeInstance = {
-      createCheckoutSession: vi.fn(),
-      someOtherMethod: vi.fn(),
-    };
-
-    const mockAffiliatesComponent = {
-      commissions: {
-        createFromInvoice: "commissions.createFromInvoice",
-        reverseByCharge: "commissions.reverseByCharge",
-      },
-      referrals: {
-        linkStripeCustomer: "referrals.linkStripeCustomer",
-        getByUserId: "referrals.getByUserId",
-        getRefereeDiscount: "referrals.getRefereeDiscount",
-      },
-    };
-
-    it("creates instance with stripe and affiliates component", () => {
-      const affiliateStripe = new AffiliateStripe(
-        mockStripeInstance,
-        mockAffiliatesComponent
-      );
-
-      expect(affiliateStripe).toBeDefined();
-      expect(affiliateStripe.stripe).toBe(mockStripeInstance);
-    });
-
-    it("exposes underlying stripe instance via getter", () => {
-      const affiliateStripe = new AffiliateStripe(
-        mockStripeInstance,
-        mockAffiliatesComponent
-      );
-
-      expect(affiliateStripe.stripe).toBe(mockStripeInstance);
-      expect(affiliateStripe.stripe.someOtherMethod).toBe(mockStripeInstance.someOtherMethod);
-    });
-
-    it("getRouteOptions returns options with affiliate event handlers", () => {
-      const affiliateStripe = new AffiliateStripe(
-        mockStripeInstance,
-        mockAffiliatesComponent
-      );
-
-      const options = affiliateStripe.getRouteOptions();
-
-      expect(options.events).toBeDefined();
-      expect(options.events!["invoice.paid"]).toBeDefined();
-      expect(options.events!["charge.refunded"]).toBeDefined();
-      expect(options.events!["checkout.session.completed"]).toBeDefined();
-    });
-
-    it("getRouteOptions merges additional options", () => {
-      const affiliateStripe = new AffiliateStripe(
-        mockStripeInstance,
-        mockAffiliatesComponent
-      );
-
-      const customHandler = vi.fn();
-      const options = affiliateStripe.getRouteOptions({
-        events: {
-          "custom.event": customHandler,
-        },
-        customOption: "value",
-      });
-
-      expect(options.events!["custom.event"]).toBe(customHandler);
-      expect(options.customOption).toBe("value");
-      // Affiliate events still present
-      expect(options.events!["invoice.paid"]).toBeDefined();
-    });
-
-    it("getRouteOptions includes callbacks from constructor", () => {
-      const onCommissionCreated = vi.fn();
-      const affiliateStripe = new AffiliateStripe(
-        mockStripeInstance,
-        mockAffiliatesComponent,
-        { onCommissionCreated }
-      );
-
-      const options = affiliateStripe.getRouteOptions();
-
-      // The callback is wired internally - test by triggering the handler
-      expect(options.events!["invoice.paid"]).toBeDefined();
-    });
-
-    it("createCheckoutSession enriches params with affiliate data", async () => {
-      const affiliateStripe = new AffiliateStripe(
-        mockStripeInstance,
-        mockAffiliatesComponent
-      );
-
-      const mockCtx = {
-        auth: {
-          getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
-        },
-        runQuery: vi.fn().mockResolvedValue({
-          affiliateCode: "PARTNER",
-          stripeCouponId: "coupon_abc",
-        }),
-        runMutation: vi.fn(),
-      };
-
-      const result = await affiliateStripe.createCheckoutSession(mockCtx, {
-        priceId: "price_123",
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-      });
-
-      expect(result.client_reference_id).toBe("user_123");
-      expect(result.metadata.affiliate_code).toBe("PARTNER");
-      expect(result.discounts).toEqual([{ coupon: "coupon_abc" }]);
-    });
-  });
-
-  describe("createAffiliateStripe", () => {
-    const mockStripeInstance = { test: true };
-    const mockAffiliatesComponent = {
-      commissions: {
-        createFromInvoice: "commissions.createFromInvoice",
-        reverseByCharge: "commissions.reverseByCharge",
-      },
-      referrals: {
-        linkStripeCustomer: "referrals.linkStripeCustomer",
-        getByUserId: "referrals.getByUserId",
-        getRefereeDiscount: "referrals.getRefereeDiscount",
-      },
-    };
-
-    it("creates AffiliateStripe instance", () => {
-      const result = createAffiliateStripe(
-        mockStripeInstance,
-        mockAffiliatesComponent
-      );
-
-      expect(result).toBeInstanceOf(AffiliateStripe);
-      expect(result.stripe).toBe(mockStripeInstance);
-    });
-
-    it("passes options to AffiliateStripe", () => {
-      const onCommissionCreated = vi.fn();
-      const result = createAffiliateStripe(
-        mockStripeInstance,
-        mockAffiliatesComponent,
-        { onCommissionCreated }
-      );
-
-      expect(result).toBeInstanceOf(AffiliateStripe);
+      expect(result).toEqual({});
     });
   });
 });

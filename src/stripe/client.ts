@@ -1,25 +1,34 @@
 /**
  * Stripe Client Utilities for Convex Affiliates
  *
- * Helpers for client-side Stripe integrations. Use these when you need
- * to enrich Stripe checkout on the client side (e.g., with Stripe.js).
+ * These utilities are for client-side referral tracking WITHOUT Better Auth.
  *
- * For most use cases, prefer the server-side `enrichCheckout` function
- * which automatically gets the user's referral from auth context.
+ * ## If you're using Better Auth:
+ * You DON'T need these utilities. Better Auth's affiliate plugin automatically:
+ * - Stores referral data when user visits with `?ref=CODE`
+ * - Links the referral to the user on signup
+ * - The server-side `getAffiliateMetadata()` handles checkout
+ *
+ * ## If you're NOT using Better Auth:
+ * Use these utilities to manually track referrals on the client side.
  *
  * @example
  * ```typescript
- * // For client-side Stripe checkout (Stripe.js)
- * import { getStoredReferral, enrichClientCheckout } from "convex-affiliates/stripe/client";
+ * // Without Better Auth - manual tracking
+ * import { storeReferral, getStoredReferral } from "convex-affiliates/stripe/client";
  *
- * // Get referral from storage (set by Better Auth client plugin)
+ * // On page load with ?ref=CODE
+ * const params = new URLSearchParams(location.search);
+ * const code = params.get("ref");
+ * if (code) {
+ *   storeReferral({ affiliateCode: code });
+ * }
+ *
+ * // On checkout - pass the code to your backend
  * const referral = getStoredReferral();
- *
- * // Or enrich checkout params directly
- * const params = enrichClientCheckout({
+ * await createCheckout({
  *   priceId: "price_xxx",
- *   successUrl: "/success",
- *   cancelUrl: "/cancel",
+ *   affiliateCode: referral?.affiliateCode,
  * });
  * ```
  *
@@ -31,7 +40,7 @@
 // =============================================================================
 
 /**
- * Stored referral data (compatible with Better Auth client plugin)
+ * Stored referral data
  */
 export interface StoredReferral {
   referralId?: string;
@@ -69,16 +78,6 @@ export interface StorageConfig {
   affiliateCodeCookieName?: string;
 }
 
-/**
- * Checkout params for client-side enrichment
- */
-export interface ClientCheckoutParams {
-  successUrl: string;
-  cancelUrl: string;
-  metadata?: Record<string, string>;
-  [key: string]: unknown;
-}
-
 // =============================================================================
 // Storage Access
 // =============================================================================
@@ -92,8 +91,6 @@ const DEFAULT_CONFIG: Required<StorageConfig> = {
 
 /**
  * Get stored referral data from localStorage and cookies.
- *
- * Compatible with the Better Auth client plugin storage format.
  *
  * @param config - Optional storage configuration
  * @returns Stored referral or null if not found
@@ -161,6 +158,9 @@ export function hasStoredReferral(config: StorageConfig = {}): boolean {
 
 /**
  * Store referral data manually.
+ *
+ * Note: If using Better Auth, you don't need this - the affiliate
+ * client plugin handles storage automatically.
  *
  * @param data - Referral data to store
  * @param config - Optional storage configuration
@@ -246,76 +246,6 @@ export function clearStoredReferral(config: StorageConfig = {}): void {
   document.cookie = `${opts.referralIdCookieName}=; path=/; max-age=0`;
   document.cookie = `${opts.affiliateCodeCookieName}=; path=/; max-age=0`;
   document.cookie = `affiliate_sub_id=; path=/; max-age=0`;
-}
-
-// =============================================================================
-// Checkout Enrichment
-// =============================================================================
-
-/**
- * Enrich checkout params with stored affiliate data (client-side).
- *
- * Use this for client-side Stripe integrations where you can't use
- * the server-side `enrichCheckout` function.
- *
- * Note: This only adds data from localStorage/cookies. For full
- * attribution including discount coupons, use server-side enrichment.
- *
- * @param params - Base checkout params
- * @param options - Optional configuration
- * @returns Enriched params with affiliate metadata
- *
- * @example
- * ```typescript
- * // With Stripe.js redirectToCheckout
- * import { loadStripe } from "@stripe/stripe-js";
- * import { enrichClientCheckout } from "convex-affiliates/stripe/client";
- *
- * const stripe = await loadStripe("pk_xxx");
- *
- * const params = enrichClientCheckout({
- *   successUrl: window.location.origin + "/success",
- *   cancelUrl: window.location.origin + "/cancel",
- * });
- *
- * // Pass metadata to your backend for checkout session creation
- * const response = await fetch("/api/checkout", {
- *   method: "POST",
- *   body: JSON.stringify({
- *     priceId: "price_xxx",
- *     metadata: params.metadata,
- *     clientReferenceId: params.client_reference_id,
- *   }),
- * });
- * ```
- */
-export function enrichClientCheckout<T extends ClientCheckoutParams>(
-  params: T,
-  options: { userId?: string; config?: StorageConfig } = {}
-): T & { client_reference_id?: string; metadata: Record<string, string> } {
-  const referral = getStoredReferral(options.config);
-
-  const enriched = {
-    ...params,
-    metadata: { ...(params.metadata ?? {}) },
-  } as T & { client_reference_id?: string; metadata: Record<string, string> };
-
-  // Add client_reference_id if userId provided
-  if (options.userId) {
-    enriched.client_reference_id = options.userId;
-  }
-
-  // Add affiliate data from storage
-  if (referral?.affiliateCode) {
-    enriched.metadata.affiliate_code = referral.affiliateCode;
-  }
-
-  if (referral?.referralId && !enriched.client_reference_id) {
-    // Use referralId as client_reference_id if no userId
-    enriched.client_reference_id = referral.referralId;
-  }
-
-  return enriched;
 }
 
 // =============================================================================

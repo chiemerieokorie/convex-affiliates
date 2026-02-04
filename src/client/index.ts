@@ -1611,16 +1611,12 @@ export {
 
 export {
   withAffiliates,
-  enrichCheckout,
-  AffiliateStripe,
-  createAffiliateStripe,
+  getAffiliateMetadata,
 } from "../stripe/index.js";
 
 export type {
   WithAffiliatesOptions,
-  CheckoutParams,
-  EnrichedCheckoutParams,
-  AffiliateStripeOptions,
+  AffiliateMetadata,
   CommissionCreatedData as StripeCommissionCreatedData,
   CommissionReversedData as StripeCommissionReversedData,
   CustomerLinkedData,

@@ -4,7 +4,6 @@ import {
   hasStoredReferral,
   storeReferral,
   clearStoredReferral,
-  enrichClientCheckout,
 } from "./client";
 
 // Mock browser globals manually for cross-environment compatibility
@@ -310,102 +309,6 @@ describe("Stripe Client Utilities", () => {
     });
   });
 
-  describe("enrichClientCheckout", () => {
-    it("returns base params when no referral is stored", () => {
-      const result = enrichClientCheckout({
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-      });
-
-      expect(result.successUrl).toBe("/success");
-      expect(result.cancelUrl).toBe("/cancel");
-      expect(result.metadata).toEqual({});
-      expect(result.client_reference_id).toBeUndefined();
-    });
-
-    it("adds affiliate_code to metadata from storage", () => {
-      mockLocalStorage._store["affiliate_code"] = "PARTNER20";
-
-      const result = enrichClientCheckout({
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-      });
-
-      expect(result.metadata.affiliate_code).toBe("PARTNER20");
-    });
-
-    it("adds referralId as client_reference_id when no userId", () => {
-      mockLocalStorage._store["affiliate_referral_id"] = "ref_123";
-
-      const result = enrichClientCheckout({
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-      });
-
-      expect(result.client_reference_id).toBe("ref_123");
-    });
-
-    it("uses userId as client_reference_id when provided", () => {
-      mockLocalStorage._store["affiliate_referral_id"] = "ref_123";
-
-      const result = enrichClientCheckout(
-        { successUrl: "/success", cancelUrl: "/cancel" },
-        { userId: "user_456" }
-      );
-
-      expect(result.client_reference_id).toBe("user_456");
-    });
-
-    it("preserves existing metadata", () => {
-      mockLocalStorage._store["affiliate_code"] = "CODE";
-
-      const result = enrichClientCheckout({
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-        metadata: { custom_field: "value" },
-      });
-
-      expect(result.metadata.custom_field).toBe("value");
-      expect(result.metadata.affiliate_code).toBe("CODE");
-    });
-
-    it("preserves additional params", () => {
-      const result = enrichClientCheckout({
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-        priceId: "price_123",
-        quantity: 2,
-      });
-
-      expect(result.priceId).toBe("price_123");
-      expect(result.quantity).toBe(2);
-    });
-
-    it("uses custom storage config", () => {
-      mockLocalStorage._store["my_affiliate_code"] = "CUSTOM_CODE";
-
-      const result = enrichClientCheckout(
-        { successUrl: "/success", cancelUrl: "/cancel" },
-        { config: { affiliateCodeKey: "my_affiliate_code" } }
-      );
-
-      expect(result.metadata.affiliate_code).toBe("CUSTOM_CODE");
-    });
-
-    it("handles both affiliateCode and referralId", () => {
-      mockLocalStorage._store["affiliate_code"] = "PARTNER";
-      mockLocalStorage._store["affiliate_referral_id"] = "ref_789";
-
-      const result = enrichClientCheckout({
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-      });
-
-      expect(result.metadata.affiliate_code).toBe("PARTNER");
-      expect(result.client_reference_id).toBe("ref_789");
-    });
-  });
-
   describe("SSR handling", () => {
     it("getStoredReferral returns null when window is undefined", () => {
       delete (globalThis as any).window;
@@ -429,17 +332,10 @@ describe("Stripe Client Utilities", () => {
       expect(() => clearStoredReferral()).not.toThrow();
     });
 
-    it("enrichClientCheckout works when window is undefined", () => {
+    it("hasStoredReferral returns false when window is undefined", () => {
       delete (globalThis as any).window;
 
-      const result = enrichClientCheckout({
-        successUrl: "/success",
-        cancelUrl: "/cancel",
-      });
-
-      // Should return base params without affiliate data
-      expect(result.successUrl).toBe("/success");
-      expect(result.metadata).toEqual({});
+      expect(hasStoredReferral()).toBe(false);
     });
   });
 });

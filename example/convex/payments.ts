@@ -7,17 +7,20 @@
 
 import { action } from "./_generated/server.js";
 import { v } from "convex/values";
-import { stripe } from "./stripe.js";
+import { components } from "./_generated/api.js";
+import { getAffiliateMetadata } from "convex-affiliates/stripe";
+
+// Note: In a real app, you would import and instantiate the Stripe component:
+// import StripeSubscriptions from "@convex-dev/stripe";
+// const stripe = new StripeSubscriptions(components.stripe);
 
 /**
  * Create a Stripe checkout session with automatic affiliate data.
  *
- * The AffiliateStripe wrapper automatically:
+ * The getAffiliateMetadata function:
  * - Gets the user ID from auth context
- * - Looks up the user's referral and campaign
- * - Adds client_reference_id for webhook attribution
- * - Adds affiliate_code to metadata
- * - Applies discount coupon if the campaign has one configured
+ * - Looks up the user's referral
+ * - Returns { affiliate_code: string } if user was referred
  *
  * @example
  * ```tsx
@@ -25,8 +28,8 @@ import { stripe } from "./stripe.js";
  * const createCheckout = useAction(api.payments.createCheckout);
  *
  * const handleSubscribe = async () => {
- *   const url = await createCheckout({ priceId: "price_xxx" });
- *   if (url) window.location.href = url;
+ *   const result = await createCheckout({ priceId: "price_xxx" });
+ *   if (result.url) window.location.href = result.url;
  * };
  * ```
  */
@@ -35,85 +38,71 @@ export const createCheckout = action({
     priceId: v.string(),
   },
   handler: async (ctx, { priceId }) => {
-    // Get enriched checkout params with affiliate data
-    const params = await stripe.createCheckoutSession(ctx, {
-      priceId,
-      successUrl: `${process.env.BASE_URL ?? "http://localhost:5173"}/success`,
-      cancelUrl: `${process.env.BASE_URL ?? "http://localhost:5173"}/cancel`,
-    });
+    // Get affiliate metadata for the current user
+    const affiliateData = await getAffiliateMetadata(ctx, components.affiliates);
 
-    // In a real app, you would create the Stripe session:
+    // In a real app, you would use @convex-dev/stripe:
     //
-    // import Stripe from "stripe";
-    // const stripeSDK = new Stripe(process.env.STRIPE_SECRET_KEY!);
-    //
-    // const session = await stripeSDK.checkout.sessions.create({
+    // return stripe.createCheckoutSession(ctx, {
+    //   priceId,
     //   mode: "subscription",
-    //   line_items: [{ price: params.priceId, quantity: 1 }],
-    //   success_url: params.successUrl,
-    //   cancel_url: params.cancelUrl,
-    //   client_reference_id: params.client_reference_id,
-    //   metadata: params.metadata,
-    //   discounts: params.discounts,
+    //   successUrl: `${process.env.BASE_URL}/success`,
+    //   cancelUrl: `${process.env.BASE_URL}/cancel`,
+    //   metadata: affiliateData, // { affiliate_code?: string }
     // });
-    //
-    // return session.url;
 
-    // For this example, we just return the enriched params
-    console.log("[Payments] Checkout params:", {
-      priceId: params.priceId,
-      client_reference_id: params.client_reference_id,
-      metadata: params.metadata,
-      discounts: params.discounts,
+    // For this example, we just log and return mock data
+    console.log("[Payments] Checkout with affiliate data:", {
+      priceId,
+      affiliateData,
     });
 
-    return `https://checkout.stripe.com/example?price=${priceId}`;
+    return {
+      sessionId: "cs_test_example",
+      url: `https://checkout.stripe.com/example?price=${priceId}`,
+    };
   },
 });
 
 /**
- * Create a checkout session with manual affiliate code.
+ * Create a checkout with additional metadata.
  *
- * Use this when you need to pass affiliate data from the client
- * (e.g., for guest checkout without auth context).
- *
- * @example
- * ```tsx
- * // Get stored referral from client
- * import { getStoredReferral } from "convex-affiliates/stripe/client";
- *
- * const referral = getStoredReferral();
- * const url = await createCheckoutWithReferral({
- *   priceId: "price_xxx",
- *   affiliateCode: referral?.affiliateCode,
- *   referralId: referral?.referralId,
- * });
- * ```
+ * Shows how to merge affiliate data with other checkout metadata.
  */
-export const createCheckoutWithReferral = action({
+export const createCheckoutWithMetadata = action({
   args: {
     priceId: v.string(),
-    affiliateCode: v.optional(v.string()),
-    referralId: v.optional(v.string()),
+    plan: v.string(),
   },
-  handler: async (ctx, { priceId, affiliateCode, referralId }) => {
-    // Pass affiliate data explicitly
-    const params = await stripe.createCheckoutSession(ctx, {
+  handler: async (ctx, { priceId, plan }) => {
+    // Get affiliate metadata for the current user
+    const affiliateData = await getAffiliateMetadata(ctx, components.affiliates);
+
+    // Merge with your own metadata
+    const metadata = {
+      ...affiliateData,
+      plan,
+      source: "pricing-page",
+    };
+
+    // In a real app:
+    //
+    // return stripe.createCheckoutSession(ctx, {
+    //   priceId,
+    //   mode: "subscription",
+    //   successUrl: `${process.env.BASE_URL}/success`,
+    //   cancelUrl: `${process.env.BASE_URL}/cancel`,
+    //   metadata,
+    // });
+
+    console.log("[Payments] Checkout with merged metadata:", {
       priceId,
-      successUrl: `${process.env.BASE_URL ?? "http://localhost:5173"}/success`,
-      cancelUrl: `${process.env.BASE_URL ?? "http://localhost:5173"}/cancel`,
-      // These are used when there's no auth context or for fallback
-      affiliateCode,
-      referralId,
+      metadata,
     });
 
-    console.log("[Payments] Checkout with referral:", {
-      priceId: params.priceId,
-      client_reference_id: params.client_reference_id,
-      metadata: params.metadata,
-      discounts: params.discounts,
-    });
-
-    return `https://checkout.stripe.com/example?price=${priceId}`;
+    return {
+      sessionId: "cs_test_example",
+      url: `https://checkout.stripe.com/example?price=${priceId}`,
+    };
   },
 });
