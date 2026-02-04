@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { withAffiliates, enrichCheckout } from "./index";
+import { withAffiliates, enrichCheckout, AffiliateStripe, createAffiliateStripe } from "./index";
 
 describe("Stripe Plugin", () => {
   describe("withAffiliates", () => {
@@ -426,6 +426,157 @@ describe("Stripe Plugin", () => {
       expect(result.client_reference_id).toBe("user_123");
       // Should still add affiliate code from params
       expect(result.metadata.affiliate_code).toBe("CODE");
+    });
+  });
+
+  describe("AffiliateStripe", () => {
+    const mockStripeInstance = {
+      createCheckoutSession: vi.fn(),
+      someOtherMethod: vi.fn(),
+    };
+
+    const mockAffiliatesComponent = {
+      commissions: {
+        createFromInvoice: "commissions.createFromInvoice",
+        reverseByCharge: "commissions.reverseByCharge",
+      },
+      referrals: {
+        linkStripeCustomer: "referrals.linkStripeCustomer",
+        getByUserId: "referrals.getByUserId",
+        getRefereeDiscount: "referrals.getRefereeDiscount",
+      },
+    };
+
+    it("creates instance with stripe and affiliates component", () => {
+      const affiliateStripe = new AffiliateStripe(
+        mockStripeInstance,
+        mockAffiliatesComponent
+      );
+
+      expect(affiliateStripe).toBeDefined();
+      expect(affiliateStripe.stripe).toBe(mockStripeInstance);
+    });
+
+    it("exposes underlying stripe instance via getter", () => {
+      const affiliateStripe = new AffiliateStripe(
+        mockStripeInstance,
+        mockAffiliatesComponent
+      );
+
+      expect(affiliateStripe.stripe).toBe(mockStripeInstance);
+      expect(affiliateStripe.stripe.someOtherMethod).toBe(mockStripeInstance.someOtherMethod);
+    });
+
+    it("getRouteOptions returns options with affiliate event handlers", () => {
+      const affiliateStripe = new AffiliateStripe(
+        mockStripeInstance,
+        mockAffiliatesComponent
+      );
+
+      const options = affiliateStripe.getRouteOptions();
+
+      expect(options.events).toBeDefined();
+      expect(options.events!["invoice.paid"]).toBeDefined();
+      expect(options.events!["charge.refunded"]).toBeDefined();
+      expect(options.events!["checkout.session.completed"]).toBeDefined();
+    });
+
+    it("getRouteOptions merges additional options", () => {
+      const affiliateStripe = new AffiliateStripe(
+        mockStripeInstance,
+        mockAffiliatesComponent
+      );
+
+      const customHandler = vi.fn();
+      const options = affiliateStripe.getRouteOptions({
+        events: {
+          "custom.event": customHandler,
+        },
+        customOption: "value",
+      });
+
+      expect(options.events!["custom.event"]).toBe(customHandler);
+      expect(options.customOption).toBe("value");
+      // Affiliate events still present
+      expect(options.events!["invoice.paid"]).toBeDefined();
+    });
+
+    it("getRouteOptions includes callbacks from constructor", () => {
+      const onCommissionCreated = vi.fn();
+      const affiliateStripe = new AffiliateStripe(
+        mockStripeInstance,
+        mockAffiliatesComponent,
+        { onCommissionCreated }
+      );
+
+      const options = affiliateStripe.getRouteOptions();
+
+      // The callback is wired internally - test by triggering the handler
+      expect(options.events!["invoice.paid"]).toBeDefined();
+    });
+
+    it("createCheckoutSession enriches params with affiliate data", async () => {
+      const affiliateStripe = new AffiliateStripe(
+        mockStripeInstance,
+        mockAffiliatesComponent
+      );
+
+      const mockCtx = {
+        auth: {
+          getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+        },
+        runQuery: vi.fn().mockResolvedValue({
+          affiliateCode: "PARTNER",
+          stripeCouponId: "coupon_abc",
+        }),
+        runMutation: vi.fn(),
+      };
+
+      const result = await affiliateStripe.createCheckoutSession(mockCtx, {
+        priceId: "price_123",
+        successUrl: "/success",
+        cancelUrl: "/cancel",
+      });
+
+      expect(result.client_reference_id).toBe("user_123");
+      expect(result.metadata.affiliate_code).toBe("PARTNER");
+      expect(result.discounts).toEqual([{ coupon: "coupon_abc" }]);
+    });
+  });
+
+  describe("createAffiliateStripe", () => {
+    const mockStripeInstance = { test: true };
+    const mockAffiliatesComponent = {
+      commissions: {
+        createFromInvoice: "commissions.createFromInvoice",
+        reverseByCharge: "commissions.reverseByCharge",
+      },
+      referrals: {
+        linkStripeCustomer: "referrals.linkStripeCustomer",
+        getByUserId: "referrals.getByUserId",
+        getRefereeDiscount: "referrals.getRefereeDiscount",
+      },
+    };
+
+    it("creates AffiliateStripe instance", () => {
+      const result = createAffiliateStripe(
+        mockStripeInstance,
+        mockAffiliatesComponent
+      );
+
+      expect(result).toBeInstanceOf(AffiliateStripe);
+      expect(result.stripe).toBe(mockStripeInstance);
+    });
+
+    it("passes options to AffiliateStripe", () => {
+      const onCommissionCreated = vi.fn();
+      const result = createAffiliateStripe(
+        mockStripeInstance,
+        mockAffiliatesComponent,
+        { onCommissionCreated }
+      );
+
+      expect(result).toBeInstanceOf(AffiliateStripe);
     });
   });
 });
