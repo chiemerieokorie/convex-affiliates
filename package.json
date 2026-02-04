@@ -61,6 +61,14 @@
       "types": "./dist/react/index.d.ts",
       "default": "./dist/react/index.js"
     },
+    "./better-auth": {
+      "types": "./dist/better-auth/index.d.ts",
+      "default": "./dist/better-auth/index.js"
+    },
+    "./better-auth/client": {
+      "types": "./dist/better-auth/client.d.ts",
+      "default": "./dist/better-auth/client.js"
+    },
     "./test": "./src/test.ts",
     "./_generated/component.js": {
       "types": "./dist/component/_generated/component.d.ts"
@@ -79,11 +87,15 @@
   },
   "peerDependencies": {
     "@convex-dev/stripe": ">=0.1.0",
+    "better-auth": ">=1.0.0",
     "convex": "^1.31.6",
     "react": "^18.3.1 || ^19.0.0"
   },
   "peerDependenciesMeta": {
     "@convex-dev/stripe": {
+      "optional": true
+    },
+    "better-auth": {
       "optional": true
     }
   },
@@ -99,6 +111,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "better-auth": "^1.4.18",
     "chokidar-cli": "3.0.0",
     "conventional-changelog-conventionalcommits": "^8.0.0",
     "convex": "1.31.6",

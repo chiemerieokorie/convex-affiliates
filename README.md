@@ -206,9 +206,9 @@ function ReferralTracker() {
 }
 ```
 
-### Attribution (Better Auth Integration)
+### Attribution (Manual Integration)
 
-Attribute signups to affiliates after user registration. In your Better Auth hook or signup handler:
+Attribute signups to affiliates after user registration. In your auth hook or signup handler:
 
 ```typescript
 // convex/users.ts
@@ -228,6 +228,117 @@ export const onUserCreated = internalMutation({
     }
   },
 });
+```
+
+## Better Auth Plugin
+
+For projects using [Better Auth](https://better-auth.com), we provide dedicated plugins that handle referral tracking and attribution automatically.
+
+### Quick Start
+
+```typescript
+// Server: convex/auth.ts
+import { affiliatePlugin } from "convex-affiliates/better-auth";
+import { components } from "./_generated/api";
+
+export const createAuth = (ctx) => {
+  return betterAuth({
+    database: authComponent.adapter(ctx),
+    plugins: [
+      affiliatePlugin(ctx, components.affiliates),
+    ],
+  });
+};
+
+// Client: lib/auth-client.ts
+import { affiliateClientPlugin } from "convex-affiliates/better-auth/client";
+
+export const authClient = createAuthClient({
+  plugins: [
+    affiliateClientPlugin(),
+  ],
+});
+```
+
+That's it! The plugins handle everything automatically.
+
+### How It Works
+
+1. **Visitor arrives** with `?ref=CODE` in the URL
+2. **Client plugin** detects the code and stores it (localStorage + cookie)
+3. **User signs up** via Better Auth
+4. **Client plugin** injects `referralId` and `referralCode` into signup request
+5. **Server plugin** reads referral data and calls component's `attributeSignup`
+6. **Referral is linked** to the new user automatically
+
+### Server Plugin Options
+
+```typescript
+affiliatePlugin(ctx, components.affiliates, {
+  // Custom field names (optional)
+  fieldNames: {
+    referralId: "referralId",
+    referralCode: "referralCode",
+  },
+
+  // Cookie names for SSR support (optional)
+  cookieName: "affiliate_code",
+  referralIdCookieName: "affiliate_referral_id",
+
+  // Callbacks (optional)
+  onAttributionSuccess: async ({ userId, affiliateCode }) => {
+    console.log(`Attributed ${userId} to ${affiliateCode}`);
+  },
+  onAttributionFailure: async ({ userId, reason }) => {
+    console.log(`Attribution failed: ${reason}`);
+  },
+});
+```
+
+### Client Plugin Options
+
+```typescript
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../convex/_generated/api";
+
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+affiliateClientPlugin({
+  // All options have sensible defaults
+  storage: "both",           // "localStorage" | "cookie" | "both"
+  cookieDurationDays: 30,
+  paramName: "ref",          // URL param: ?ref=CODE
+  subIdParamName: "sub",     // URL param: ?sub=campaign-1
+  autoTrack: true,           // Auto-detect from URL
+  clearOnSignup: true,       // Clear after successful signup
+
+  // Automatic click tracking (recommended)
+  // Tracks clicks when a referral is detected from URL
+  trackClick: (args) => convex.mutation(api.affiliates.trackClick, args),
+});
+```
+
+The `trackClick` option automatically tracks referral clicks when detected from URL parameters. The mutation receives:
+- `affiliateCode`: The affiliate code from the URL
+- `landingPage`: The full URL where the visitor landed
+- `subId`: Optional sub-tracking ID (if `?sub=...` is present)
+
+### Client Plugin Actions
+
+```typescript
+// Get stored referral
+const referral = authClient.affiliate.getStoredReferral();
+
+// Check if referred
+if (authClient.affiliate.hasReferral()) {
+  // Show "Referred by partner" badge
+}
+
+// Manual tracking
+await authClient.affiliate.trackReferral("PARTNER20");
+
+// Clear referral data
+authClient.affiliate.clearReferral();
 ```
 
 ### Stripe Webhook Integration
