@@ -4,52 +4,66 @@
  * Automatically tracks affiliate commissions from Stripe payments.
  * Works with @convex-dev/stripe component.
  *
- * ## Quick Start
+ * ## Quick Start (Recommended)
  *
  * ```typescript
+ * // convex/stripe.ts
+ * import { Stripe } from "@convex-dev/stripe";
+ * import { AffiliateStripe } from "convex-affiliates/stripe";
+ * import { components } from "./_generated/api";
+ *
+ * // Wrap Stripe with affiliate tracking
+ * export const stripe = new AffiliateStripe(
+ *   new Stripe(components.stripe),
+ *   components.affiliates
+ * );
+ *
  * // convex/http.ts
  * import { httpRouter } from "convex/server";
  * import { registerRoutes } from "@convex-dev/stripe";
- * import { withAffiliates } from "convex-affiliates/stripe";
- * import { components } from "./_generated/api";
+ * import { stripe } from "./stripe";
  *
  * const http = httpRouter();
- *
- * // One line - that's it!
- * registerRoutes(http, components.stripe, withAffiliates(components.affiliates));
- *
+ * registerRoutes(http, components.stripe, stripe.getRouteOptions());
  * export default http;
- * ```
  *
- * ## With Custom Handlers
- *
- * ```typescript
- * registerRoutes(http, components.stripe, withAffiliates(components.affiliates, {
- *   events: {
- *     // Your handler runs AFTER affiliate logic
- *     "invoice.paid": async (ctx, event) => {
- *       await sendSlackNotification(event);
- *     },
- *   },
- * }));
- * ```
- *
- * ## Checkout with Affiliate Data
- *
- * ```typescript
- * // convex/payments.ts
- * import { enrichCheckout } from "convex-affiliates/stripe";
- *
+ * // convex/payments.ts - checkout is automatic
  * export const createCheckout = action(async (ctx, { priceId }) => {
- *   // Automatically adds affiliate data for logged-in user
- *   const params = await enrichCheckout(ctx, components.affiliates, {
+ *   const params = await stripe.createCheckoutSession(ctx, {
  *     priceId,
  *     successUrl: "/success",
  *     cancelUrl: "/cancel",
  *   });
- *
- *   return stripe.checkout.sessions.create(params);
+ *   // params has affiliate data, just pass to Stripe API
  * });
+ * ```
+ *
+ * ## Alternative: Direct withAffiliates
+ *
+ * ```typescript
+ * // convex/http.ts
+ * import { registerRoutes } from "@convex-dev/stripe";
+ * import { withAffiliates } from "convex-affiliates/stripe";
+ *
+ * registerRoutes(http, components.stripe, withAffiliates(components.affiliates));
+ * ```
+ *
+ * ## With Better Auth
+ *
+ * ```typescript
+ * // Server: convex/auth.ts
+ * import { affiliatePlugin } from "convex-affiliates/better-auth";
+ * betterAuth({ plugins: [affiliatePlugin(ctx, components.affiliates)] });
+ *
+ * // Client: lib/auth-client.ts
+ * import { affiliateClientPlugin } from "convex-affiliates/better-auth/client";
+ * createAuthClient({ plugins: [affiliateClientPlugin()] });
+ *
+ * // Stripe: convex/stripe.ts
+ * import { AffiliateStripe } from "convex-affiliates/stripe";
+ * export const stripe = new AffiliateStripe(new Stripe(components.stripe), components.affiliates);
+ *
+ * // Now: signup tracks affiliate, checkout includes affiliate data, webhooks create commissions
  * ```
  *
  * @module
@@ -467,3 +481,172 @@ async function safeCall<T>(fn: (data: T) => Promise<void>, data: T): Promise<voi
     console.error("[convex-affiliates] Callback error:", error);
   }
 }
+
+// =============================================================================
+// Stripe Instance Wrapper
+// =============================================================================
+
+/**
+ * Options for AffiliateStripe wrapper
+ */
+export interface AffiliateStripeOptions {
+  /**
+   * Called when a commission is created from a paid invoice.
+   */
+  onCommissionCreated?: (data: CommissionCreatedData) => Promise<void>;
+
+  /**
+   * Called when a commission is reversed (refund/chargeback).
+   */
+  onCommissionReversed?: (data: CommissionReversedData) => Promise<void>;
+
+  /**
+   * Called when a Stripe customer is linked to an affiliate.
+   */
+  onCustomerLinked?: (data: CustomerLinkedData) => Promise<void>;
+}
+
+/**
+ * Stripe component interface (from @convex-dev/stripe)
+ */
+interface StripeComponentApi {
+  createCheckoutSession?: unknown;
+  [key: string]: unknown;
+}
+
+/**
+ * Wrapped Stripe instance with automatic affiliate tracking.
+ *
+ * Wraps @convex-dev/stripe to automatically:
+ * - Handle webhooks for commission creation/reversal
+ * - Enrich checkout sessions with affiliate data
+ *
+ * @example
+ * ```typescript
+ * // convex/stripe.ts
+ * import { Stripe } from "@convex-dev/stripe";
+ * import { AffiliateStripe } from "convex-affiliates/stripe";
+ * import { components } from "./_generated/api";
+ *
+ * // Wrap the Stripe instance
+ * export const stripe = new AffiliateStripe(
+ *   new Stripe(components.stripe),
+ *   components.affiliates
+ * );
+ *
+ * // Use stripe.registerRoutes() - webhooks are automatic
+ * // Use stripe.createCheckoutSession() - affiliate data is automatic
+ * ```
+ */
+export class AffiliateStripe<T extends StripeComponentApi> {
+  private stripeInstance: T;
+  private affiliatesComponent: AffiliatesComponent;
+  private options: AffiliateStripeOptions;
+
+  constructor(
+    stripeInstance: T,
+    affiliatesComponent: AffiliatesComponent,
+    options: AffiliateStripeOptions = {}
+  ) {
+    this.stripeInstance = stripeInstance;
+    this.affiliatesComponent = affiliatesComponent;
+    this.options = options;
+  }
+
+  /**
+   * Get the underlying Stripe instance.
+   */
+  get stripe(): T {
+    return this.stripeInstance;
+  }
+
+  /**
+   * Get options for registerRoutes with affiliate handlers included.
+   *
+   * @param additionalOptions - Additional options to merge
+   * @returns Options object for registerRoutes
+   *
+   * @example
+   * ```typescript
+   * registerRoutes(http, components.stripe, stripe.getRouteOptions());
+   * ```
+   */
+  getRouteOptions(additionalOptions: StripeRegisterOptions = {}): StripeRegisterOptions {
+    return withAffiliates(this.affiliatesComponent, {
+      ...additionalOptions,
+      onCommissionCreated: this.options.onCommissionCreated,
+      onCommissionReversed: this.options.onCommissionReversed,
+      onCustomerLinked: this.options.onCustomerLinked,
+    });
+  }
+
+  /**
+   * Create a checkout session with automatic affiliate data.
+   *
+   * Gets the user from auth context and enriches the session with:
+   * - client_reference_id (userId for attribution)
+   * - metadata.affiliate_code
+   * - discounts[] (if campaign has coupon configured)
+   *
+   * @param ctx - Convex action context
+   * @param params - Checkout params
+   * @returns Enriched checkout params
+   *
+   * @example
+   * ```typescript
+   * export const createCheckout = action({
+   *   args: { priceId: v.string() },
+   *   handler: async (ctx, { priceId }) => {
+   *     const params = await stripe.createCheckoutSession(ctx, {
+   *       priceId,
+   *       successUrl: "/success",
+   *       cancelUrl: "/cancel",
+   *     });
+   *     // params is already enriched with affiliate data
+   *     return stripeApi.checkout.sessions.create(params);
+   *   },
+   * });
+   * ```
+   */
+  async createCheckoutSession(
+    ctx: ConvexActionCtx,
+    params: CheckoutParams
+  ): Promise<EnrichedCheckoutParams> {
+    return enrichCheckout(ctx, this.affiliatesComponent, params);
+  }
+}
+
+/**
+ * Create an AffiliateStripe instance.
+ *
+ * Factory function alternative to using `new AffiliateStripe()`.
+ *
+ * @param stripeInstance - The @convex-dev/stripe instance
+ * @param affiliatesComponent - The affiliates component
+ * @param options - Optional callbacks
+ * @returns Wrapped Stripe instance
+ *
+ * @example
+ * ```typescript
+ * import { Stripe } from "@convex-dev/stripe";
+ * import { createAffiliateStripe } from "convex-affiliates/stripe";
+ *
+ * export const stripe = createAffiliateStripe(
+ *   new Stripe(components.stripe),
+ *   components.affiliates,
+ *   {
+ *     onCommissionCreated: async (data) => {
+ *       console.log(`Commission: $${data.amountCents / 100}`);
+ *     },
+ *   }
+ * );
+ * ```
+ */
+export function createAffiliateStripe<T extends StripeComponentApi>(
+  stripeInstance: T,
+  affiliatesComponent: AffiliatesComponent,
+  options: AffiliateStripeOptions = {}
+): AffiliateStripe<T> {
+  return new AffiliateStripe(stripeInstance, affiliatesComponent, options);
+}
+

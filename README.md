@@ -345,7 +345,157 @@ authClient.affiliate.clearReferral();
 
 For projects using [@convex-dev/stripe](https://www.convex.dev/components/stripe), we provide a plugin that automatically handles affiliate tracking for payments.
 
-### Quick Start
+### Quick Start (Recommended)
+
+Wrap your Stripe instance with `AffiliateStripe` for automatic affiliate tracking:
+
+```typescript
+// convex/stripe.ts
+import { Stripe } from "@convex-dev/stripe";
+import { AffiliateStripe } from "convex-affiliates/stripe";
+import { components } from "./_generated/api";
+
+// Wrap Stripe with affiliate tracking - that's it!
+export const stripe = new AffiliateStripe(
+  new Stripe(components.stripe),
+  components.affiliates
+);
+```
+
+```typescript
+// convex/http.ts
+import { httpRouter } from "convex/server";
+import { registerRoutes } from "@convex-dev/stripe";
+import { stripe } from "./stripe";
+import { components } from "./_generated/api";
+
+const http = httpRouter();
+
+// Webhooks automatically handle commissions
+registerRoutes(http, components.stripe, stripe.getRouteOptions());
+
+export default http;
+```
+
+```typescript
+// convex/payments.ts
+import { action } from "./_generated/server";
+import { v } from "convex/values";
+import { stripe } from "./stripe";
+import StripeSDK from "stripe";
+
+const stripeSDK = new StripeSDK(process.env.STRIPE_SECRET_KEY!);
+
+export const createCheckout = action({
+  args: { priceId: v.string() },
+  handler: async (ctx, { priceId }) => {
+    // Automatically enriched with affiliate data
+    const params = await stripe.createCheckoutSession(ctx, {
+      priceId,
+      successUrl: `${process.env.SITE_URL}/success`,
+      cancelUrl: `${process.env.SITE_URL}/cancel`,
+    });
+
+    const session = await stripeSDK.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: params.priceId, quantity: 1 }],
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      client_reference_id: params.client_reference_id,
+      metadata: params.metadata,
+      discounts: params.discounts,
+    });
+
+    return session.url;
+  },
+});
+```
+
+The plugin automatically handles:
+- `invoice.paid` → Creates commission for the affiliate
+- `charge.refunded` → Reverses commission on refund
+- `checkout.session.completed` → Links Stripe customer to affiliate
+
+### Complete: Better Auth + Stripe
+
+For the full affiliate flow (signup attribution + payment tracking), combine the Better Auth and Stripe plugins:
+
+```typescript
+// convex/auth.ts - Better Auth with affiliate plugin
+import { betterAuth } from "better-auth";
+import { affiliatePlugin } from "convex-affiliates/better-auth";
+import { components } from "./_generated/api";
+
+export const createAuth = (ctx) => {
+  return betterAuth({
+    database: authComponent.adapter(ctx),
+    plugins: [
+      affiliatePlugin(ctx, components.affiliates),
+    ],
+  });
+};
+```
+
+```typescript
+// lib/auth-client.ts - Client with referral tracking
+import { createAuthClient } from "better-auth/client";
+import { affiliateClientPlugin } from "convex-affiliates/better-auth/client";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../convex/_generated/api";
+
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+export const authClient = createAuthClient({
+  plugins: [
+    affiliateClientPlugin({
+      // Track clicks when ?ref=CODE is detected
+      trackClick: (args) => convex.mutation(api.affiliates.trackClick, args),
+    }),
+  ],
+});
+```
+
+```typescript
+// convex/stripe.ts - Stripe with affiliate tracking
+import { Stripe } from "@convex-dev/stripe";
+import { AffiliateStripe } from "convex-affiliates/stripe";
+import { components } from "./_generated/api";
+
+export const stripe = new AffiliateStripe(
+  new Stripe(components.stripe),
+  components.affiliates,
+  {
+    // Optional: get notified when commissions are created
+    onCommissionCreated: async (data) => {
+      console.log(`Commission created: $${data.amountCents / 100} for ${data.affiliateCode}`);
+    },
+  }
+);
+```
+
+```typescript
+// convex/http.ts - Wire it all together
+import { httpRouter } from "convex/server";
+import { registerRoutes } from "@convex-dev/stripe";
+import { stripe } from "./stripe";
+import { components } from "./_generated/api";
+
+const http = httpRouter();
+registerRoutes(http, components.stripe, stripe.getRouteOptions());
+export default http;
+```
+
+**The complete flow:**
+1. User clicks `yoursite.com?ref=PARTNER20`
+2. Client plugin stores the code and tracks the click
+3. User signs up via Better Auth → automatically attributed to affiliate
+4. User checks out → `stripe.createCheckoutSession()` adds affiliate data
+5. Payment succeeds → webhook creates commission for affiliate
+6. Refund happens → webhook reverses commission
+
+### Alternative: Direct withAffiliates
+
+If you don't need the wrapper class, use `withAffiliates` directly:
 
 ```typescript
 // convex/http.ts
@@ -355,24 +505,16 @@ import { withAffiliates } from "convex-affiliates/stripe";
 import { components } from "./_generated/api";
 
 const http = httpRouter();
-
-// One line - that's it!
 registerRoutes(http, components.stripe, withAffiliates(components.affiliates));
-
 export default http;
 ```
-
-That's it! The plugin automatically handles:
-- `invoice.paid` → Creates commission for the affiliate
-- `charge.refunded` → Reverses commission on refund
-- `checkout.session.completed` → Links Stripe customer to affiliate
 
 ### With Your Own Event Handlers
 
 If you need custom logic alongside affiliate tracking, both handlers run (affiliate first, then yours):
 
 ```typescript
-registerRoutes(http, components.stripe, withAffiliates(components.affiliates, {
+registerRoutes(http, components.stripe, stripe.getRouteOptions({
   events: {
     // Your handler runs AFTER affiliate commission is created
     "invoice.paid": async (ctx, event) => {
@@ -387,25 +529,29 @@ registerRoutes(http, components.stripe, withAffiliates(components.affiliates, {
 Get notified when affiliate events occur:
 
 ```typescript
-registerRoutes(http, components.stripe, withAffiliates(components.affiliates, {
-  onCommissionCreated: async (data) => {
-    // data: { commissionId, affiliateId, affiliateCode, amountCents, currency }
-    await notifyAffiliate(data.affiliateId, `You earned $${data.amountCents / 100}!`);
-  },
-  onCommissionReversed: async (data) => {
-    // data: { commissionId, affiliateId, amountCents, reason }
-    await notifyAffiliate(data.affiliateId, "A commission was reversed.");
-  },
-  onCustomerLinked: async (data) => {
-    // data: { stripeCustomerId, userId, affiliateCode }
-    console.log(`Customer ${data.stripeCustomerId} linked to affiliate`);
-  },
-}));
+const stripe = new AffiliateStripe(
+  new Stripe(components.stripe),
+  components.affiliates,
+  {
+    onCommissionCreated: async (data) => {
+      // data: { commissionId, affiliateId, affiliateCode, amountCents, currency }
+      await notifyAffiliate(data.affiliateId, `You earned $${data.amountCents / 100}!`);
+    },
+    onCommissionReversed: async (data) => {
+      // data: { commissionId, affiliateId, amountCents, reason }
+      await notifyAffiliate(data.affiliateId, "A commission was reversed.");
+    },
+    onCustomerLinked: async (data) => {
+      // data: { stripeCustomerId, userId, affiliateCode }
+      console.log(`Customer ${data.stripeCustomerId} linked to affiliate`);
+    },
+  }
+);
 ```
 
-### Checkout with Affiliate Data
+### Checkout with enrichCheckout
 
-Use `enrichCheckout` to automatically add affiliate data to checkout sessions. It gets the user from the auth context and looks up their referral:
+For more control, use `enrichCheckout` directly:
 
 ```typescript
 // convex/payments.ts
@@ -481,15 +627,6 @@ const checkoutParams = enrichClientCheckout({
 // Clear after purchase
 clearStoredReferral();
 ```
-
-### Complete Flow
-
-1. **User clicks affiliate link** → `?ref=CODE` in URL
-2. **Better Auth client plugin** stores the code (or use `trackClick` mutation)
-3. **User signs up** → Better Auth plugin calls `attributeSignup`
-4. **User checkouts** → `enrichCheckout` adds affiliate data to session
-5. **Payment succeeds** → `withAffiliates` webhook creates commission
-6. **Refund happens** → `withAffiliates` webhook reverses commission
 
 ### Legacy: Standalone Handlers
 
