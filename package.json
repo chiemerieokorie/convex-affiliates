@@ -69,6 +69,14 @@
       "types": "./dist/better-auth/client.d.ts",
       "default": "./dist/better-auth/client.js"
     },
+    "./stripe": {
+      "types": "./dist/stripe/index.d.ts",
+      "default": "./dist/stripe/index.js"
+    },
+    "./stripe/client": {
+      "types": "./dist/stripe/client.d.ts",
+      "default": "./dist/stripe/client.js"
+    },
     "./test": "./src/test.ts",
     "./_generated/component.js": {
       "types": "./dist/component/_generated/component.d.ts"
@@ -122,6 +130,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^28.0.0",
     "npm-run-all2": "8.0.4",
     "path-exists-cli": "2.0.0",
     "pkg-pr-new": "^0.0.60",

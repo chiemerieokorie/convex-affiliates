@@ -1605,6 +1605,24 @@ export {
 } from "../component/validators.js";
 
 // =============================================================================
+// Stripe Plugin Re-exports (for consumer convenience)
+// =============================================================================
+// These can also be imported from "convex-affiliates/stripe" directly.
+
+export {
+  withAffiliates,
+  getAffiliateMetadata,
+} from "../stripe/index.js";
+
+export type {
+  WithAffiliatesOptions,
+  AffiliateMetadata,
+  CommissionCreatedData as StripeCommissionCreatedData,
+  CommissionReversedData as StripeCommissionReversedData,
+  CustomerLinkedData,
+} from "../stripe/index.js";
+
+// =============================================================================
 // Exports
 // =============================================================================
 

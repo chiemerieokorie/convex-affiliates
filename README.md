@@ -341,32 +341,171 @@ await authClient.affiliate.trackReferral("PARTNER20");
 authClient.affiliate.clearReferral();
 ```
 
-### Stripe Webhook Integration
+## Stripe Plugin
 
-#### With @convex-dev/stripe (Recommended)
+For projects using [@convex-dev/stripe](https://www.convex.dev/components/stripe), we provide a plugin that automatically handles affiliate tracking for payments.
 
-If you're using `@convex-dev/stripe`, use `getAffiliateStripeHandlers` to get type-safe handlers:
+### Quick Start
 
-```typescript
-// convex/stripeHandlers.ts
-import { getAffiliateStripeHandlers } from "convex-affiliates";
-import { components } from "./_generated/api";
+**Step 1: Configure Webhooks**
 
-// Get affiliate handlers for invoice.paid, charge.refunded, checkout.session.completed
-export const affiliateHandlers = getAffiliateStripeHandlers(components.affiliates);
-```
-
-Then use them in your Stripe webhook setup. You can combine with your own handlers as needed.
-
-#### Standalone Webhook Handler
-
-If you're not using `@convex-dev/stripe`, use the standalone handler with built-in signature verification:
+Use `withAffiliates` to add automatic commission tracking to Stripe webhooks:
 
 ```typescript
 // convex/http.ts
 import { httpRouter } from "convex/server";
+import { registerRoutes } from "@convex-dev/stripe";
+import { withAffiliates } from "convex-affiliates/stripe";
 import { components } from "./_generated/api";
+
+const http = httpRouter();
+
+// Register Stripe routes with affiliate tracking
+registerRoutes(http, components.stripe, withAffiliates(components.affiliates));
+
+export default http;
+```
+
+**Step 2: Create Checkout Sessions**
+
+Use `getAffiliateMetadata` to get affiliate data for checkout. You must use the Stripe SDK directly and pass `client_reference_id` for commission tracking to work:
+
+```typescript
+// convex/payments.ts
+import { action } from "./_generated/server";
+import { v } from "convex/values";
+import { getAffiliateMetadata } from "convex-affiliates/stripe";
+import { components } from "./_generated/api";
+import Stripe from "stripe";
+
+const stripeSDK = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+export const createCheckout = action({
+  args: { priceId: v.string() },
+  handler: async (ctx, { priceId }) => {
+    // Get affiliate data: { userId, affiliate_code? }
+    const { userId, ...metadata } = await getAffiliateMetadata(ctx, components.affiliates);
+
+    const session = await stripeSDK.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${process.env.SITE_URL}/success`,
+      cancel_url: `${process.env.SITE_URL}/cancel`,
+      client_reference_id: userId, // REQUIRED for commission tracking!
+      metadata, // { affiliate_code?: string }
+    });
+
+    return session.url;
+  },
+});
+```
+
+The plugin automatically handles:
+- `invoice.paid` → Creates commission for the affiliate
+- `charge.refunded` → Reverses commission on refund
+- `checkout.session.completed` → Links Stripe customer to affiliate
+
+### Complete: Better Auth + Stripe
+
+For the full affiliate flow (signup attribution + payment tracking), see our detailed integration guide:
+[docs/better-auth-stripe-integration.md](docs/better-auth-stripe-integration.md)
+
+**The complete flow:**
+1. User clicks `yoursite.com?ref=PARTNER20`
+2. Better Auth client plugin stores the code and tracks the click
+3. User signs up via Better Auth → automatically attributed to affiliate
+4. User checks out → `getAffiliateMetadata()` provides affiliate data
+5. Payment succeeds → webhook creates commission for affiliate
+6. Refund happens → webhook reverses commission
+
+### With Callbacks
+
+Get notified when affiliate events occur:
+
+```typescript
+// convex/http.ts
+registerRoutes(http, components.stripe, withAffiliates(components.affiliates, {
+  onCommissionCreated: async (data) => {
+    // data: { commissionId, affiliateId, affiliateCode, amountCents, currency }
+    await notifyAffiliate(data.affiliateId, `You earned $${data.amountCents / 100}!`);
+  },
+  onCommissionReversed: async (data) => {
+    // data: { commissionId, affiliateId, amountCents, reason }
+    await notifyAffiliate(data.affiliateId, "A commission was reversed.");
+  },
+  onCustomerLinked: async (data) => {
+    // data: { stripeCustomerId, userId, affiliateCode }
+    console.log(`Customer ${data.stripeCustomerId} linked to affiliate`);
+  },
+}));
+```
+
+### With Your Own Event Handlers
+
+If you need custom logic alongside affiliate tracking, both handlers run (affiliate first, then yours):
+
+```typescript
+registerRoutes(http, components.stripe, withAffiliates(components.affiliates, {
+  events: {
+    // Your handler runs AFTER affiliate commission is created
+    "invoice.paid": async (ctx, event) => {
+      await sendSlackNotification(event);
+    },
+  },
+}));
+```
+
+### Client-Side Utilities
+
+For client-side storage (if not using Better Auth), use the client utilities:
+
+```typescript
+import {
+  getStoredReferral,
+  storeReferral,
+  hasStoredReferral,
+  clearStoredReferral,
+} from "convex-affiliates/stripe/client";
+
+// Check if user was referred
+if (hasStoredReferral()) {
+  const referral = getStoredReferral();
+  console.log(`Referred by: ${referral?.affiliateCode}`);
+}
+
+// Manually store referral (if not using Better Auth client plugin)
+const params = new URLSearchParams(window.location.search);
+const code = params.get("ref");
+if (code) {
+  storeReferral({ affiliateCode: code });
+}
+
+// Clear after purchase
+clearStoredReferral();
+```
+
+### Legacy: Standalone Handlers
+
+If you're not using `@convex-dev/stripe`, you can still use the standalone handlers:
+
+```typescript
+import { getAffiliateStripeHandlers } from "convex-affiliates";
+
+// Get handlers for manual integration
+const handlers = getAffiliateStripeHandlers(components.affiliates, {
+  hooks: {
+    "commission.created": async (data) => { /* ... */ },
+  },
+});
+```
+
+Or use the standalone webhook handler with built-in signature verification:
+
+```typescript
+// convex/http.ts
+import { httpRouter } from "convex/server";
 import { createAffiliateApi } from "convex-affiliates";
+import { components } from "./_generated/api";
 
 const http = httpRouter();
 
@@ -388,10 +527,6 @@ http.route({
 
 export default http;
 ```
-
-Set `STRIPE_WEBHOOK_SECRET` in your Convex environment variables.
-
-Both approaches handle `invoice.paid`, `charge.refunded`, and `checkout.session.completed` events automatically
 
 ### Recording Payouts
 
