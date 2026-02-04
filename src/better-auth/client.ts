@@ -296,7 +296,9 @@ export const affiliateClientPlugin = (
 
       // Store in cookies
       if (options.storage === "cookie" || options.storage === "both") {
-        const cookieOptions = `path=/; max-age=${maxAge}; SameSite=Lax`;
+        // Add Secure flag for HTTPS (production), skip for localhost dev
+        const isSecure = window.location.protocol === "https:";
+        const cookieOptions = `path=/; max-age=${maxAge}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
 
         if (data.referralId) {
           document.cookie = `${options.referralIdCookieName}=${data.referralId}; ${cookieOptions}`;
@@ -439,101 +441,103 @@ export const affiliateClientPlugin = (
       },
     ],
 
-    // Provide actions for manual control
+    // Provide actions for manual control, namespaced under 'affiliate'
     getActions: () => ({
-      /**
-       * Get the currently stored referral data.
-       *
-       * @example
-       * ```typescript
-       * const referral = authClient.affiliate.getStoredReferral();
-       * if (referral) {
-       *   console.log(`Referred by: ${referral.affiliateCode}`);
-       * }
-       * ```
-       */
-      getStoredReferral: (): StoredReferral | null => {
-        return storage.get();
-      },
+      affiliate: {
+        /**
+         * Get the currently stored referral data.
+         *
+         * @example
+         * ```typescript
+         * const referral = authClient.affiliate.getStoredReferral();
+         * if (referral) {
+         *   console.log(`Referred by: ${referral.affiliateCode}`);
+         * }
+         * ```
+         */
+        getStoredReferral: (): StoredReferral | null => {
+          return storage.get();
+        },
 
-      /**
-       * Manually store referral data.
-       * Useful when you want to track referrals from non-URL sources.
-       *
-       * @example
-       * ```typescript
-       * authClient.affiliate.storeReferral({
-       *   affiliateCode: "PARTNER20",
-       *   referralId: "abc123",
-       * });
-       * ```
-       */
-      storeReferral: (data: Partial<StoredReferral>): void => {
-        storage.set(data);
-      },
+        /**
+         * Manually store referral data.
+         * Useful when you want to track referrals from non-URL sources.
+         *
+         * @example
+         * ```typescript
+         * authClient.affiliate.storeReferral({
+         *   affiliateCode: "PARTNER20",
+         *   referralId: "abc123",
+         * });
+         * ```
+         */
+        storeReferral: (data: Partial<StoredReferral>): void => {
+          storage.set(data);
+        },
 
-      /**
-       * Clear stored referral data.
-       *
-       * @example
-       * ```typescript
-       * authClient.affiliate.clearReferral();
-       * ```
-       */
-      clearReferral: (): void => {
-        storage.clear();
-      },
+        /**
+         * Clear stored referral data.
+         *
+         * @example
+         * ```typescript
+         * authClient.affiliate.clearReferral();
+         * ```
+         */
+        clearReferral: (): void => {
+          storage.clear();
+        },
 
-      /**
-       * Check if there's an active referral.
-       *
-       * @example
-       * ```typescript
-       * if (authClient.affiliate.hasReferral()) {
-       *   // Show "Referred by partner" badge
-       * }
-       * ```
-       */
-      hasReferral: (): boolean => {
-        const referral = storage.get();
-        return !!(referral?.referralId || referral?.affiliateCode);
-      },
+        /**
+         * Check if there's an active referral.
+         *
+         * @example
+         * ```typescript
+         * if (authClient.affiliate.hasReferral()) {
+         *   // Show "Referred by partner" badge
+         * }
+         * ```
+         */
+        hasReferral: (): boolean => {
+          const referral = storage.get();
+          return !!(referral?.referralId || referral?.affiliateCode);
+        },
 
-      /**
-       * Track a referral click manually.
-       * Stores the code and optionally calls onReferralDetected.
-       *
-       * @example
-       * ```typescript
-       * // From a partner link click
-       * await authClient.affiliate.trackReferral("PARTNER20");
-       * ```
-       */
-      trackReferral: async (
-        affiliateCode: string,
-        subId?: string
-      ): Promise<string | undefined> => {
-        storage.set({ affiliateCode, subId });
+        /**
+         * Track a referral click manually.
+         * Stores the code and optionally calls onReferralDetected.
+         *
+         * @example
+         * ```typescript
+         * // From a partner link click
+         * await authClient.affiliate.trackReferral("PARTNER20");
+         * ```
+         */
+        trackReferral: async (
+          affiliateCode: string,
+          subId?: string
+        ): Promise<string | undefined> => {
+          storage.set({ affiliateCode, subId });
 
-        if (options.onReferralDetected) {
-          try {
-            const referralId = await options.onReferralDetected(
-              affiliateCode,
-              subId
-            );
-            if (referralId) {
-              storage.set({ referralId });
-              return referralId;
+          if (options.onReferralDetected) {
+            try {
+              const referralId = await options.onReferralDetected(
+                affiliateCode,
+                subId
+              );
+              if (referralId) {
+                storage.set({ referralId });
+                return referralId;
+              }
+            } catch (error) {
+              console.error(
+                "[convex-affiliates] Error tracking referral:",
+                error
+              );
             }
-          } catch (error) {
-            console.error(
-              "[convex-affiliates] Error tracking referral:",
-              error
-            );
           }
-        }
 
-        return undefined;
+          return undefined;
+        },
       },
     }),
   } satisfies BetterAuthClientPlugin;

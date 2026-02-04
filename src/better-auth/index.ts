@@ -232,7 +232,7 @@ export function affiliatePlugin(
 
                 if (referral && referral.status === "clicked") {
                   await ctx.runMutation(component.referrals.attributeSignup, {
-                    referralId: referral._id,
+                    referralId: referralId, // Use the tracking ID, not document _id
                     userId,
                   });
                   attributed = true;
