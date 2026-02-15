@@ -118,7 +118,7 @@ export interface CommissionCreatedData {
   commissionId: string;
   affiliateId: string;
   affiliateCode: string;
-  amountCents: number;
+  commissionAmountCents: number;
   currency: string;
 }
 
@@ -128,7 +128,7 @@ export interface CommissionCreatedData {
 export interface CommissionReversedData {
   commissionId: string;
   affiliateId: string;
-  amountCents: number;
+  commissionAmountCents: number;
   reason?: string;
 }
 
@@ -202,7 +202,7 @@ export interface AffiliateMetadata {
  * // With callbacks
  * registerRoutes(http, components.stripe, withAffiliates(components.affiliates, {
  *   onCommissionCreated: async (data) => {
- *     console.log(`Commission created: $${data.amountCents / 100}`);
+ *     console.log(`Commission created: $${data.commissionAmountCents / 100}`);
  *   },
  * }));
  * ```
@@ -260,7 +260,7 @@ export function withAffiliates(
           commissionId: result.commissionId,
           affiliateId: result.affiliateId!,
           affiliateCode: result.affiliateCode!,
-          amountCents: result.commissionAmountCents!,
+          commissionAmountCents: result.commissionAmountCents!,
           currency: invoice.currency,
         });
       }
@@ -284,7 +284,7 @@ export function withAffiliates(
         await safeCall(onCommissionReversed, {
           commissionId: result.commissionId,
           affiliateId: result.affiliateId!,
-          amountCents: result.commissionAmountCents!,
+          commissionAmountCents: result.commissionAmountCents!,
           reason: charge.refunds?.data?.[0]?.reason,
         });
       }

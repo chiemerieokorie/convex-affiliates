@@ -88,6 +88,7 @@ export interface CommissionRecord {
   currency: string;
   status: "pending" | "approved" | "processing" | "paid" | "reversed";
   payoutId?: string;
+  dueAt: number;
   reversalReason?: string;
   createdAt: number;
   paidAt?: number;
@@ -155,6 +156,7 @@ export interface CommissionReversedData {
   commissionId: string;
   affiliateId: string;
   commissionAmountCents: number;
+  reason?: string;
 }
 
 
@@ -1532,6 +1534,9 @@ export function getAffiliateStripeHandlers(
           commissionId: result.commissionId,
           affiliateId: result.affiliateId,
           commissionAmountCents: result.commissionAmountCents,
+          reason:
+            (charge.refunds as { data?: Array<{ reason?: string }> })?.data?.[0]
+              ?.reason ?? undefined,
         });
       }
     },

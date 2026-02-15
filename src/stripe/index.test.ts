@@ -192,7 +192,7 @@ describe("Stripe Plugin", () => {
         commissionId: "comm_123",
         affiliateId: "aff_123",
         affiliateCode: "CODE",
-        amountCents: 1000,
+        commissionAmountCents: 1000,
         currency: "usd",
       });
     });

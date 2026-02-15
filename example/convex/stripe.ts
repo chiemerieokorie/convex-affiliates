@@ -37,13 +37,13 @@ export const stripeRouteOptions = withAffiliates(components.affiliates, {
   // Optional: Get notified when affiliate events occur
   onCommissionCreated: async (data) => {
     console.log(
-      `[Affiliates] Commission created: $${(data.amountCents / 100).toFixed(2)} ` +
+      `[Affiliates] Commission created: $${(data.commissionAmountCents / 100).toFixed(2)} ` +
         `for affiliate ${data.affiliateCode}`
     );
   },
   onCommissionReversed: async (data) => {
     console.log(
-      `[Affiliates] Commission reversed: $${(data.amountCents / 100).toFixed(2)} ` +
+      `[Affiliates] Commission reversed: $${(data.commissionAmountCents / 100).toFixed(2)} ` +
         `for affiliate ${data.affiliateId}`
     );
   },
