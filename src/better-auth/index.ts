@@ -26,32 +26,23 @@
  */
 
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
+import { createAuthMiddleware } from "better-auth/plugins";
+import type { GenericActionCtx, GenericDataModel } from "convex/server";
+import type { ComponentApi } from "../component/_generated/component.js";
 
 // =============================================================================
 // Types
 // =============================================================================
 
 /**
- * Convex context with mutation/query capabilities
+ * Convex context with query/mutation capabilities.
+ * Uses Pick<GenericActionCtx> so consumers can pass their ActionCtx
+ * directly without @ts-expect-error.
  */
-interface ConvexCtx {
-  runQuery: <T>(query: unknown, args?: unknown) => Promise<T>;
-  runMutation: <T>(mutation: unknown, args?: unknown) => Promise<T>;
-}
-
-/**
- * The affiliates component API shape
- */
-interface AffiliatesComponent {
-  affiliates: {
-    getById: unknown;
-  };
-  referrals: {
-    attributeSignup: unknown;
-    attributeSignupByCode: unknown;
-    getByReferralId: unknown;
-  };
-}
+type ConvexCtx = Pick<
+  GenericActionCtx<GenericDataModel>,
+  "runQuery" | "runMutation"
+>;
 
 /**
  * Optional configuration for the affiliate plugin
@@ -137,9 +128,9 @@ export interface AffiliatePluginOptions {
  */
 export function affiliatePlugin(
   ctx: ConvexCtx,
-  component: AffiliatesComponent,
+  component: ComponentApi,
   options: AffiliatePluginOptions = {}
-): BetterAuthPlugin {
+) {
   const config = {
     referralIdField: options.fieldNames?.referralId ?? "referralId",
     referralCodeField: options.fieldNames?.referralCode ?? "referralCode",
@@ -166,8 +157,8 @@ export function affiliatePlugin(
             );
           },
 
-          handler: (async (hookCtx: unknown) => {
-            const context = hookCtx as {
+          handler: createAuthMiddleware(async (ctx_hook) => {
+            const context = ctx_hook as unknown as {
               context: {
                 returned?: unknown;
                 body?: Record<string, unknown>;
@@ -243,31 +234,29 @@ export function affiliatePlugin(
 
               // Try by referral ID first (more accurate)
               if (referralId) {
-                const referral = await ctx.runQuery<{
-                  _id: string;
-                  status: string;
-                  affiliateId: string;
-                } | null>(component.referrals.getByReferralId, { referralId });
+                const referral = await ctx.runQuery(
+                  component.referrals.getByReferralId,
+                  { referralId }
+                );
 
                 if (referral && referral.status === "clicked") {
                   await ctx.runMutation(component.referrals.attributeSignup, {
-                    referralId: referralId, // Use the tracking ID, not document _id
+                    referralId: referralId,
                     userId,
                   });
                   attributed = true;
                   // Look up the affiliate to get their code
-                  const affiliate = await ctx.runQuery<{
-                    code: string;
-                  } | null>(component.affiliates.getById, {
-                    affiliateId: referral.affiliateId,
-                  });
+                  const affiliate = await ctx.runQuery(
+                    component.affiliates.getById,
+                    { affiliateId: referral.affiliateId }
+                  );
                   affiliateCode = affiliate?.code;
                 }
               }
 
               // Try by affiliate code if referral ID didn't work
               if (!attributed && referralCode) {
-                const result = await ctx.runMutation<{ success: boolean }>(
+                const result = await ctx.runMutation(
                   component.referrals.attributeSignupByCode,
                   { userId, affiliateCode: referralCode }
                 );
@@ -290,11 +279,11 @@ export function affiliatePlugin(
                 reason: error instanceof Error ? error.message : "Unknown error",
               });
             }
-          }) as unknown,
+          }),
         },
       ],
     },
-  } as BetterAuthPlugin;
+  } satisfies BetterAuthPlugin;
 }
 
 // =============================================================================

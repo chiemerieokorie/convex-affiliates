@@ -5,6 +5,8 @@ import {
   paginationOptsValidator,
 } from "convex/server";
 import type {
+  Auth,
+  GenericActionCtx,
   GenericDataModel,
   GenericMutationCtx,
   GenericQueryCtx,
@@ -33,11 +35,10 @@ import {
  * Generic Stripe event handler context type.
  * Matches the ctx parameter from @convex-dev/stripe handlers.
  */
-type StripeHandlerCtx = {
-  runQuery: (query: any, args?: any) => Promise<any>;
-  runMutation: (mutation: any, args?: any) => Promise<any>;
-  runAction: (action: any, args?: any) => Promise<any>;
-};
+type StripeHandlerCtx = Pick<
+  GenericActionCtx<GenericDataModel>,
+  "runQuery" | "runMutation" | "runAction"
+>;
 
 /**
  * Generic Stripe event type.
@@ -230,15 +231,15 @@ export interface AffiliateConfig {
 export interface CreateAffiliateApiConfig extends AffiliateConfig {
   /**
    * Authentication function that returns the user ID.
-   * Accepts any Convex ctx — no need to annotate it.
+   * Receives the Convex context with auth capabilities.
    */
-  auth: (ctx: any) => Promise<string>;
+  auth: (ctx: { auth: Auth }) => Promise<string>;
 
   /**
    * Optional admin check function.
    * If not provided, admin endpoints will use the auth function only.
    */
-  isAdmin?: (ctx: any) => Promise<boolean>;
+  isAdmin?: (ctx: { auth: Auth }) => Promise<boolean>;
 
   /**
    * Optional type-safe hooks for affiliate lifecycle events.
@@ -322,7 +323,7 @@ export function createAffiliateApi(
   };
 
   // Helper to check admin access
-  const requireAdmin = async (ctx: any) => {
+  const requireAdmin = async (ctx: { auth: Auth }) => {
     if (isAdmin) {
       const isAdminResult = await isAdmin(ctx);
       if (!isAdminResult) throw new Error("Not authorized - admin access required");
