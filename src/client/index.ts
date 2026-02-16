@@ -1392,7 +1392,8 @@ export function createAffiliateApi(
  * Verify Stripe webhook signature without the Stripe SDK.
  * Uses Web Crypto API for HMAC-SHA256.
  */
-async function verifyStripeSignature(
+/** @internal — exported for testing only */
+export async function verifyStripeSignature(
   payload: string,
   signature: string,
   secret: string
@@ -1427,8 +1428,13 @@ async function verifyStripeSignature(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  // Constant-time comparison
-  return sig === expectedSig;
+  // Constant-time comparison to prevent timing attacks
+  if (sig.length !== expectedSig.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < sig.length; i++) {
+    mismatch |= sig.charCodeAt(i) ^ expectedSig.charCodeAt(i);
+  }
+  return mismatch === 0;
 }
 
 export interface StripeWebhookConfig {
