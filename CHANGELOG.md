@@ -1,3 +1,18 @@
+## [2.4.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.3.0...v2.4.0) (2026-02-16)
+
+### Features
+
+* add branded ID types for nominal type safety at client layer ([3ee1476](https://github.com/chiemerieokorie/convex-affiliates/commit/3ee1476e67ae8e1c8afbe9f26208ae1a256971e0))
+* replace any/unknown types with proper Convex types across all plugins ([1093430](https://github.com/chiemerieokorie/convex-affiliates/commit/1093430c913b18a570b1880ba84f3091fcd1a280))
+* unify field names and add missing fields across plugin types ([03b2ab5](https://github.com/chiemerieokorie/convex-affiliates/commit/03b2ab53d1ced938c3ec7ce4369369e6bc0711db))
+* use union types and remove ghost fields in React hooks ([ab8e0b0](https://github.com/chiemerieokorie/convex-affiliates/commit/ab8e0b06f94fa2e78159a6d742209160d24c09ba))
+
+### Bug Fixes
+
+* gate stripe runtime re-exports from main entry point ([52a0caa](https://github.com/chiemerieokorie/convex-affiliates/commit/52a0caaf7da9bc009c12cfcbccf2e1b13934e901))
+* improve test type safety and extend boundary validation ([3c5a82f](https://github.com/chiemerieokorie/convex-affiliates/commit/3c5a82fd40d0999c5a1f90e98bffcbfd1d717639))
+* resolve affiliateCode bug and non-deterministic code generation ([4c14771](https://github.com/chiemerieokorie/convex-affiliates/commit/4c14771e018d7c2d0a7f7ca9f140af4d7f0bb936))
+
 ## [2.3.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.2.0...v2.3.0) (2026-02-04)
 
 ### Features
