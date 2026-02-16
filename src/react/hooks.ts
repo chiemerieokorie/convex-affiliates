@@ -10,6 +10,11 @@ import type {
   PayoutMethod,
   PayoutStatus,
 } from "../component/validators.js";
+import type {
+  AffiliateId,
+  CommissionId,
+  PayoutId,
+} from "../client/index.js";
 
 // =============================================================================
 // Types
@@ -52,7 +57,7 @@ export interface AffiliatePortalData {
 }
 
 export interface AffiliateProfile {
-  _id: string;
+  _id: AffiliateId;
   userId: string;
   code: string;
   displayName?: string;
@@ -93,8 +98,8 @@ export interface AdminDashboardData {
 }
 
 export interface Commission {
-  _id: string;
-  affiliateId: string;
+  _id: CommissionId;
+  affiliateId: AffiliateId;
   referralId: string;
   stripeCustomerId: string;
   stripeInvoiceId: string;
@@ -115,8 +120,8 @@ export interface Commission {
 }
 
 export interface Payout {
-  _id: string;
-  affiliateId: string;
+  _id: PayoutId;
+  affiliateId: AffiliateId;
   amountCents: number;
   currency: string;
   method: PayoutMethod;
