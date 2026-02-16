@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FunctionReference } from "convex/server";
 
 // =============================================================================
@@ -184,13 +184,20 @@ function createStorageAdapter(
   cookieOpts: CookieOptions = {}
 ): StorageAdapter {
   const ls: StorageAdapter = {
-    get: (key) =>
-      typeof window !== "undefined" ? localStorage.getItem(key) : null,
+    get: (key) => {
+      try {
+        return typeof window !== "undefined" ? localStorage.getItem(key) : null;
+      } catch { return null; }
+    },
     set: (key, value) => {
-      if (typeof window !== "undefined") localStorage.setItem(key, value);
+      try {
+        if (typeof window !== "undefined") localStorage.setItem(key, value);
+      } catch { /* storage unavailable (e.g., Safari private mode) */ }
     },
     remove: (key) => {
-      if (typeof window !== "undefined") localStorage.removeItem(key);
+      try {
+        if (typeof window !== "undefined") localStorage.removeItem(key);
+      } catch { /* storage unavailable */ }
     },
   };
 
@@ -406,12 +413,16 @@ export function useTrackReferralOnLoad(
   }) => Promise<{ referralId: string } | null>,
   config?: AffiliateHooksConfig
 ) {
-  const adapter = createStorageAdapter(config?.storage, config?.cookieOptions);
+  const adapter = useMemo(
+    () => createStorageAdapter(config?.storage, config?.cookieOptions),
+    [config?.storage, config?.cookieOptions]
+  );
   const [tracked, setTracked] = useState(false);
   const [referralId, setReferralId] = useState<string | null>(null);
+  const trackingRef = useRef(false);
 
   useEffect(() => {
-    if (tracked) return;
+    if (tracked || trackingRef.current) return;
 
     const searchParams = new URLSearchParams(window.location.search);
     const code = searchParams.get("ref");
@@ -420,6 +431,7 @@ export function useTrackReferralOnLoad(
     if (!code) return;
 
     const track = async () => {
+      trackingRef.current = true;
       try {
         const result = await trackClick({
           affiliateCode: code,
@@ -438,11 +450,12 @@ export function useTrackReferralOnLoad(
         setTracked(true);
       } catch (error) {
         console.error("Failed to track referral:", error);
+        setTracked(true); // Don't retry on failure
       }
     };
 
     track();
-  }, [tracked, trackClick]);
+  }, [tracked, trackClick, adapter]);
 
   return { tracked, referralId };
 }
@@ -480,6 +493,9 @@ export function useStoredReferral(config?: AffiliateHooksConfig) {
 export function useAffiliateLinkGenerator(baseUrl: string, code: string) {
   const generate = useCallback(
     (path = "/", subId?: string) => {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(path)) {
+        throw new Error("path must be relative, not an absolute URL");
+      }
       const url = new URL(path, baseUrl);
       url.searchParams.set("ref", code);
       if (subId) {

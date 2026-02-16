@@ -1560,6 +1560,9 @@ export function generateAffiliateLink(
   path = "/",
   subId?: string
 ): string {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) {
+    throw new Error("path must be relative, not an absolute URL");
+  }
   const url = new URL(path, baseUrl);
   url.searchParams.set("ref", code);
   if (subId) {
