@@ -344,13 +344,14 @@ export function createAffiliateApi(
 
   // Helper to check admin access
   const requireAdmin = async (ctx: { auth: Auth }) => {
-    if (isAdmin) {
-      const isAdminResult = await isAdmin(ctx);
-      if (!isAdminResult) throw new Error("Not authorized - admin access required");
-    } else {
-      // Fall back to just requiring auth
-      await auth(ctx);
+    if (!isAdmin) {
+      throw new Error(
+        "isAdmin callback is required to use admin endpoints. " +
+        "Provide it in createAffiliateApi config."
+      );
     }
+    const isAdminResult = await isAdmin(ctx);
+    if (!isAdminResult) throw new Error("Not authorized - admin access required");
   };
 
   // Helper to get affiliate by userId
@@ -782,8 +783,12 @@ export function createAffiliateApi(
         if (!affiliate) {
           throw new Error("User is not an affiliate");
         }
-        const baseUrl = config.baseUrl ?? "";
-        const url = new URL(args.path ?? "/", baseUrl);
+        if (!config.baseUrl) {
+          throw new Error(
+            "baseUrl must be configured in createAffiliateApi to use generateLink"
+          );
+        }
+        const url = new URL(args.path ?? "/", config.baseUrl);
         url.searchParams.set("ref", affiliate.code);
         if (args.subId) {
           url.searchParams.set("sub", args.subId);
