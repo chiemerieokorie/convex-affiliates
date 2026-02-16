@@ -197,8 +197,20 @@ export const create = mutation({
       createdAt: now,
     });
 
-    // Mark all commissions as processing
+    // Validate and mark all commissions as processing
     for (const commissionId of args.commissionIds) {
+      const commission = await ctx.db.get(commissionId);
+      if (!commission) {
+        throw new Error(`Commission ${commissionId} not found`);
+      }
+      if (commission.affiliateId !== args.affiliateId) {
+        throw new Error("Commission belongs to a different affiliate");
+      }
+      if (commission.status !== "approved") {
+        throw new Error(
+          `Commission ${commissionId} is not in approved status (current: ${commission.status})`
+        );
+      }
       await ctx.db.patch(commissionId, {
         status: "processing",
         payoutId,
@@ -222,6 +234,9 @@ export const markCompleted = mutation({
     if (!payout) {
       throw new Error("Payout not found");
     }
+
+    // Idempotency guard — prevent double-completion corrupting stats
+    if (payout.status === "completed") return null;
 
     const now = Date.now();
 
@@ -333,6 +348,10 @@ export const record = mutation({
       )
       .filter((q) => q.lte(q.field("dueAt"), now))
       .collect();
+
+    if (dueCommissions.length === 0) {
+      throw new Error("No commissions are due for payout");
+    }
 
     // Create the payout record
     const payoutId = await ctx.db.insert("payouts", {
