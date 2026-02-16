@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { generateAffiliateLink } from "./index.js";
+import { generateAffiliateLink, verifyStripeSignature } from "./index.js";
 import { components, initConvexTest } from "./setup.test.js";
 
 describe("component boundary validation", () => {
@@ -44,6 +44,58 @@ describe("component boundary validation", () => {
     const authContent = readFileSync(resolve(__dirname, "../better-auth/index.ts"), "utf-8");
     const anyCasts = authContent.match(/as any/g);
     expect(anyCasts).toBeNull();
+  });
+});
+
+describe("verifyStripeSignature", () => {
+  async function createSignature(payload: string, secret: string, timestamp: number): Promise<string> {
+    const signedPayload = `${timestamp}.${payload}`;
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const sigBytes = await crypto.subtle.sign("HMAC", key, encoder.encode(signedPayload));
+    const sig = Array.from(new Uint8Array(sigBytes))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    return `t=${timestamp},v1=${sig}`;
+  }
+
+  const secret = "whsec_test_secret";
+  const payload = '{"type":"invoice.paid"}';
+
+  test("valid signature passes", async () => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const header = await createSignature(payload, secret, timestamp);
+    expect(await verifyStripeSignature(payload, header, secret)).toBe(true);
+  });
+
+  test("invalid signature fails", async () => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const header = `t=${timestamp},v1=${"a".repeat(64)}`;
+    expect(await verifyStripeSignature(payload, header, secret)).toBe(false);
+  });
+
+  test("expired timestamp fails", async () => {
+    const staleTimestamp = Math.floor(Date.now() / 1000) - 600; // 10 min ago
+    const header = await createSignature(payload, secret, staleTimestamp);
+    expect(await verifyStripeSignature(payload, header, secret)).toBe(false);
+  });
+
+  test("malformed header fails", async () => {
+    expect(await verifyStripeSignature(payload, "garbage", secret)).toBe(false);
+    expect(await verifyStripeSignature(payload, "", secret)).toBe(false);
+    expect(await verifyStripeSignature(payload, "t=,v1=", secret)).toBe(false);
+  });
+
+  test("wrong secret fails", async () => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const header = await createSignature(payload, secret, timestamp);
+    expect(await verifyStripeSignature(payload, header, "wrong_secret")).toBe(false);
   });
 });
 
