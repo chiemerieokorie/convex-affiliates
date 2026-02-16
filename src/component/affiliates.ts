@@ -432,6 +432,13 @@ export const setCustomCommission = mutation({
       throw new Error("Affiliate not found");
     }
 
+    if (args.commissionValue < 0) {
+      throw new Error("Commission value cannot be negative");
+    }
+    if (args.commissionType === "percentage" && args.commissionValue > 100) {
+      throw new Error("Percentage commission cannot exceed 100%");
+    }
+
     await ctx.db.patch(args.affiliateId, {
       customCommissionType: args.commissionType,
       customCommissionValue: args.commissionValue,
