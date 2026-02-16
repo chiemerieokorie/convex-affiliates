@@ -345,6 +345,10 @@ export const suspend = mutation({
       return null;
     }
 
+    if (affiliate.status !== "approved") {
+      throw new Error("Only approved affiliates can be suspended");
+    }
+
     await ctx.db.patch(args.affiliateId, {
       status: "suspended",
       updatedAt: Date.now(),
