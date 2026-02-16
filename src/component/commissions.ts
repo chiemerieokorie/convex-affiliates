@@ -589,8 +589,8 @@ export const createFromInvoice = mutation({
       // Count existing commissions for this subscription
       const existingForSub = await ctx.db
         .query("commissions")
-        .filter((q) =>
-          q.eq(q.field("stripeSubscriptionId"), args.stripeSubscriptionId)
+        .withIndex("by_stripeSubscription", (q) =>
+          q.eq("stripeSubscriptionId", args.stripeSubscriptionId)
         )
         .collect();
       paymentNumber = existingForSub.length + 1;
@@ -638,20 +638,27 @@ export const createFromInvoice = mutation({
     if (affiliate.customCommissionType && affiliate.customCommissionValue !== undefined) {
       commissionType = affiliate.customCommissionType;
       commissionRate = affiliate.customCommissionValue;
-    } else if (args.stripeProductId) {
-      // Priority 2: Product-specific rate
-      const productCommission = await ctx.db
-        .query("productCommissions")
-        .withIndex("by_campaign_product", (q) =>
-          q.eq("campaignId", affiliate.campaignId).eq("stripeProductId", args.stripeProductId!)
-        )
-        .first();
+    } else {
+      let found = false;
 
-      if (productCommission) {
-        commissionType = productCommission.commissionType;
-        commissionRate = productCommission.commissionValue;
-      } else {
-        // Priority 3: Check for tiered commission based on affiliate performance
+      // Priority 2: Product-specific rate (only if productId provided)
+      if (args.stripeProductId) {
+        const productCommission = await ctx.db
+          .query("productCommissions")
+          .withIndex("by_campaign_product", (q) =>
+            q.eq("campaignId", affiliate.campaignId).eq("stripeProductId", args.stripeProductId!)
+          )
+          .first();
+
+        if (productCommission) {
+          commissionType = productCommission.commissionType;
+          commissionRate = productCommission.commissionValue;
+          found = true;
+        }
+      }
+
+      // Priority 3: Tiered commission based on affiliate performance
+      if (!found) {
         const tiers = await ctx.db
           .query("commissionTiers")
           .withIndex("by_campaign", (q) => q.eq("campaignId", affiliate.campaignId))

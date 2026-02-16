@@ -530,6 +530,124 @@ describe("affiliate component", () => {
     });
   });
 
+  describe("commission priority chain", () => {
+    test("createFromInvoice uses tiered commission when no stripeProductId", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Tiered Campaign",
+        slug: "tiered",
+        commissionType: "percentage",
+        commissionValue: 10, // Default 10%
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      // Register and approve affiliate
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "affiliate-user",
+        email: "affiliate@example.com",
+        campaignId,
+      });
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      // Insert a commission tier directly (no public API for this)
+      await t.run(async (ctx) => {
+        await ctx.db.insert("commissionTiers", {
+          campaignId,
+          minReferrals: 0, // Applies immediately
+          commissionType: "percentage",
+          commissionValue: 30, // 30% tier rate
+        });
+      });
+
+      // Create referral for a customer
+      await t.mutation(api.referrals.attributeSignupByCode, {
+        userId: "customer-1",
+        affiliateCode: affiliateResult.code,
+      });
+      await t.mutation(api.referrals.linkStripeCustomer, {
+        stripeCustomerId: "cus_tiered",
+        userId: "customer-1",
+      });
+
+      // Create commission WITHOUT stripeProductId — should use tier rate (30%), not default (10%)
+      const commission = await t.mutation(api.commissions.createFromInvoice, {
+        stripeCustomerId: "cus_tiered",
+        stripeInvoiceId: "inv_tiered_1",
+        amountPaidCents: 10000,
+        currency: "usd",
+        // No stripeProductId
+      });
+
+      expect(commission).toBeDefined();
+      expect(commission?.commissionAmountCents).toBe(3000); // 30% of $100
+    });
+
+    test("createFromInvoice prefers product rate over tier", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Product Campaign",
+        slug: "product",
+        commissionType: "percentage",
+        commissionValue: 10,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "affiliate-user",
+        email: "affiliate@example.com",
+        campaignId,
+      });
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      // Insert tier AND product commission
+      await t.run(async (ctx) => {
+        await ctx.db.insert("commissionTiers", {
+          campaignId,
+          minReferrals: 0,
+          commissionType: "percentage",
+          commissionValue: 30,
+        });
+        await ctx.db.insert("productCommissions", {
+          campaignId,
+          stripeProductId: "prod_premium",
+          commissionType: "percentage",
+          commissionValue: 50, // 50% product rate
+        });
+      });
+
+      await t.mutation(api.referrals.attributeSignupByCode, {
+        userId: "customer-2",
+        affiliateCode: affiliateResult.code,
+      });
+      await t.mutation(api.referrals.linkStripeCustomer, {
+        stripeCustomerId: "cus_product",
+        userId: "customer-2",
+      });
+
+      // Create commission WITH matching stripeProductId — should use product rate (50%)
+      const commission = await t.mutation(api.commissions.createFromInvoice, {
+        stripeCustomerId: "cus_product",
+        stripeInvoiceId: "inv_product_1",
+        stripeProductId: "prod_premium",
+        amountPaidCents: 10000,
+        currency: "usd",
+      });
+
+      expect(commission).toBeDefined();
+      expect(commission?.commissionAmountCents).toBe(5000); // 50% of $100
+    });
+  });
+
   describe("two-sided rewards", () => {
     test("getRefereeDiscount returns discount when configured", async () => {
       const t = initConvexTest();

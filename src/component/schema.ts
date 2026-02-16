@@ -219,6 +219,7 @@ export default defineSchema({
     .index("by_referral", ["referralId"])
     .index("by_stripeInvoice", ["stripeInvoiceId"])
     .index("by_stripeCharge", ["stripeChargeId"])
+    .index("by_stripeSubscription", ["stripeSubscriptionId"])
     .index("by_payout", ["payoutId"])
     .index("by_status_dueAt", ["status", "dueAt"]),
 
