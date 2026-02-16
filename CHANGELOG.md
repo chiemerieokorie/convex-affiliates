@@ -1,3 +1,9 @@
+## [3.0.3](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.2...v3.0.3) (2026-02-16)
+
+### Bug Fixes
+
+* harden data integrity for signups, clicks, and commission values ([53efebf](https://github.com/chiemerieokorie/convex-affiliates/commit/53efebf061f3ae3eab634a58869415a27393a7e4))
+
 ## [3.0.2](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.1...v3.0.2) (2026-02-16)
 
 ### Bug Fixes
