@@ -345,6 +345,9 @@ export const markPaid = mutation({
       throw new Error("Commission not found");
     }
 
+    // Idempotency guard — prevent double-payment corrupting stats
+    if (commission.status === "paid") return null;
+
     const now = Date.now();
 
     await ctx.db.patch(args.commissionId, {
@@ -390,7 +393,9 @@ export const reverse = mutation({
     }
 
     const now = Date.now();
-    const wasPending = commission.status === "pending" || commission.status === "approved";
+    const wasPending = commission.status === "pending"
+      || commission.status === "approved"
+      || commission.status === "processing";
 
     await ctx.db.patch(args.commissionId, {
       status: "reversed",
@@ -780,7 +785,9 @@ export const reverseByCharge = mutation({
     }
 
     const now = Date.now();
-    const wasPending = commission.status === "pending" || commission.status === "approved";
+    const wasPending = commission.status === "pending"
+      || commission.status === "approved"
+      || commission.status === "processing";
     const reason = args.reason ?? "Charge refunded";
 
     // Reverse the commission directly

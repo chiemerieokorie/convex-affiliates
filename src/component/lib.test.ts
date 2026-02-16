@@ -530,6 +530,160 @@ describe("affiliate component", () => {
     });
   });
 
+  describe("payout lifecycle", () => {
+    async function setupPayoutScenario() {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Payout Campaign",
+        slug: "payout",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "affiliate-user",
+        email: "affiliate@example.com",
+        campaignId,
+      });
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      // Create referral and commission
+      await t.mutation(api.referrals.attributeSignupByCode, {
+        userId: "customer-1",
+        affiliateCode: affiliateResult.code,
+      });
+      await t.mutation(api.referrals.linkStripeCustomer, {
+        stripeCustomerId: "cus_payout",
+        userId: "customer-1",
+      });
+
+      const commission = await t.mutation(api.commissions.createFromInvoice, {
+        stripeCustomerId: "cus_payout",
+        stripeInvoiceId: "inv_payout_1",
+        amountPaidCents: 10000,
+        currency: "usd",
+      });
+
+      return { t, affiliateResult, commission: commission! };
+    }
+
+    test("markCompleted is idempotent — second call is no-op", async () => {
+      const { t, affiliateResult, commission } = await setupPayoutScenario();
+
+      // Advance time past NET-30
+      vi.setSystemTime(Date.now() + 31 * 24 * 60 * 60 * 1000);
+
+      // Approve commission first
+      await t.mutation(api.commissions.approve, {
+        commissionId: commission.commissionId,
+      });
+
+      // Create payout
+      const payoutId = await t.mutation(api.payouts.create, {
+        affiliateId: affiliateResult.affiliateId,
+        amountCents: 2000,
+        currency: "usd",
+        method: "bank_transfer",
+        periodStart: Date.now() - 31 * 24 * 60 * 60 * 1000,
+        periodEnd: Date.now(),
+        commissionIds: [commission.commissionId],
+      });
+
+      // Complete payout
+      await t.mutation(api.payouts.markCompleted, { payoutId });
+
+      // Get stats after first completion
+      const affiliateAfterFirst = await t.query(api.affiliates.getById, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+      const paidAfterFirst = affiliateAfterFirst!.stats.paidCommissionsCents;
+
+      // Call markCompleted again (idempotency test)
+      await t.mutation(api.payouts.markCompleted, { payoutId });
+
+      // Stats should NOT change
+      const affiliateAfterSecond = await t.query(api.affiliates.getById, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+      expect(affiliateAfterSecond!.stats.paidCommissionsCents).toBe(paidAfterFirst);
+    });
+
+    test("payouts.create rejects commission from different affiliate", async () => {
+      const { t, commission } = await setupPayoutScenario();
+
+      // Create a second affiliate
+      const campaignId2 = await t.mutation(api.campaigns.create, {
+        name: "Other Campaign",
+        slug: "other",
+        commissionType: "percentage",
+        commissionValue: 10,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: false,
+      });
+      const otherAffiliate = await t.mutation(api.affiliates.register, {
+        userId: "other-affiliate",
+        email: "other@example.com",
+        campaignId: campaignId2,
+      });
+
+      // Approve the commission
+      await t.mutation(api.commissions.approve, {
+        commissionId: commission.commissionId,
+      });
+
+      // Try to create payout with wrong affiliate
+      await expect(
+        t.mutation(api.payouts.create, {
+          affiliateId: otherAffiliate.affiliateId,
+          amountCents: 2000,
+          currency: "usd",
+          method: "bank_transfer",
+          periodStart: Date.now(),
+          periodEnd: Date.now(),
+          commissionIds: [commission.commissionId],
+        })
+      ).rejects.toThrow("Commission belongs to a different affiliate");
+    });
+
+    test("payouts.create rejects non-approved commission", async () => {
+      const { t, affiliateResult, commission } = await setupPayoutScenario();
+
+      // Commission is still "pending" — not approved yet
+      await expect(
+        t.mutation(api.payouts.create, {
+          affiliateId: affiliateResult.affiliateId,
+          amountCents: 2000,
+          currency: "usd",
+          method: "bank_transfer",
+          periodStart: Date.now(),
+          periodEnd: Date.now(),
+          commissionIds: [commission.commissionId],
+        })
+      ).rejects.toThrow("not in approved status");
+    });
+
+    test("payouts.record rejects when no commissions due", async () => {
+      const { t, affiliateResult } = await setupPayoutScenario();
+
+      // No approved commissions due yet — should throw
+      await expect(
+        t.mutation(api.payouts.record, {
+          affiliateId: affiliateResult.affiliateId,
+          amountCents: 5000,
+          currency: "usd",
+          method: "bank_transfer",
+        })
+      ).rejects.toThrow("No commissions are due for payout");
+    });
+  });
+
   describe("two-sided rewards", () => {
     test("getRefereeDiscount returns discount when configured", async () => {
       const t = initConvexTest();
