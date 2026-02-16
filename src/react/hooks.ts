@@ -3,6 +3,13 @@
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FunctionReference } from "convex/server";
+import type {
+  AffiliateStatus,
+  CommissionStatus,
+  CommissionType,
+  PayoutMethod,
+  PayoutStatus,
+} from "../component/validators.js";
 
 // =============================================================================
 // Types
@@ -48,11 +55,17 @@ export interface AffiliateProfile {
   _id: string;
   userId: string;
   code: string;
-  email: string;
   displayName?: string;
   website?: string;
-  socialMedia?: string;
-  status: string;
+  socials?: {
+    twitter?: string;
+    youtube?: string;
+    instagram?: string;
+    tiktok?: string;
+    linkedin?: string;
+  };
+  payoutEmail?: string;
+  status: AffiliateStatus;
   stats: {
     totalClicks: number;
     totalSignups: number;
@@ -62,8 +75,6 @@ export interface AffiliateProfile {
     pendingCommissionsCents: number;
     paidCommissionsCents: number;
   };
-  stripeConnectStatus?: string;
-  stripeConnectAccountId?: string;
   createdAt: number;
 }
 
@@ -94,9 +105,9 @@ export interface Commission {
   saleAmountCents: number;
   commissionAmountCents: number;
   commissionRate: number;
-  commissionType: string;
+  commissionType: CommissionType;
   currency: string;
-  status: string;
+  status: CommissionStatus;
   createdAt: number;
   approvedAt?: number;
   paidAt?: number;
@@ -108,19 +119,14 @@ export interface Payout {
   affiliateId: string;
   amountCents: number;
   currency: string;
-  method: string;
-  stripeConnectAccountId?: string;
-  stripeTransferId?: string;
+  method: PayoutMethod;
   periodStart: number;
   periodEnd: number;
-  status: string;
+  status: PayoutStatus;
   commissionsCount: number;
   notes?: string;
   createdAt: number;
-  processedAt?: number;
   completedAt?: number;
-  failedAt?: number;
-  failureReason?: string;
 }
 
 // =============================================================================
@@ -281,7 +287,7 @@ export function createAffiliateHooks(
      * Get paginated payout history.
      */
     useAffiliatePayouts: (
-      status?: "pending" | "processing" | "completed" | "failed" | "cancelled"
+      status?: PayoutStatus
     ) => {
       return usePaginatedQuery(
         affiliateApi.listPayouts,
@@ -366,7 +372,7 @@ export function createAffiliateHooks(
 
       return useCallback(
         async (affiliateId: string) => {
-          return await approve({ affiliateId: affiliateId as any });
+          return await approve({ affiliateId });
         },
         [approve]
       );
@@ -380,7 +386,7 @@ export function createAffiliateHooks(
 
       return useCallback(
         async (affiliateId: string, reason?: string) => {
-          return await reject({ affiliateId: affiliateId as any, reason });
+          return await reject({ affiliateId, reason });
         },
         [reject]
       );
