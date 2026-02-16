@@ -530,6 +530,268 @@ describe("affiliate component", () => {
     });
   });
 
+  describe("status transitions", () => {
+    test("suspend on approved affiliate succeeds", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Default Campaign",
+        slug: "default",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const result = await t.mutation(api.affiliates.register, {
+        userId: "user-suspend",
+        email: "suspend@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: result.affiliateId,
+      });
+
+      await t.mutation(api.affiliates.suspend, {
+        affiliateId: result.affiliateId,
+      });
+
+      const affiliate = await t.query(api.affiliates.getByCode, {
+        code: result.code,
+      });
+      expect(affiliate?.status).toBe("suspended");
+    });
+
+    test("suspend on pending affiliate throws", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Default Campaign",
+        slug: "default",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const result = await t.mutation(api.affiliates.register, {
+        userId: "user-pending",
+        email: "pending@example.com",
+        campaignId,
+      });
+
+      await expect(
+        t.mutation(api.affiliates.suspend, {
+          affiliateId: result.affiliateId,
+        })
+      ).rejects.toThrow("Only approved affiliates can be suspended");
+    });
+
+    test("suspend on rejected affiliate throws", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Default Campaign",
+        slug: "default",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const result = await t.mutation(api.affiliates.register, {
+        userId: "user-rejected",
+        email: "rejected@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.reject, {
+        affiliateId: result.affiliateId,
+      });
+
+      await expect(
+        t.mutation(api.affiliates.suspend, {
+          affiliateId: result.affiliateId,
+        })
+      ).rejects.toThrow("Only approved affiliates can be suspended");
+    });
+
+    test("suspend on already-suspended affiliate is a no-op", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Default Campaign",
+        slug: "default",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const result = await t.mutation(api.affiliates.register, {
+        userId: "user-double-suspend",
+        email: "double@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: result.affiliateId,
+      });
+
+      await t.mutation(api.affiliates.suspend, {
+        affiliateId: result.affiliateId,
+      });
+
+      // Second suspend should not throw
+      await t.mutation(api.affiliates.suspend, {
+        affiliateId: result.affiliateId,
+      });
+
+      const affiliate = await t.query(api.affiliates.getByCode, {
+        code: result.code,
+      });
+      expect(affiliate?.status).toBe("suspended");
+    });
+  });
+
+  describe("commission reversal", () => {
+    test("double reversal is a no-op", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Default Campaign",
+        slug: "default",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "affiliate-rev",
+        email: "rev@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      // Create a referral and commission
+      const signupResult = await t.mutation(api.referrals.attributeSignupByCode, {
+        userId: "customer-rev",
+        affiliateCode: affiliateResult.code,
+      });
+      expect(signupResult.success).toBe(true);
+
+      await t.mutation(api.referrals.linkStripeCustomer, {
+        stripeCustomerId: "cus_rev",
+        userId: "customer-rev",
+      });
+
+      const commission = await t.mutation(api.commissions.createFromInvoice, {
+        stripeCustomerId: "cus_rev",
+        stripeInvoiceId: "inv_rev_1",
+        amountPaidCents: 10000,
+        currency: "usd",
+      });
+      expect(commission).toBeDefined();
+
+      // Get stats after commission creation
+      const affiliateBefore = await t.query(api.affiliates.getByUserId, {
+        userId: "affiliate-rev",
+      });
+      const statsBefore = affiliateBefore!.stats;
+
+      // First reversal
+      await t.mutation(api.commissions.reverse, {
+        commissionId: commission!.commissionId,
+        reason: "Refund",
+      });
+
+      const statsAfterFirst = (await t.query(api.affiliates.getByUserId, {
+        userId: "affiliate-rev",
+      }))!.stats;
+
+      // Second reversal should be a no-op
+      await t.mutation(api.commissions.reverse, {
+        commissionId: commission!.commissionId,
+        reason: "Duplicate refund",
+      });
+
+      const statsAfterSecond = (await t.query(api.affiliates.getByUserId, {
+        userId: "affiliate-rev",
+      }))!.stats;
+
+      // Stats should not change on second reversal
+      expect(statsAfterSecond.totalCommissionsCents).toBe(statsAfterFirst.totalCommissionsCents);
+      expect(statsAfterSecond.pendingCommissionsCents).toBe(statsAfterFirst.pendingCommissionsCents);
+    });
+
+    test("stats cannot go below zero on reversal", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Default Campaign",
+        slug: "default",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "affiliate-floor",
+        email: "floor@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      const signupResult = await t.mutation(api.referrals.attributeSignupByCode, {
+        userId: "customer-floor",
+        affiliateCode: affiliateResult.code,
+      });
+      expect(signupResult.success).toBe(true);
+
+      await t.mutation(api.referrals.linkStripeCustomer, {
+        stripeCustomerId: "cus_floor",
+        userId: "customer-floor",
+      });
+
+      const commission = await t.mutation(api.commissions.createFromInvoice, {
+        stripeCustomerId: "cus_floor",
+        stripeInvoiceId: "inv_floor_1",
+        amountPaidCents: 10000,
+        currency: "usd",
+      });
+      expect(commission).toBeDefined();
+
+      // Reverse the commission
+      await t.mutation(api.commissions.reverse, {
+        commissionId: commission!.commissionId,
+        reason: "Refund",
+      });
+
+      // Verify stats are >= 0
+      const affiliate = await t.query(api.affiliates.getByUserId, {
+        userId: "affiliate-floor",
+      });
+      expect(affiliate!.stats.totalCommissionsCents).toBeGreaterThanOrEqual(0);
+      expect(affiliate!.stats.pendingCommissionsCents).toBeGreaterThanOrEqual(0);
+      expect(affiliate!.stats.paidCommissionsCents).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   describe("two-sided rewards", () => {
     test("getRefereeDiscount returns discount when configured", async () => {
       const t = initConvexTest();

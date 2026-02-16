@@ -359,9 +359,9 @@ export const markPaid = mutation({
       await ctx.db.patch(affiliate._id, {
         stats: {
           ...affiliate.stats,
-          pendingCommissionsCents:
+          pendingCommissionsCents: Math.max(0,
             affiliate.stats.pendingCommissionsCents -
-            commission.commissionAmountCents,
+            commission.commissionAmountCents),
           paidCommissionsCents:
             affiliate.stats.paidCommissionsCents +
             commission.commissionAmountCents,
@@ -389,6 +389,10 @@ export const reverse = mutation({
       throw new Error("Commission not found");
     }
 
+    if (commission.status === "reversed") {
+      return null; // Already reversed
+    }
+
     const now = Date.now();
     const wasPending = commission.status === "pending" || commission.status === "approved";
 
@@ -403,19 +407,19 @@ export const reverse = mutation({
     if (affiliate) {
       const updates = {
         ...affiliate.stats,
-        totalCommissionsCents:
+        totalCommissionsCents: Math.max(0,
           affiliate.stats.totalCommissionsCents -
-          commission.commissionAmountCents,
+          commission.commissionAmountCents),
       };
 
       if (wasPending) {
-        updates.pendingCommissionsCents =
+        updates.pendingCommissionsCents = Math.max(0,
           affiliate.stats.pendingCommissionsCents -
-          commission.commissionAmountCents;
+          commission.commissionAmountCents);
       } else if (commission.status === "paid") {
-        updates.paidCommissionsCents =
+        updates.paidCommissionsCents = Math.max(0,
           affiliate.stats.paidCommissionsCents -
-          commission.commissionAmountCents;
+          commission.commissionAmountCents);
       }
 
       await ctx.db.patch(affiliate._id, {
@@ -795,16 +799,16 @@ export const reverseByCharge = mutation({
     if (affiliate) {
       const updates = {
         ...affiliate.stats,
-        totalCommissionsCents:
-          affiliate.stats.totalCommissionsCents - commission.commissionAmountCents,
+        totalCommissionsCents: Math.max(0,
+          affiliate.stats.totalCommissionsCents - commission.commissionAmountCents),
       };
 
       if (wasPending) {
-        updates.pendingCommissionsCents =
-          affiliate.stats.pendingCommissionsCents - commission.commissionAmountCents;
+        updates.pendingCommissionsCents = Math.max(0,
+          affiliate.stats.pendingCommissionsCents - commission.commissionAmountCents);
       } else if (commission.status === "paid") {
-        updates.paidCommissionsCents =
-          affiliate.stats.paidCommissionsCents - commission.commissionAmountCents;
+        updates.paidCommissionsCents = Math.max(0,
+          affiliate.stats.paidCommissionsCents - commission.commissionAmountCents);
       }
 
       await ctx.db.patch(affiliate._id, {
