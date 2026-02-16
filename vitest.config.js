@@ -5,11 +5,13 @@ export default defineConfig({
     environment: "edge-runtime",
     typecheck: {
       tsconfig: "./tsconfig.test.json",
+      exclude: ["**/consumer-test/**", "**/node_modules/**"],
     },
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
       "**/.examples/**",
+      "**/consumer-test/**",
     ],
   },
 });

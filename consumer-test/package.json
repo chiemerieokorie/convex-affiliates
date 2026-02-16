@@ -1,0 +1,17 @@
+{
+  "name": "consumer-test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "bash scripts/setup.sh",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run setup && npm run typecheck"
+  },
+  "devDependencies": {
+    "convex": "^1.31.7",
+    "react": "^19.0.0",
+    "@convex-dev/stripe": ">=0.1.0",
+    "better-auth": ">=1.0.0",
+    "typescript": "~5.9.0"
+  }
+}
