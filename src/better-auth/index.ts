@@ -43,6 +43,9 @@ interface ConvexCtx {
  * The affiliates component API shape
  */
 interface AffiliatesComponent {
+  affiliates: {
+    getById: unknown;
+  };
   referrals: {
     attributeSignup: unknown;
     attributeSignupByCode: unknown;
@@ -243,7 +246,7 @@ export function affiliatePlugin(
                 const referral = await ctx.runQuery<{
                   _id: string;
                   status: string;
-                  affiliateCode?: string;
+                  affiliateId: string;
                 } | null>(component.referrals.getByReferralId, { referralId });
 
                 if (referral && referral.status === "clicked") {
@@ -252,7 +255,13 @@ export function affiliatePlugin(
                     userId,
                   });
                   attributed = true;
-                  affiliateCode = referral.affiliateCode;
+                  // Look up the affiliate to get their code
+                  const affiliate = await ctx.runQuery<{
+                    code: string;
+                  } | null>(component.affiliates.getById, {
+                    affiliateId: referral.affiliateId,
+                  });
+                  affiliateCode = affiliate?.code;
                 }
               }
 

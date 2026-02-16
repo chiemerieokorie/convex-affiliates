@@ -223,8 +223,10 @@ export function generateAffiliateCode(prefix?: string): string {
   let code = prefix ? prefix.toUpperCase() : "";
   const targetLength = 8;
   const charsToAdd = targetLength - code.length;
+  const randomBytes = new Uint8Array(charsToAdd);
+  crypto.getRandomValues(randomBytes);
   for (let i = 0; i < charsToAdd; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(randomBytes[i] % chars.length);
   }
   return code;
 }
