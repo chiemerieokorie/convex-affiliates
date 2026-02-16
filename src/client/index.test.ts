@@ -110,6 +110,16 @@ describe("client tests", () => {
     expect(linkWithSubId).toBe("https://example.com/pricing?ref=ABC123&sub=campaign1");
   });
 
+  test("generateAffiliateLink rejects absolute URL path", () => {
+    expect(() =>
+      generateAffiliateLink("https://example.com", "ABC123", "https://evil.com/")
+    ).toThrow("path must be relative");
+
+    expect(() =>
+      generateAffiliateLink("https://example.com", "ABC123", "http://evil.com/")
+    ).toThrow("path must be relative");
+  });
+
   test("should track click and attribute signup", async () => {
     const t = initConvexTest();
 
