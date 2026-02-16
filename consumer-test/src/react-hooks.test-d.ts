@@ -1,10 +1,14 @@
 /**
  * Verify createAffiliateHooks factory compiles with expected API shape.
+ *
+ * NOTE: createAffiliateHooks expects FunctionReference types (from components.affiliates),
+ * NOT the RegisteredQuery/RegisteredMutation types returned by createAffiliateApi.
+ * This is a known type gap — consumers must pass components.affiliates directly.
  */
 import { createAffiliateHooks } from "convex-affiliates/react";
 import type { FunctionReference } from "convex/server";
 
-// Simulate the API shape that createAffiliateHooks expects
+// This matches the shape consumers get from components.affiliates
 declare const affiliateApi: {
   getPortalData: FunctionReference<"query">;
   getAffiliate: FunctionReference<"query">;
@@ -30,7 +34,7 @@ const hooks = createAffiliateHooks(affiliateApi, {
   },
 });
 
-// Verify all hooks exist and are functions
+// Verify all hooks exist
 hooks.useAffiliate;
 hooks.useAffiliatePortal;
 hooks.useAffiliateCommissions;
@@ -42,3 +46,5 @@ hooks.useAffiliateList;
 hooks.useTopAffiliates;
 hooks.useApproveAffiliate;
 hooks.useRejectAffiliate;
+
+void [hooks];
