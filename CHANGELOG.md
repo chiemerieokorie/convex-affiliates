@@ -1,3 +1,9 @@
+## [3.0.1](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.0...v3.0.1) (2026-02-16)
+
+### Bug Fixes
+
+* commission tier logic and subscription index ([713eb75](https://github.com/chiemerieokorie/convex-affiliates/commit/713eb75a9cb3104502f986a06917efa953e52847))
+
 ## [3.0.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.5.0...v3.0.0) (2026-02-16)
 
 ### ⚠ BREAKING CHANGES
