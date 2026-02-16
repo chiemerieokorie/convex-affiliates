@@ -1611,14 +1611,10 @@ export {
 } from "../component/validators.js";
 
 // =============================================================================
-// Stripe Plugin Re-exports (for consumer convenience)
+// Stripe Plugin Type Re-exports
 // =============================================================================
-// These can also be imported from "convex-affiliates/stripe" directly.
-
-export {
-  withAffiliates,
-  getAffiliateMetadata,
-} from "../stripe/index.js";
+// Runtime functions (withAffiliates, getAffiliateMetadata) must be imported
+// from "convex-affiliates/stripe" directly to avoid requiring @convex-dev/stripe.
 
 export type {
   WithAffiliatesOptions,
