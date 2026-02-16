@@ -441,6 +441,15 @@ export const attributeSignup = mutation({
       return null; // Affiliate cannot refer themselves
     }
 
+    // Prevent duplicate attribution for the same user
+    const existingUserReferral = await ctx.db
+      .query("referrals")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .first();
+    if (existingUserReferral) {
+      return null; // User already attributed
+    }
+
     const now = Date.now();
 
     // Update referral with user ID
@@ -526,11 +535,10 @@ export const attributeSignupByCode = mutation({
       expiresAt,
     });
 
-    // Update affiliate stats
+    // Update affiliate stats (no totalClicks increment — no click occurred)
     await ctx.db.patch(affiliate._id, {
       stats: {
         ...affiliate.stats,
-        totalClicks: affiliate.stats.totalClicks + 1,
         totalSignups: affiliate.stats.totalSignups + 1,
       },
       updatedAt: now,
@@ -634,11 +642,10 @@ export const linkStripeCustomer = mutation({
             expiresAt,
           });
 
-          // Update affiliate stats
+          // Update affiliate stats (no totalClicks increment — no click occurred)
           await ctx.db.patch(affiliate._id, {
             stats: {
               ...affiliate.stats,
-              totalClicks: affiliate.stats.totalClicks + 1,
               totalSignups: affiliate.stats.totalSignups + 1,
             },
             updatedAt: now,

@@ -206,6 +206,14 @@ export const create = mutation({
   },
   returns: v.id("campaigns"),
   handler: async (ctx, args) => {
+    // Validate commission value bounds
+    if (args.commissionValue < 0) {
+      throw new Error("Commission value cannot be negative");
+    }
+    if (args.commissionType === "percentage" && args.commissionValue > 100) {
+      throw new Error("Percentage commission cannot exceed 100%");
+    }
+
     // Check for unique slug
     const existing = await ctx.db
       .query("campaigns")
@@ -282,6 +290,16 @@ export const update = mutation({
     const campaign = await ctx.db.get(args.campaignId);
     if (!campaign) {
       throw new Error("Campaign not found");
+    }
+
+    // Validate commission value bounds if provided
+    const effectiveType = args.commissionType ?? campaign.commissionType;
+    const effectiveValue = args.commissionValue ?? campaign.commissionValue;
+    if (effectiveValue < 0) {
+      throw new Error("Commission value cannot be negative");
+    }
+    if (effectiveType === "percentage" && effectiveValue > 100) {
+      throw new Error("Percentage commission cannot exceed 100%");
     }
 
     // Check for unique slug if changing
