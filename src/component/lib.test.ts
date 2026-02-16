@@ -1038,4 +1038,153 @@ describe("affiliate component", () => {
       expect(discount?.discountValue).toBe(15);
     });
   });
+
+  describe("commission priority chain", () => {
+    test("createFromInvoice uses tiered commission when no stripeProductId", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Tiered Campaign",
+        slug: "tiered",
+        commissionType: "percentage",
+        commissionValue: 10, // Default 10%
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      // Register and approve affiliate
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "affiliate-user",
+        email: "affiliate@example.com",
+        campaignId,
+      });
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      // Insert a commission tier directly (no public API for this)
+      await t.run(async (ctx) => {
+        await ctx.db.insert("commissionTiers", {
+          campaignId,
+          minReferrals: 0, // Applies immediately
+          commissionType: "percentage",
+          commissionValue: 30, // 30% tier rate
+        });
+      });
+
+      // Track click and attribute signup
+      await t.mutation(api.referrals.trackClick, {
+        affiliateCode: affiliateResult.code,
+        landingPage: "/pricing",
+      });
+      await t.mutation(api.referrals.attributeSignupByCode, {
+        affiliateCode: affiliateResult.code,
+        userId: "customer-user",
+      });
+
+      // Link Stripe customer
+      await t.mutation(api.referrals.linkStripeCustomer, {
+        stripeCustomerId: "cus_tier_test",
+        userId: "customer-user",
+        affiliateCode: affiliateResult.code,
+      });
+
+      // Create commission WITHOUT stripeProductId — tier should apply
+      const commissionId = await t.mutation(api.commissions.createFromInvoice, {
+        stripeInvoiceId: "inv_tier_test",
+        stripeCustomerId: "cus_tier_test",
+        amountPaidCents: 10000,
+        currency: "usd",
+      });
+
+      expect(commissionId).toBeDefined();
+
+      // Verify the commission used the tier rate (30%), not the campaign default (10%)
+      const commissionRef = await t.query(api.commissions.getByStripeInvoice, {
+        stripeInvoiceId: "inv_tier_test",
+      });
+      expect(commissionRef).toBeDefined();
+
+      // Read full commission document to check rate
+      const commission = await t.run(async (ctx) => {
+        return await ctx.db.get(commissionRef!._id);
+      });
+      expect(commission?.commissionRate).toBe(30);
+      expect(commission?.commissionAmountCents).toBe(3000); // 30% of 10000
+    });
+
+    test("createFromInvoice uses product rate over tier rate when stripeProductId present", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Product Campaign",
+        slug: "product",
+        commissionType: "percentage",
+        commissionValue: 10,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "affiliate-user",
+        email: "affiliate@example.com",
+        campaignId,
+      });
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      // Insert both a tier and a product-specific commission
+      await t.run(async (ctx) => {
+        await ctx.db.insert("commissionTiers", {
+          campaignId,
+          minReferrals: 0,
+          commissionType: "percentage",
+          commissionValue: 30,
+        });
+        await ctx.db.insert("productCommissions", {
+          campaignId,
+          stripeProductId: "prod_test",
+          commissionType: "percentage",
+          commissionValue: 50, // Product rate wins
+        });
+      });
+
+      // Setup referral flow
+      await t.mutation(api.referrals.trackClick, {
+        affiliateCode: affiliateResult.code,
+        landingPage: "/pricing",
+      });
+      await t.mutation(api.referrals.attributeSignupByCode, {
+        affiliateCode: affiliateResult.code,
+        userId: "customer-user2",
+      });
+      await t.mutation(api.referrals.linkStripeCustomer, {
+        stripeCustomerId: "cus_prod_test",
+        userId: "customer-user2",
+        affiliateCode: affiliateResult.code,
+      });
+
+      const commissionId = await t.mutation(api.commissions.createFromInvoice, {
+        stripeInvoiceId: "inv_prod_test",
+        stripeCustomerId: "cus_prod_test",
+        stripeProductId: "prod_test",
+        amountPaidCents: 10000,
+        currency: "usd",
+      });
+
+      expect(commissionId).toBeDefined();
+
+      const commissionRef = await t.query(api.commissions.getByStripeInvoice, {
+        stripeInvoiceId: "inv_prod_test",
+      });
+      const commission = await t.run(async (ctx) => {
+        return await ctx.db.get(commissionRef!._id);
+      });
+      expect(commission?.commissionRate).toBe(50);
+      expect(commission?.commissionAmountCents).toBe(5000); // 50% of 10000
+    });
+  });
 });
