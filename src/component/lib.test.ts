@@ -1187,4 +1187,177 @@ describe("affiliate component", () => {
       expect(commission?.commissionAmountCents).toBe(5000); // 50% of 10000
     });
   });
+
+  describe("data integrity", () => {
+    test("attributeSignup deduplicates by userId", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Test Campaign",
+        slug: "dedup-test",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "affiliate-user",
+        email: "affiliate@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      // Track two separate clicks
+      const click1 = await t.mutation(api.referrals.trackClick, {
+        affiliateCode: affiliateResult.code,
+        landingPage: "/page1",
+      });
+      const click2 = await t.mutation(api.referrals.trackClick, {
+        affiliateCode: affiliateResult.code,
+        landingPage: "/page2",
+      });
+
+      expect(click1?.referralId).toBeDefined();
+      expect(click2?.referralId).toBeDefined();
+
+      // First attribution succeeds
+      await t.mutation(api.referrals.attributeSignup, {
+        referralId: click1!.referralId,
+        userId: "same-user",
+      });
+
+      // Second attribution for same user is silently ignored
+      await t.mutation(api.referrals.attributeSignup, {
+        referralId: click2!.referralId,
+        userId: "same-user",
+      });
+
+      // Verify only one referral is linked to this user
+      const referral = await t.query(api.referrals.getByUserId, {
+        userId: "same-user",
+      });
+      expect(referral).toBeDefined();
+      expect(referral?.status).toBe("signed_up");
+
+      // Affiliate stats should show only 1 signup
+      const affiliate = await t.query(api.affiliates.getById, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+      expect(affiliate?.stats.totalSignups).toBe(1);
+    });
+
+    test("attributeSignupByCode does not inflate totalClicks", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Test Campaign",
+        slug: "clicks-test",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "affiliate-user",
+        email: "affiliate@example.com",
+        campaignId,
+      });
+
+      await t.mutation(api.affiliates.approve, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+
+      // Code-based attribution (no click happened)
+      await t.mutation(api.referrals.attributeSignupByCode, {
+        affiliateCode: affiliateResult.code,
+        userId: "code-user",
+      });
+
+      const affiliate = await t.query(api.affiliates.getById, {
+        affiliateId: affiliateResult.affiliateId,
+      });
+      expect(affiliate?.stats.totalClicks).toBe(0);
+      expect(affiliate?.stats.totalSignups).toBe(1);
+    });
+
+    test("campaign create rejects negative commission value", async () => {
+      const t = initConvexTest();
+
+      await expect(
+        t.mutation(api.campaigns.create, {
+          name: "Bad Campaign",
+          slug: "bad",
+          commissionType: "percentage",
+          commissionValue: -10,
+          payoutTerm: "NET-30",
+          cookieDurationDays: 30,
+        })
+      ).rejects.toThrow("Commission value cannot be negative");
+    });
+
+    test("campaign create rejects percentage over 100", async () => {
+      const t = initConvexTest();
+
+      await expect(
+        t.mutation(api.campaigns.create, {
+          name: "Bad Campaign",
+          slug: "bad",
+          commissionType: "percentage",
+          commissionValue: 150,
+          payoutTerm: "NET-30",
+          cookieDurationDays: 30,
+        })
+      ).rejects.toThrow("Percentage commission cannot exceed 100%");
+    });
+
+    test("setCustomCommission rejects invalid values", async () => {
+      const t = initConvexTest();
+
+      const campaignId = await t.mutation(api.campaigns.create, {
+        name: "Test Campaign",
+        slug: "commission-test",
+        commissionType: "percentage",
+        commissionValue: 20,
+        payoutTerm: "NET-30",
+        cookieDurationDays: 30,
+        isDefault: true,
+      });
+
+      const affiliateResult = await t.mutation(api.affiliates.register, {
+        userId: "affiliate-user",
+        email: "affiliate@example.com",
+        campaignId,
+      });
+
+      await expect(
+        t.mutation(api.affiliates.setCustomCommission, {
+          affiliateId: affiliateResult.affiliateId,
+          commissionType: "percentage",
+          commissionValue: -5,
+        })
+      ).rejects.toThrow("Commission value cannot be negative");
+
+      await expect(
+        t.mutation(api.affiliates.setCustomCommission, {
+          affiliateId: affiliateResult.affiliateId,
+          commissionType: "percentage",
+          commissionValue: 200,
+        })
+      ).rejects.toThrow("Percentage commission cannot exceed 100%");
+
+      // Fixed rate values above 100 should be allowed
+      await t.mutation(api.affiliates.setCustomCommission, {
+        affiliateId: affiliateResult.affiliateId,
+        commissionType: "fixed",
+        commissionValue: 500,
+      });
+    });
+  });
 });
