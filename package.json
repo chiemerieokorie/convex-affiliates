@@ -41,7 +41,7 @@
     "test:coverage": "vitest run --coverage --coverage.reporter=text",
     "prepublishOnly": "npm run build",
     "semantic-release": "semantic-release",
-    "attw": "attw $(npm pack -s) --profile esm-only --exclude-entrypoints ./convex.config",
+    "attw": "attw $(npm pack -s) --profile esm-only --exclude-entrypoints ./convex.config ./test",
     "consumer-test": "npm run build && cd consumer-test && npm run verify",
     "verify-all": "npm run build && npm run test && npm run typecheck && npm run attw && npm run consumer-test"
   },

@@ -44,9 +44,12 @@ import type {
   PayoutMethod,
   EventType,
   PromoContentType,
+  // Stripe type re-exports from root
+  StripeCommissionCreatedData,
+  StripeCommissionReversedData,
 } from "convex-affiliates";
 
-// React hooks
+// React hooks and utilities
 import {
   createAffiliateHooks,
   useTrackReferralOnLoad,
@@ -59,7 +62,7 @@ import {
   formatRelativeTime,
 } from "convex-affiliates/react";
 
-// React types
+// React types — hooks
 import type {
   AffiliatePortalData,
   AffiliateProfile,
@@ -69,6 +72,54 @@ import type {
   StorageMode,
   AffiliateHooksConfig,
   CookieOptions,
+} from "convex-affiliates/react";
+
+// React types — portal component props and render props
+import type {
+  AffiliatePortalProviderProps,
+  AffiliatePortalContextValue,
+  AffiliateStats,
+  CommissionItem,
+  PayoutItem,
+  AffiliateStatsRenderProps,
+  AffiliateStatsProps,
+  AffiliateLinkGeneratorRenderProps,
+  AffiliateLinkGeneratorProps,
+  CommissionHistoryRenderProps,
+  CommissionHistoryProps,
+  PendingPayoutRenderProps,
+  PendingPayoutProps,
+  CommissionRateRenderProps,
+  CommissionRateProps,
+  StripeConnectStatusRenderProps,
+  StripeConnectStatusProps,
+  AffiliateStatusRenderProps,
+  AffiliateStatusProps,
+  PayoutHistoryRenderProps,
+  PayoutHistoryProps,
+} from "convex-affiliates/react";
+
+// React types — admin dashboard props and render props
+import type {
+  AdminDashboardProviderProps,
+  AdminDashboardContextValue,
+  AdminDashboardStats,
+  AffiliateListItem,
+  TopAffiliate,
+  OverviewStatsRenderProps,
+  OverviewStatsProps,
+  ConversionFunnelRenderProps,
+  ConversionFunnelProps,
+  AffiliateTableRenderProps,
+  AffiliateTableProps,
+  PendingApprovalsRenderProps,
+  PendingApprovalsProps,
+  TopAffiliatesRenderProps,
+  TopAffiliatesProps,
+  PayoutSummaryRenderProps,
+  PayoutSummaryProps,
+  CampaignStatsRenderProps,
+  CampaignStatsProps,
 } from "convex-affiliates/react";
 
 // React portal components
@@ -108,6 +159,8 @@ import type {
   WithAffiliatesOptions,
   AffiliateMetadata,
   CustomerLinkedData,
+  CommissionCreatedData as StripeModuleCommissionCreatedData,
+  CommissionReversedData as StripeModuleCommissionReversedData,
 } from "convex-affiliates/stripe";
 
 // Stripe client utilities
@@ -118,14 +171,29 @@ import {
   clearStoredReferral,
 } from "convex-affiliates/stripe/client";
 
+import type {
+  StoredReferral,
+  StorageConfig,
+} from "convex-affiliates/stripe/client";
+
 // Better Auth server plugin
 import { affiliatePlugin } from "convex-affiliates/better-auth";
+
+import type {
+  AffiliatePluginOptions,
+} from "convex-affiliates/better-auth";
 
 // Better Auth client plugin
 import {
   affiliateClientPlugin,
   extractReferralParams,
   createReferralUrl,
+} from "convex-affiliates/better-auth/client";
+
+import type {
+  StorageStrategy,
+  AffiliateClientPluginConfig,
+  StoredReferral as BetterAuthStoredReferral,
 } from "convex-affiliates/better-auth/client";
 
 // Convex config
