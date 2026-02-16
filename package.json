@@ -40,7 +40,10 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:coverage": "vitest run --coverage --coverage.reporter=text",
     "prepublishOnly": "npm run build",
-    "semantic-release": "semantic-release"
+    "semantic-release": "semantic-release",
+    "attw": "attw $(npm pack -s) --profile esm-only --exclude-entrypoints ./convex.config",
+    "consumer-test": "npm run build && cd consumer-test && npm run verify",
+    "verify-all": "npm run build && npm run test && npm run typecheck && npm run attw && npm run consumer-test"
   },
   "publishConfig": {
     "access": "public",
@@ -108,6 +111,7 @@
     }
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
     "@convex-dev/eslint-plugin": "^1.1.1",
     "@convex-dev/stripe": "^0.1.2",
     "@edge-runtime/vm": "^5.0.0",

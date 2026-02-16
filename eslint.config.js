@@ -10,6 +10,7 @@ export default [
       "dist/**",
       "example/dist/**",
       ".examples/**",
+      "consumer-test/**",
       "*.config.{js,mjs,cjs,ts,tsx}",
       "example/**/*.config.{js,mjs,cjs,ts,tsx}",
       "**/_generated/",

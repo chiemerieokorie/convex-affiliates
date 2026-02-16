@@ -39,5 +39,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Validate export types
+        run: npm run attw
+
+      - name: Consumer type verification
+        run: |
+          cd consumer-test
+          npm ci --legacy-peer-deps
+          npm run verify
+
       - name: Publish preview package
         run: npx pkg-pr-new publish || echo "pkg-pr-new not configured"
