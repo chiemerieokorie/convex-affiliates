@@ -23,6 +23,7 @@
  */
 
 import type { BetterAuthClientPlugin } from "better-auth/client";
+import type { affiliatePlugin } from "./index.js";
 
 // =============================================================================
 // Types
@@ -414,6 +415,7 @@ export const affiliateClientPlugin = (
 
   return {
     id: "convex-affiliates",
+    $InferServerPlugin: {} as ReturnType<typeof affiliatePlugin>,
 
     // Inject referral data into signup requests via Better Fetch plugin
     fetchPlugins: [

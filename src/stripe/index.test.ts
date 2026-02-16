@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { withAffiliates, getAffiliateMetadata } from "./index";
+import type { ComponentApi } from "../component/_generated/component.js";
 
 describe("Stripe Plugin", () => {
   describe("withAffiliates", () => {
@@ -13,7 +14,7 @@ describe("Stripe Plugin", () => {
         getByUserId: "referrals.getByUserId",
         getRefereeDiscount: "referrals.getRefereeDiscount",
       },
-    };
+    } as unknown as ComponentApi;
 
     it("returns options with affiliate event handlers", () => {
       const result = withAffiliates(mockComponent);
@@ -191,7 +192,7 @@ describe("Stripe Plugin", () => {
         commissionId: "comm_123",
         affiliateId: "aff_123",
         affiliateCode: "CODE",
-        amountCents: 1000,
+        commissionAmountCents: 1000,
         currency: "usd",
       });
     });
@@ -243,7 +244,7 @@ describe("Stripe Plugin", () => {
         getByUserId: "referrals.getByUserId",
         getRefereeDiscount: "referrals.getRefereeDiscount",
       },
-    };
+    } as unknown as ComponentApi;
 
     it("returns empty object when no user is authenticated", async () => {
       const mockCtx = {

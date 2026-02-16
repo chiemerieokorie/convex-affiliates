@@ -380,7 +380,7 @@ export const markPaid = mutation({
 export const reverse = mutation({
   args: {
     commissionId: v.id("commissions"),
-    reason: v.string(),
+    reason: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -395,7 +395,7 @@ export const reverse = mutation({
     await ctx.db.patch(args.commissionId, {
       status: "reversed",
       reversedAt: now,
-      reversalReason: args.reason,
+      reversalReason: args.reason ?? "Commission reversed",
     });
 
     // Update affiliate stats

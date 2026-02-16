@@ -65,25 +65,28 @@
 // Types
 // =============================================================================
 
+import type {
+  GenericActionCtx,
+  GenericDataModel,
+  GenericMutationCtx,
+} from "convex/server";
+import type { ComponentApi } from "../component/_generated/component.js";
+
 /**
  * Convex context with mutation/query capabilities.
- * Uses permissive types to accept any Convex context.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface ConvexCtx {
-  runQuery: (query: any, args?: any) => Promise<any>;
-  runMutation: (mutation: any, args?: any) => Promise<any>;
-}
+type ConvexCtx = Pick<
+  GenericMutationCtx<GenericDataModel>,
+  "runQuery" | "runMutation"
+>;
 
 /**
  * Convex action context with auth.
- * Uses permissive types to accept any Convex action context.
  */
-interface ConvexActionCtx extends ConvexCtx {
-  auth: {
-    getUserIdentity: () => Promise<{ subject: string } | null>;
-  };
-}
+type ConvexActionCtx = Pick<
+  GenericActionCtx<GenericDataModel>,
+  "runQuery" | "runMutation" | "auth"
+>;
 
 /**
  * Stripe event shape
@@ -101,21 +104,6 @@ interface StripeEvent {
 type StripeEventHandler = (ctx: ConvexCtx, event: StripeEvent) => Promise<void>;
 
 /**
- * The affiliates component API shape
- */
-interface AffiliatesComponent {
-  commissions: {
-    createFromInvoice: unknown;
-    reverseByCharge: unknown;
-  };
-  referrals: {
-    linkStripeCustomer: unknown;
-    getByUserId: unknown;
-    getRefereeDiscount: unknown;
-  };
-}
-
-/**
  * Options for @convex-dev/stripe registerRoutes
  */
 interface StripeRegisterOptions {
@@ -130,7 +118,7 @@ export interface CommissionCreatedData {
   commissionId: string;
   affiliateId: string;
   affiliateCode: string;
-  amountCents: number;
+  commissionAmountCents: number;
   currency: string;
 }
 
@@ -140,7 +128,7 @@ export interface CommissionCreatedData {
 export interface CommissionReversedData {
   commissionId: string;
   affiliateId: string;
-  amountCents: number;
+  commissionAmountCents: number;
   reason?: string;
 }
 
@@ -214,7 +202,7 @@ export interface AffiliateMetadata {
  * // With callbacks
  * registerRoutes(http, components.stripe, withAffiliates(components.affiliates, {
  *   onCommissionCreated: async (data) => {
- *     console.log(`Commission created: $${data.amountCents / 100}`);
+ *     console.log(`Commission created: $${data.commissionAmountCents / 100}`);
  *   },
  * }));
  * ```
@@ -233,7 +221,7 @@ export interface AffiliateMetadata {
  * ```
  */
 export function withAffiliates(
-  component: AffiliatesComponent,
+  component: ComponentApi,
   options: WithAffiliatesOptions = {}
 ): StripeRegisterOptions {
   const { events: userEvents, onCommissionCreated, onCommissionReversed, onCustomerLinked, ...rest } = options;
@@ -241,18 +229,25 @@ export function withAffiliates(
   // Create affiliate event handlers
   const affiliateEvents: Record<string, StripeEventHandler> = {
     "invoice.paid": async (ctx, event) => {
-      const invoice = event.data.object;
+      const invoice = event.data.object as {
+        id: string;
+        customer: string;
+        charge?: string;
+        subscription?: string;
+        lines?: { data?: Array<{ price?: { product?: string } }> };
+        amount_paid: number;
+        currency: string;
+        metadata?: Record<string, string>;
+      };
       const result = (await ctx.runMutation(component.commissions.createFromInvoice, {
         stripeInvoiceId: invoice.id,
         stripeCustomerId: invoice.customer,
         stripeChargeId: invoice.charge ?? undefined,
         stripeSubscriptionId: invoice.subscription ?? undefined,
-        stripeProductId:
-          (invoice.lines as { data?: Array<{ price?: { product?: string } }> })
-            ?.data?.[0]?.price?.product ?? undefined,
+        stripeProductId: invoice.lines?.data?.[0]?.price?.product ?? undefined,
         amountPaidCents: invoice.amount_paid,
         currency: invoice.currency,
-        affiliateCode: (invoice.metadata as Record<string, string>)?.affiliate_code,
+        affiliateCode: invoice.metadata?.affiliate_code,
       })) as {
         commissionId?: string;
         affiliateId?: string;
@@ -265,19 +260,20 @@ export function withAffiliates(
           commissionId: result.commissionId,
           affiliateId: result.affiliateId!,
           affiliateCode: result.affiliateCode!,
-          amountCents: result.commissionAmountCents!,
-          currency: invoice.currency as string,
+          commissionAmountCents: result.commissionAmountCents!,
+          currency: invoice.currency,
         });
       }
     },
 
     "charge.refunded": async (ctx, event) => {
-      const charge = event.data.object;
+      const charge = event.data.object as {
+        id: string;
+        refunds?: { data?: Array<{ reason?: string }> };
+      };
       const result = (await ctx.runMutation(component.commissions.reverseByCharge, {
         stripeChargeId: charge.id,
-        reason:
-          (charge.refunds as { data?: Array<{ reason?: string }> })?.data?.[0]?.reason ??
-          "Charge refunded",
+        reason: charge.refunds?.data?.[0]?.reason ?? "Charge refunded",
       })) as {
         commissionId?: string;
         affiliateId?: string;
@@ -288,25 +284,29 @@ export function withAffiliates(
         await safeCall(onCommissionReversed, {
           commissionId: result.commissionId,
           affiliateId: result.affiliateId!,
-          amountCents: result.commissionAmountCents!,
-          reason: (charge.refunds as { data?: Array<{ reason?: string }> })?.data?.[0]?.reason,
+          commissionAmountCents: result.commissionAmountCents!,
+          reason: charge.refunds?.data?.[0]?.reason,
         });
       }
     },
 
     "checkout.session.completed": async (ctx, event) => {
-      const session = event.data.object;
+      const session = event.data.object as {
+        customer: string;
+        client_reference_id?: string;
+        metadata?: Record<string, string>;
+      };
       await ctx.runMutation(component.referrals.linkStripeCustomer, {
         stripeCustomerId: session.customer,
         userId: session.client_reference_id ?? undefined,
-        affiliateCode: (session.metadata as Record<string, string>)?.affiliate_code,
+        affiliateCode: session.metadata?.affiliate_code,
       });
 
       if (onCustomerLinked) {
         await safeCall(onCustomerLinked, {
-          stripeCustomerId: session.customer as string,
-          userId: (session.client_reference_id as string) ?? undefined,
-          affiliateCode: (session.metadata as Record<string, string>)?.affiliate_code,
+          stripeCustomerId: session.customer,
+          userId: session.client_reference_id ?? undefined,
+          affiliateCode: session.metadata?.affiliate_code,
         });
       }
     },
@@ -382,7 +382,7 @@ export function withAffiliates(
  */
 export async function getAffiliateMetadata(
   ctx: ConvexActionCtx,
-  component: AffiliatesComponent
+  component: ComponentApi
 ): Promise<AffiliateMetadata> {
   // Get user ID from auth context
   const identity = await ctx.auth.getUserIdentity();

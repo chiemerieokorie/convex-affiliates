@@ -666,7 +666,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     reverse: FunctionReference<
       "mutation",
       "internal",
-      { commissionId: string; reason: string },
+      { commissionId: string; reason?: string },
       null,
       Name
     >;
