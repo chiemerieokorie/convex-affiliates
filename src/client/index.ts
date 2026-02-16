@@ -1338,12 +1338,18 @@ export function createAffiliateApi(
           switch (event.type) {
             case "invoice.paid": {
               const invoice = event.data.object;
+              if (!invoice.id || !invoice.customer || invoice.amount_paid == null || !invoice.currency) {
+                return new Response(
+                  JSON.stringify({ error: "Missing required invoice fields" }),
+                  { status: 400, headers: { "Content-Type": "application/json" } }
+                );
+              }
               await ctx.runMutation(component.commissions.createFromInvoice, {
                 stripeInvoiceId: invoice.id,
                 stripeCustomerId: invoice.customer,
-                stripeChargeId: invoice.charge,
-                stripeSubscriptionId: invoice.subscription,
-                stripeProductId: invoice.lines?.data?.[0]?.price?.product,
+                stripeChargeId: invoice.charge ?? undefined,
+                stripeSubscriptionId: invoice.subscription ?? undefined,
+                stripeProductId: invoice.lines?.data?.[0]?.price?.product ?? undefined,
                 amountPaidCents: invoice.amount_paid,
                 currency: invoice.currency,
                 affiliateCode: invoice.metadata?.affiliate_code,
@@ -1403,16 +1409,18 @@ export async function verifyStripeSignature(
   signature: string,
   secret: string
 ): Promise<boolean> {
-  // Parse signature header: t=timestamp,v1=signature
+  // Parse signature header: t=timestamp,v1=sig1,v1=sig2,...
   const parts = signature.split(",");
   const timestamp = parts.find((p) => p.startsWith("t="))?.slice(2);
-  const sig = parts.find((p) => p.startsWith("v1="))?.slice(3);
+  const sigs = parts.filter((p) => p.startsWith("v1=")).map((p) => p.slice(3));
 
-  if (!timestamp || !sig) return false;
+  if (!timestamp || sigs.length === 0) return false;
 
-  // Check timestamp is within tolerance (5 minutes)
+  // Validate timestamp is numeric and within tolerance (5 minutes)
+  const ts = parseInt(timestamp, 10);
+  if (isNaN(ts)) return false;
   const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - parseInt(timestamp)) > 300) return false;
+  if (Math.abs(now - ts) > 300) return false;
 
   // Compute expected signature
   const signedPayload = `${timestamp}.${payload}`;
@@ -1433,13 +1441,15 @@ export async function verifyStripeSignature(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  // Constant-time comparison to prevent timing attacks
-  if (sig.length !== expectedSig.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < sig.length; i++) {
-    mismatch |= sig.charCodeAt(i) ^ expectedSig.charCodeAt(i);
-  }
-  return mismatch === 0;
+  // Constant-time comparison — check all v1= signatures (supports key rotation)
+  return sigs.some((sig) => {
+    if (sig.length !== expectedSig.length) return false;
+    let mismatch = 0;
+    for (let i = 0; i < sig.length; i++) {
+      mismatch |= sig.charCodeAt(i) ^ expectedSig.charCodeAt(i);
+    }
+    return mismatch === 0;
+  });
 }
 
 export interface StripeWebhookConfig {
@@ -1522,14 +1532,16 @@ export function getAffiliateStripeHandlers(
   return {
     "invoice.paid": async (ctx, event) => {
       const invoice = event.data.object as unknown as Record<string, unknown>;
+      if (!invoice.id || !invoice.customer || invoice.amount_paid == null || !invoice.currency) {
+        return; // Skip malformed invoice events
+      }
+      const lines = invoice.lines as { data?: Array<{ price?: { product?: string } }> } | undefined;
       const result = await ctx.runMutation(component.commissions.createFromInvoice, {
         stripeInvoiceId: invoice.id as string,
         stripeCustomerId: invoice.customer as string,
         stripeChargeId: (invoice.charge as string) ?? undefined,
         stripeSubscriptionId: (invoice.subscription as string) ?? undefined,
-        stripeProductId:
-          ((invoice.lines as { data?: Array<{ price?: { product?: string } }> })
-            ?.data?.[0]?.price?.product as string) ?? undefined,
+        stripeProductId: lines?.data?.[0]?.price?.product ?? undefined,
         amountPaidCents: invoice.amount_paid as number,
         currency: invoice.currency as string,
         affiliateCode: (invoice.metadata as Record<string, string>)
@@ -1595,6 +1607,9 @@ export function generateAffiliateLink(
   path = "/",
   subId?: string
 ): string {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) {
+    throw new Error("path must be relative, not an absolute URL");
+  }
   const url = new URL(path, baseUrl);
   url.searchParams.set("ref", code);
   if (subId) {

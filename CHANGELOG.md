@@ -1,3 +1,11 @@
+## [3.0.2](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.1...v3.0.2) (2026-02-16)
+
+### Bug Fixes
+
+* harden Stripe webhook signature and field handling ([8c15925](https://github.com/chiemerieokorie/convex-affiliates/commit/8c1592510a6ae7f4a471673fec676ba4874fc403))
+* payout lifecycle guards and commission status handling ([10c76a9](https://github.com/chiemerieokorie/convex-affiliates/commit/10c76a92d09b6aa8afc6cffc9fffbc70859d902d))
+* React hook bugs and open redirect in link generation ([d3d06a4](https://github.com/chiemerieokorie/convex-affiliates/commit/d3d06a493ad6444535fe6072e46f312f4b5431be))
+
 ## [3.0.1](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.0...v3.0.1) (2026-02-16)
 
 ### Bug Fixes
