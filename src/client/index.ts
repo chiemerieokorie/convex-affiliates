@@ -63,6 +63,24 @@ export type AffiliateStripeHandlers = {
 };
 
 // =============================================================================
+// Branded ID Types
+// =============================================================================
+
+declare const __brand: unique symbol;
+type Brand<T, B extends string> = T & { readonly [__brand]: B };
+
+/** Branded string type for affiliate IDs. */
+export type AffiliateId = Brand<string, "AffiliateId">;
+/** Branded string type for campaign IDs. */
+export type CampaignId = Brand<string, "CampaignId">;
+/** Branded string type for commission IDs. */
+export type CommissionId = Brand<string, "CommissionId">;
+/** Branded string type for referral IDs. */
+export type ReferralId = Brand<string, "ReferralId">;
+/** Branded string type for payout IDs. */
+export type PayoutId = Brand<string, "PayoutId">;
+
+// =============================================================================
 // Typed Pagination Records
 // =============================================================================
 
@@ -70,10 +88,10 @@ export type AffiliateStripeHandlers = {
  * A single commission record as returned by paginated commission queries.
  */
 export interface CommissionRecord {
-  _id: string;
+  _id: CommissionId;
   _creationTime: number;
-  affiliateId: string;
-  referralId: string;
+  affiliateId: AffiliateId;
+  referralId: ReferralId;
   stripeCustomerId: string;
   stripeProductId?: string;
   stripeInvoiceId?: string;
@@ -87,7 +105,7 @@ export interface CommissionRecord {
   commissionType: "percentage" | "fixed";
   currency: string;
   status: "pending" | "approved" | "processing" | "paid" | "reversed";
-  payoutId?: string;
+  payoutId?: PayoutId;
   dueAt: number;
   reversalReason?: string;
   createdAt: number;
@@ -99,9 +117,9 @@ export interface CommissionRecord {
  * A single payout record as returned by paginated payout queries.
  */
 export interface PayoutRecord {
-  _id: string;
+  _id: PayoutId;
   _creationTime: number;
-  affiliateId: string;
+  affiliateId: AffiliateId;
   amountCents: number;
   currency: string;
   method: "manual" | "bank_transfer" | "paypal" | "other";
@@ -122,7 +140,7 @@ export interface PayoutRecord {
  * Data passed to affiliate.registered hook.
  */
 export interface AffiliateRegisteredData {
-  affiliateId: string;
+  affiliateId: AffiliateId;
   affiliateCode: string;
   affiliateEmail: string;
   affiliateUserId: string;
@@ -132,7 +150,7 @@ export interface AffiliateRegisteredData {
  * Data passed to affiliate status change hooks (approved, rejected, suspended).
  */
 export interface AffiliateStatusChangeData {
-  affiliateId: string;
+  affiliateId: AffiliateId;
   affiliateCode: string;
   affiliateEmail: string;
   affiliateUserId: string;
@@ -142,8 +160,8 @@ export interface AffiliateStatusChangeData {
  * Data passed to commission.created hook.
  */
 export interface CommissionCreatedData {
-  commissionId: string;
-  affiliateId: string;
+  commissionId: CommissionId;
+  affiliateId: AffiliateId;
   affiliateCode: string;
   commissionAmountCents: number;
   currency: string;
@@ -153,8 +171,8 @@ export interface CommissionCreatedData {
  * Data passed to commission.reversed hook.
  */
 export interface CommissionReversedData {
-  commissionId: string;
-  affiliateId: string;
+  commissionId: CommissionId;
+  affiliateId: AffiliateId;
   commissionAmountCents: number;
   reason?: string;
 }
@@ -490,7 +508,7 @@ export function createAffiliateApi(
 
         // Call hook for new registration
         await callHook("affiliate.registered", {
-          affiliateId: result.affiliateId,
+          affiliateId: result.affiliateId as AffiliateId,
           affiliateCode: result.code,
           affiliateEmail: args.email,
           affiliateUserId: userId,
@@ -1015,7 +1033,7 @@ export function createAffiliateApi(
         // Call hook for approval
         if (affiliateData) {
           await callHook("affiliate.approved", {
-            affiliateId: args.affiliateId,
+            affiliateId: args.affiliateId as AffiliateId,
             affiliateCode: affiliateData.code,
             affiliateUserId: affiliateData.userId,
             affiliateEmail: affiliateData.payoutEmail ?? "",
@@ -1061,7 +1079,7 @@ export function createAffiliateApi(
         // Call hook for rejection
         if (affiliateData) {
           await callHook("affiliate.rejected", {
-            affiliateId: args.affiliateId,
+            affiliateId: args.affiliateId as AffiliateId,
             affiliateCode: affiliateData.code,
             affiliateUserId: affiliateData.userId,
             affiliateEmail: affiliateData.payoutEmail ?? "",
@@ -1100,7 +1118,7 @@ export function createAffiliateApi(
         // Call hook for suspension
         if (affiliateData) {
           await callHook("affiliate.suspended", {
-            affiliateId: args.affiliateId,
+            affiliateId: args.affiliateId as AffiliateId,
             affiliateCode: affiliateData.code,
             affiliateUserId: affiliateData.userId,
             affiliateEmail: affiliateData.payoutEmail ?? "",
@@ -1510,8 +1528,8 @@ export function getAffiliateStripeHandlers(
       // Call hook if commission was created
       if (result && result.commissionId) {
         await callHook("commission.created", {
-          commissionId: result.commissionId,
-          affiliateId: result.affiliateId,
+          commissionId: result.commissionId as CommissionId,
+          affiliateId: result.affiliateId as AffiliateId,
           affiliateCode: result.affiliateCode,
           commissionAmountCents: result.commissionAmountCents,
           currency: invoice.currency as string,
@@ -1531,8 +1549,8 @@ export function getAffiliateStripeHandlers(
       // Call hook if commission was reversed
       if (result && result.commissionId) {
         await callHook("commission.reversed", {
-          commissionId: result.commissionId,
-          affiliateId: result.affiliateId,
+          commissionId: result.commissionId as CommissionId,
+          affiliateId: result.affiliateId as AffiliateId,
           commissionAmountCents: result.commissionAmountCents,
           reason:
             (charge.refunds as { data?: Array<{ reason?: string }> })?.data?.[0]
