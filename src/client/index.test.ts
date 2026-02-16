@@ -27,6 +27,24 @@ describe("component boundary validation", () => {
     const anyCasts = clientContent.match(/as any/g);
     expect(anyCasts).toBeNull();
   });
+
+  test("react hooks should not use 'as any' type casts", () => {
+    const hooksContent = readFileSync(resolve(__dirname, "../react/hooks.ts"), "utf-8");
+    const anyCasts = hooksContent.match(/as any/g);
+    expect(anyCasts).toBeNull();
+  });
+
+  test("stripe plugin should not use 'as any' type casts", () => {
+    const stripeContent = readFileSync(resolve(__dirname, "../stripe/index.ts"), "utf-8");
+    const anyCasts = stripeContent.match(/as any/g);
+    expect(anyCasts).toBeNull();
+  });
+
+  test("better-auth plugin should not use 'as any' type casts", () => {
+    const authContent = readFileSync(resolve(__dirname, "../better-auth/index.ts"), "utf-8");
+    const anyCasts = authContent.match(/as any/g);
+    expect(anyCasts).toBeNull();
+  });
 });
 
 describe("client tests", () => {
