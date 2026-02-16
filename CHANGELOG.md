@@ -1,3 +1,14 @@
+## [2.5.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.4.0...v2.5.0) (2026-02-16)
+
+### Features
+
+* add consumer type verification with attw and tarball testing ([871cd7d](https://github.com/chiemerieokorie/convex-affiliates/commit/871cd7d6efa510e20b8f995fdfe479dd2c9a6663))
+
+### Bug Fixes
+
+* guard suspend status transition and prevent negative commission stats ([9415e50](https://github.com/chiemerieokorie/convex-affiliates/commit/9415e505f24351a426f20f52d63bdceb3d012ee0))
+* use constant-time comparison for Stripe webhook signature verification ([5135b75](https://github.com/chiemerieokorie/convex-affiliates/commit/5135b756e30516ef451214daa581ccb5063fa905))
+
 ## [2.4.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.3.0...v2.4.0) (2026-02-16)
 
 ### Features
