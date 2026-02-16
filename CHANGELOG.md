@@ -1,3 +1,18 @@
+## [3.0.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.5.0...v3.0.0) (2026-02-16)
+
+### ⚠ BREAKING CHANGES
+
+* Admin endpoints now throw if `isAdmin` is not provided
+in `createAffiliateApi` config. Previously, any authenticated user could
+access admin endpoints when `isAdmin` was omitted.
+
+Also fixes `generateLink` crashing with `TypeError: Invalid URL` when
+`baseUrl` is not configured — now throws a clear error message instead.
+
+### Bug Fixes
+
+* require isAdmin callback for admin endpoints, validate baseUrl ([b235d69](https://github.com/chiemerieokorie/convex-affiliates/commit/b235d692546f180187c288640f7b9b91af2ae906))
+
 ## [2.5.0](https://github.com/chiemerieokorie/convex-affiliates/compare/v2.4.0...v2.5.0) (2026-02-16)
 
 ### Features
