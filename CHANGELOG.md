@@ -1,3 +1,10 @@
+## [3.0.4](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.3...v3.0.4) (2026-02-18)
+
+### Bug Fixes
+
+* harden data integrity, security, and payout validation ([035a287](https://github.com/chiemerieokorie/convex-affiliates/commit/035a287ac4e4b7b353d4f4027da9da44578cf609))
+* return null instead of throwing for admin queries on non-admin users ([1b071fe](https://github.com/chiemerieokorie/convex-affiliates/commit/1b071fea1b0f6c478401666b839403f332137260))
+
 ## [3.0.3](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.2...v3.0.3) (2026-02-16)
 
 ### Bug Fixes
