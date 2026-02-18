@@ -504,7 +504,7 @@ export function useStoredReferral(config?: AffiliateHooksConfig) {
 export function useAffiliateLinkGenerator(baseUrl: string, code: string) {
   const generate = useCallback(
     (path = "/", subId?: string) => {
-      if (/^[a-z][a-z0-9+.-]*:/i.test(path)) {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith("//")) {
         throw new Error("path must be relative, not an absolute URL");
       }
       const url = new URL(path, baseUrl);

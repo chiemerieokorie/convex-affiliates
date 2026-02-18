@@ -239,6 +239,9 @@ export function withAffiliates(
         currency: string;
         metadata?: Record<string, string>;
       };
+      if (!invoice.id || !invoice.customer || invoice.amount_paid == null || !invoice.currency) {
+        return; // Skip malformed invoice events
+      }
       const result = (await ctx.runMutation(component.commissions.createFromInvoice, {
         stripeInvoiceId: invoice.id,
         stripeCustomerId: invoice.customer,

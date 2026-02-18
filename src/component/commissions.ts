@@ -412,9 +412,13 @@ export const reverse = mutation({
     if (affiliate) {
       const updates = {
         ...affiliate.stats,
+        totalRevenueCents: Math.max(0,
+          affiliate.stats.totalRevenueCents - commission.saleAmountCents),
         totalCommissionsCents: Math.max(0,
           affiliate.stats.totalCommissionsCents -
           commission.commissionAmountCents),
+        totalConversions: Math.max(0,
+          affiliate.stats.totalConversions - 1),
       };
 
       if (wasPending) {
@@ -535,6 +539,26 @@ export const createFromInvoice = mutation({
       return null;
     }
 
+    // Check for existing commission for this invoice (deduplication)
+    // This must be checked FIRST to ensure idempotency even if affiliate
+    // status changes between webhook retries.
+    const existingCommission = await ctx.db
+      .query("commissions")
+      .withIndex("by_stripeInvoice", (q) => q.eq("stripeInvoiceId", args.stripeInvoiceId))
+      .first();
+
+    if (existingCommission) {
+      // Already processed - return existing commission details
+      const existingAffiliate = await ctx.db.get(existingCommission.affiliateId);
+      return {
+        commissionId: existingCommission._id,
+        affiliateId: existingCommission.affiliateId,
+        affiliateCode: existingAffiliate?.code ?? "",
+        affiliateUserId: existingAffiliate?.userId ?? "",
+        commissionAmountCents: existingCommission.commissionAmountCents,
+      };
+    }
+
     // FRAUD PREVENTION: Duplicate customer detection
     // First check if this Stripe customer already has attribution
     // A customer can only be attributed to ONE affiliate
@@ -567,23 +591,6 @@ export const createFromInvoice = mutation({
     // If the referral has a userId that matches the affiliate's userId, reject
     if (referral.userId && affiliate.userId === referral.userId) {
       return null; // Affiliate cannot earn commissions on their own purchases
-    }
-
-    // Check for existing commission for this invoice (deduplication)
-    const existingCommission = await ctx.db
-      .query("commissions")
-      .withIndex("by_stripeInvoice", (q) => q.eq("stripeInvoiceId", args.stripeInvoiceId))
-      .first();
-
-    if (existingCommission) {
-      // Already processed - return existing commission details
-      return {
-        commissionId: existingCommission._id,
-        affiliateId: affiliate._id,
-        affiliateCode: affiliate.code,
-        affiliateUserId: affiliate.userId,
-        commissionAmountCents: existingCommission.commissionAmountCents,
-      };
     }
 
     // Get campaign to check commission duration rules
@@ -813,8 +820,12 @@ export const reverseByCharge = mutation({
     if (affiliate) {
       const updates = {
         ...affiliate.stats,
+        totalRevenueCents: Math.max(0,
+          affiliate.stats.totalRevenueCents - commission.saleAmountCents),
         totalCommissionsCents: Math.max(0,
           affiliate.stats.totalCommissionsCents - commission.commissionAmountCents),
+        totalConversions: Math.max(0,
+          affiliate.stats.totalConversions - 1),
       };
 
       if (wasPending) {

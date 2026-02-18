@@ -124,8 +124,9 @@ export const getAffiliatesDueForPayout = query({
     // Get all approved commissions that are past their due date
     const dueCommissions = await ctx.db
       .query("commissions")
-      .withIndex("by_status_dueAt", (q) => q.eq("status", "approved"))
-      .filter((q) => q.lte(q.field("dueAt"), now))
+      .withIndex("by_status_dueAt", (q) =>
+        q.eq("status", "approved").lte("dueAt", now)
+      )
       .collect();
 
     // Group by affiliate
@@ -198,6 +199,7 @@ export const create = mutation({
     });
 
     // Validate and mark all commissions as processing
+    let commissionSum = 0;
     for (const commissionId of args.commissionIds) {
       const commission = await ctx.db.get(commissionId);
       if (!commission) {
@@ -211,10 +213,18 @@ export const create = mutation({
           `Commission ${commissionId} is not in approved status (current: ${commission.status})`
         );
       }
+      commissionSum += commission.commissionAmountCents;
       await ctx.db.patch(commissionId, {
         status: "processing",
         payoutId,
       });
+    }
+
+    // Validate payout amount matches commission total
+    if (args.amountCents !== commissionSum) {
+      throw new Error(
+        `Payout amount (${args.amountCents}) does not match commission total (${commissionSum})`
+      );
     }
 
     return payoutId;
@@ -252,6 +262,8 @@ export const markCompleted = mutation({
       .collect();
 
     for (const commission of commissions) {
+      // Skip commissions that were reversed while the payout was processing
+      if (commission.status === "reversed") continue;
       await ctx.db.patch(commission._id, {
         status: "paid",
         paidAt: now,
@@ -264,8 +276,8 @@ export const markCompleted = mutation({
       await ctx.db.patch(affiliate._id, {
         stats: {
           ...affiliate.stats,
-          pendingCommissionsCents:
-            affiliate.stats.pendingCommissionsCents - payout.amountCents,
+          pendingCommissionsCents: Math.max(0,
+            affiliate.stats.pendingCommissionsCents - payout.amountCents),
           paidCommissionsCents:
             affiliate.stats.paidCommissionsCents + payout.amountCents,
         },
@@ -384,7 +396,8 @@ export const record = mutation({
     await ctx.db.patch(affiliate._id, {
       stats: {
         ...affiliate.stats,
-        pendingCommissionsCents: affiliate.stats.pendingCommissionsCents - totalPaid,
+        pendingCommissionsCents: Math.max(0,
+          affiliate.stats.pendingCommissionsCents - totalPaid),
         paidCommissionsCents: affiliate.stats.paidCommissionsCents + totalPaid,
       },
       updatedAt: now,

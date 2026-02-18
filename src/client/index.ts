@@ -788,7 +788,11 @@ export function createAffiliateApi(
             "baseUrl must be configured in createAffiliateApi to use generateLink"
           );
         }
-        const url = new URL(args.path ?? "/", config.baseUrl);
+        const path = args.path ?? "/";
+        if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith("//")) {
+          throw new Error("path must be relative, not an absolute URL");
+        }
+        const url = new URL(path, config.baseUrl);
         url.searchParams.set("ref", affiliate.code);
         if (args.subId) {
           url.searchParams.set("sub", args.subId);
@@ -1384,9 +1388,7 @@ export function createAffiliateApi(
         } catch (error) {
           console.error("Stripe webhook error:", error);
           return new Response(
-            JSON.stringify({
-              error: error instanceof Error ? error.message : "Unknown error",
-            }),
+            JSON.stringify({ error: "Internal webhook processing error" }),
             { status: 500, headers: { "Content-Type": "application/json" } }
           );
         }
@@ -1607,7 +1609,7 @@ export function generateAffiliateLink(
   path = "/",
   subId?: string
 ): string {
-  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith("//")) {
     throw new Error("path must be relative, not an absolute URL");
   }
   const url = new URL(path, baseUrl);
