@@ -342,7 +342,13 @@ export function createAffiliateApi(
     return campaign!;
   };
 
-  // Helper to check admin access
+  // Helper to check admin access (non-throwing, for queries)
+  const checkAdmin = async (ctx: { auth: Auth }): Promise<boolean> => {
+    if (!isAdmin) return false;
+    return isAdmin(ctx);
+  };
+
+  // Helper to require admin access (throwing, for mutations)
   const requireAdmin = async (ctx: { auth: Auth }) => {
     if (!isAdmin) {
       throw new Error(
@@ -930,7 +936,7 @@ export function createAffiliateApi(
     adminDashboard: queryGeneric({
       args: {},
       handler: async (ctx) => {
-        await requireAdmin(ctx);
+        if (!(await checkAdmin(ctx))) return null;
         return ctx.runQuery(component.analytics.getAdminDashboard);
       },
     }),
@@ -964,7 +970,7 @@ export function createAffiliateApi(
         limit: v.optional(v.number()),
       },
       handler: async (ctx, args) => {
-        await requireAdmin(ctx);
+        if (!(await checkAdmin(ctx))) return null;
         return ctx.runQuery(component.affiliates.list, args );
       },
     }),
@@ -1002,7 +1008,7 @@ export function createAffiliateApi(
         limit: v.optional(v.number()),
       },
       handler: async (ctx, args) => {
-        await requireAdmin(ctx);
+        if (!(await checkAdmin(ctx))) return null;
         return ctx.runQuery(component.analytics.getTopAffiliates, args);
       },
     }),
@@ -1159,7 +1165,7 @@ export function createAffiliateApi(
         activeOnly: v.optional(v.boolean()),
       },
       handler: async (ctx, args) => {
-        await requireAdmin(ctx);
+        if (!(await checkAdmin(ctx))) return null;
         return ctx.runQuery(component.campaigns.list, args);
       },
     }),
