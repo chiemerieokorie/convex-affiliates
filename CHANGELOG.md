@@ -1,3 +1,9 @@
+## [3.0.5](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.4...v3.0.5) (2026-02-20)
+
+### Bug Fixes
+
+* replace /sign-in/social with /callback/ in after-hook matcher ([576e735](https://github.com/chiemerieokorie/convex-affiliates/commit/576e7352cddbc63668537766fb0b65b85a08c527))
+
 ## [3.0.4](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.3...v3.0.4) (2026-02-18)
 
 ### Bug Fixes
