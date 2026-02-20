@@ -146,14 +146,14 @@ export function affiliatePlugin(
     hooks: {
       after: [
         {
-          // Match all signup-related endpoints
+          // Match signup endpoints and OAuth callback (where social auth users are created)
           matcher: (context: HookEndpointContext) => {
             const path = context.path ?? "";
             return (
               path === "/sign-up/email" ||
               path === "/sign-up/username" ||
-              path === "/sign-in/social" ||
-              path.startsWith("/sign-up/")
+              path.startsWith("/sign-up/") ||
+              path.startsWith("/callback/")
             );
           },
 
