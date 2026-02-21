@@ -1,3 +1,9 @@
+## [3.0.6](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.5...v3.0.6) (2026-02-21)
+
+### Bug Fixes
+
+* add refactor to semantic-release rules ([808f86d](https://github.com/chiemerieokorie/convex-affiliates/commit/808f86d4e5d768363e34ad9dcdb1305c2bdd9cf3))
+
 ## [3.0.5](https://github.com/chiemerieokorie/convex-affiliates/compare/v3.0.4...v3.0.5) (2026-02-20)
 
 ### Bug Fixes
