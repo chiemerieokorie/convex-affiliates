@@ -2,8 +2,8 @@
  * Better Auth Server Plugin for Convex Affiliates
  *
  * This plugin automatically handles affiliate attribution when users sign up
- * through Better Auth. It hooks into the signup flow and calls the component's
- * attributeSignup mutation directly.
+ * through Better Auth. It uses databaseHooks to intercept user creation events,
+ * which fires for ALL auth methods (email, OAuth, magic-link, etc.).
  *
  * @example
  * ```typescript
@@ -25,8 +25,7 @@
  * @module
  */
 
-import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
-import { createAuthMiddleware } from "better-auth/plugins";
+import type { BetterAuthPlugin } from "better-auth";
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
 import type { ComponentApi } from "../component/_generated/component.js";
 
@@ -93,9 +92,10 @@ export interface AffiliatePluginOptions {
 /**
  * Better Auth plugin for automatic affiliate attribution.
  *
- * This plugin intercepts signup requests and automatically attributes
- * new users to affiliates. It reads referral data from the request body
- * (injected by the client plugin) or from cookies.
+ * Uses `databaseHooks.user.create.after` to intercept user creation at the
+ * database level. This fires for ALL auth methods (email, OAuth, magic-link,
+ * passkey, etc.) and receives the actual user record directly — no need
+ * for endpoint path matching or response parsing.
  *
  * @param ctx - The Convex context (from createAuth function)
  * @param component - The affiliates component (components.affiliates)
@@ -143,145 +143,90 @@ export function affiliatePlugin(
   return {
     id: "convex-affiliates",
 
-    hooks: {
-      after: [
-        {
-          // Match signup endpoints and OAuth callback (where social auth users are created)
-          matcher: (context: HookEndpointContext) => {
-            const path = context.path ?? "";
-            return (
-              path === "/sign-up/email" ||
-              path === "/sign-up/username" ||
-              path.startsWith("/sign-up/") ||
-              path.startsWith("/callback/")
-            );
+    init() {
+      return {
+        options: {
+          databaseHooks: {
+            user: {
+              create: {
+                after: async (
+                  user: { id: string } & Record<string, unknown>,
+                  endpointCtx: { body?: unknown; headers?: Headers } | null
+                ) => {
+                  // Top-level try-catch: NEVER let attribution crash the auth flow
+                  try {
+                    if (!endpointCtx) return;
+
+                    const userId = user.id;
+
+                    // Extract referral data from body (email signups)
+                    const body = endpointCtx.body as Record<string, unknown> | undefined;
+                    let referralId = body?.[config.referralIdField] as string | undefined;
+                    let referralCode = body?.[config.referralCodeField] as string | undefined;
+
+                    // Also check cookies (OAuth signups — cookies forwarded by Next.js proxy)
+                    const cookieHeader = endpointCtx.headers?.get("cookie");
+                    if (cookieHeader) {
+                      const cookies = parseCookies(cookieHeader);
+                      if (!referralId) referralId = cookies[config.referralIdCookieName];
+                      if (!referralCode) referralCode = cookies[config.cookieName];
+                    }
+
+                    if (!referralId && !referralCode) {
+                      try { await config.onAttributionFailure?.({ userId, reason: "No referral data found" }); } catch { /* swallow */ }
+                      return;
+                    }
+
+                    // Attribution logic
+                    let attributed = false;
+                    let affiliateCode: string | undefined;
+
+                    // Try by referral ID first (more accurate)
+                    if (referralId) {
+                      const referral = await ctx.runQuery(
+                        component.referrals.getByReferralId,
+                        { referralId }
+                      );
+
+                      if (referral?.status === "clicked") {
+                        await ctx.runMutation(component.referrals.attributeSignup, {
+                          referralId,
+                          userId,
+                        });
+                        attributed = true;
+                        const affiliate = await ctx.runQuery(
+                          component.affiliates.getById,
+                          { affiliateId: referral.affiliateId }
+                        );
+                        affiliateCode = affiliate?.code;
+                      }
+                    }
+
+                    // Try by affiliate code if referral ID didn't work
+                    if (!attributed && referralCode) {
+                      const result = await ctx.runMutation(
+                        component.referrals.attributeSignupByCode,
+                        { userId, affiliateCode: referralCode }
+                      );
+                      attributed = result.success;
+                      affiliateCode = referralCode;
+                    }
+
+                    if (attributed) {
+                      try { await config.onAttributionSuccess?.({ userId, affiliateCode }); } catch { /* swallow */ }
+                    } else {
+                      try { await config.onAttributionFailure?.({ userId, reason: "Attribution failed - referral not found or invalid" }); } catch { /* swallow */ }
+                    }
+                  } catch (error) {
+                    console.error("[convex-affiliates] Attribution error:", error);
+                    try { await config.onAttributionFailure?.({ userId: user.id, reason: error instanceof Error ? error.message : "Unknown error" }); } catch { /* swallow */ }
+                  }
+                },
+              },
+            },
           },
-
-          handler: createAuthMiddleware(async (ctx_hook) => {
-            const context = ctx_hook as unknown as {
-              context: {
-                returned?: unknown;
-                body?: Record<string, unknown>;
-                request?: Request;
-              };
-              body?: Record<string, unknown>;
-              headers?: Headers;
-            };
-
-            // Check if signup was successful (user was created)
-            const returned = context.context?.returned;
-            if (!returned || typeof returned !== "object") {
-              return;
-            }
-
-            // Extract user ID from response
-            const responseObj = returned as Record<string, unknown>;
-            const user = responseObj.user as {
-              id?: string;
-              createdAt?: Date | string | number;
-            } | undefined;
-            if (!user?.id) {
-              return;
-            }
-
-            const userId = user.id;
-
-            // For OAuth sign-ins, check if this is actually a new user
-            // by comparing createdAt to current time (within 10 seconds = new user)
-            if (user.createdAt) {
-              const createdAt = new Date(user.createdAt).getTime();
-              const now = Date.now();
-              const isNewUser = now - createdAt < 10000; // 10 seconds
-              if (!isNewUser) {
-                // Existing user signing in via OAuth, skip attribution
-                return;
-              }
-            }
-
-            // Extract referral data from request body
-            const body = context.body ?? context.context?.body;
-            let referralId = body?.[config.referralIdField] as string | undefined;
-            let referralCode = body?.[config.referralCodeField] as string | undefined;
-
-            // Also check cookies
-            const cookieHeader =
-              context.headers?.get?.("cookie") ??
-              context.context?.request?.headers?.get?.("cookie");
-
-            if (cookieHeader) {
-              const cookies = parseCookies(cookieHeader);
-              if (!referralId && config.referralIdCookieName) {
-                referralId = cookies[config.referralIdCookieName];
-              }
-              if (!referralCode && config.cookieName) {
-                referralCode = cookies[config.cookieName];
-              }
-            }
-
-            // Skip if no referral data
-            if (!referralId && !referralCode) {
-              await config.onAttributionFailure?.({
-                userId,
-                reason: "No referral data found",
-              });
-              return;
-            }
-
-            // Attribute the signup
-            try {
-              let attributed = false;
-              let affiliateCode: string | undefined;
-
-              // Try by referral ID first (more accurate)
-              if (referralId) {
-                const referral = await ctx.runQuery(
-                  component.referrals.getByReferralId,
-                  { referralId }
-                );
-
-                if (referral && referral.status === "clicked") {
-                  await ctx.runMutation(component.referrals.attributeSignup, {
-                    referralId: referralId,
-                    userId,
-                  });
-                  attributed = true;
-                  // Look up the affiliate to get their code
-                  const affiliate = await ctx.runQuery(
-                    component.affiliates.getById,
-                    { affiliateId: referral.affiliateId }
-                  );
-                  affiliateCode = affiliate?.code;
-                }
-              }
-
-              // Try by affiliate code if referral ID didn't work
-              if (!attributed && referralCode) {
-                const result = await ctx.runMutation(
-                  component.referrals.attributeSignupByCode,
-                  { userId, affiliateCode: referralCode }
-                );
-                attributed = result.success;
-                affiliateCode = referralCode;
-              }
-
-              if (attributed) {
-                await config.onAttributionSuccess?.({ userId, affiliateCode });
-              } else {
-                await config.onAttributionFailure?.({
-                  userId,
-                  reason: "Attribution failed - referral not found or invalid",
-                });
-              }
-            } catch (error) {
-              console.error("[convex-affiliates] Attribution error:", error);
-              await config.onAttributionFailure?.({
-                userId,
-                reason: error instanceof Error ? error.message : "Unknown error",
-              });
-            }
-          }),
         },
-      ],
+      };
     },
   } satisfies BetterAuthPlugin;
 }
@@ -292,19 +237,17 @@ export function affiliatePlugin(
 
 function parseCookies(cookieHeader: string): Record<string, string> {
   const cookies: Record<string, string> = {};
-  cookieHeader.split(";").forEach((cookie) => {
+  for (const cookie of cookieHeader.split(";")) {
     const [name, ...valueParts] = cookie.trim().split("=");
     if (name) {
       const value = valueParts.join("=");
-      // Decode URI-encoded values (handles special characters in affiliate codes)
       try {
         cookies[name] = decodeURIComponent(value);
       } catch {
-        // If decoding fails, use the raw value
         cookies[name] = value;
       }
     }
-  });
+  }
   return cookies;
 }
 
